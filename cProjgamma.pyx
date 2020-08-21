@@ -9,7 +9,9 @@ from scipy.special import gammaln
 from functools import lru_cache
 from genpareto import gpd_fit
 from collections import namedtuple
-from slice import univariate_slice_sample, skip_univariate_slice_sample
+from cSlice import SliceSample
+cimport numpy as np
+
 
 # Tuples for storing priors
 
@@ -18,7 +20,13 @@ DirichletPrior = namedtuple('DirichletPrior', 'a')
 
 ## Functions related to projected gamma density
 
-def logdprojgamma(coss, sins, sinp, alpha, beta):
+cpdef double logdprojgamma(
+        np.ndarray[dtype = np.float64_t, ndim = 2] coss,
+        np.ndarray[dtype = np.float64_t, ndim = 2] sins,
+        np.ndarray[dtype = np.float64_t, ndim = 2] sinp,
+        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
+        np.ndarray[dtype = np.float64_t, ndim = 1] beta
+        ):
     """ Log-density of projected gamma.  Inputs have already been
     pre-formatted for use.
     coss = matrix of cos(theta), last col = 1  (n x k)
@@ -27,10 +35,15 @@ def logdprojgamma(coss, sins, sinp, alpha, beta):
     alpha = vector of shape parameters for underlying gamma distributions
     beta  = vector of rate parameters for underlying gamma distributions
     """
-    Yl = coss * sinp
-    A = alpha.sum()
-    B = (beta * Yl).sum(axis = 1)
+    cdef np.ndarray[dtype = np.float_t, ndim = 2] Yl
+    cdef np.ndarray[dtype = np.float_t, ndim = 1] B, asinv
+    cdef double A, lp
+
+    Yl    = coss * sinp
+    A     = alpha.sum()
+    B     = (beta * Yl).sum(axis = 1)
     asinv = np.cumsum(alpha[1:][::-1])[::-1]
+
     lp = (
         + gammaln(A)
         - A * log(B)
@@ -40,21 +53,13 @@ def logdprojgamma(coss, sins, sinp, alpha, beta):
         )
     return lp
 
-def logdprojgamma_pre_single(lcoss, lsins, Yl, alpha, beta):
-    A = alpha.sum()
-    B = (Yl * beta).sum()
-    k = Yl.shape[0]
-    asinv = np.cumsum(alpha[1:][::-1])[::-1]
-    lp = (
-        + gammaln(A)
-        - A * log(B)
-        + (alpha * np.log(beta) - gammaln(alpha)).sum()
-        + (lcoss[:(k-1)] * (alpha[:(k-1)] - 1)).sum()
-        + (lsins[1:] * (asinv - 1)).sum()
-        )
-    return lp
-
-def logdprojgamma_pre(lcoss, lsins, Yl, alpha, beta):
+cpdef double logdprojgamma_pre(
+        np.ndarray[dtype = np.float64_t, ndim = 2] lcoss,
+        np.ndarray[dtype = np.float64_t, ndim = 2] lsins,
+        np.ndarray[dtype = np.float64_t, ndim = 2] Yl,
+        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
+        np.ndarray[dtype = np.float64_t, ndim = 1] beta
+        ):
     """ Log-density of projected gamma.  Inputs have been pre-computed as
     much as possible.
     lcoss = log(matrix of cos(theta), last col = 1  (n x k))
@@ -64,13 +69,12 @@ def logdprojgamma_pre(lcoss, lsins, Yl, alpha, beta):
     alpha = vector of shape parameters for underlying gamma distributions
     beta  = vector of rate parameters for underlying gamma distributions
     """
-    # if only a single row, then send it down the single chute.
-    if len(Yl.shape) == 1:
-        return np.array([logdprojgamma_pre_single(lcoss, lsins, Yl, alpha, beta)])
+    cdef np.ndarray[dtype = np.float_t, ndim = 1] B, asinv
+    cdef double A, lp
+    cdef int k
 
-    # otherwise continue on, calculate logdprojgamma for all
     A = alpha.sum()
-    B = (Yl * beta).sum(axis = 1)
+    B = (beta * Yl).sum(axis = 1)
     k = lcoss.shape[1]
     asinv = np.cumsum(alpha[1:][::-1])[::-1]
     lp = (
@@ -82,7 +86,16 @@ def logdprojgamma_pre(lcoss, lsins, Yl, alpha, beta):
         )
     return lp
 
-def dprojgamma(theta, alpha, beta, logd = False):
+cpdef double dprojgamma(
+        np.ndarray[dtype = np.float64_t, ndim = 2] theta,
+        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
+        np.ndarray[dtype = np.float64_t, ndim = 1] beta,
+        bint logd = False,
+        ):
+    cdef int k
+    cdef np.ndarray[dtype = np.float64_t, ndim = 2] coss, sins, sinp
+    cdef double ld
+
     k = len(alpha)
     assert all(len(theta) == k - 1, len(beta) == k)
 
@@ -97,7 +110,16 @@ def dprojgamma(theta, alpha, beta, logd = False):
     else:
         return exp(ld)
 
-def dprojgamma_trig(s_theta, c_theta, alpha, beta, logd = False):
+cpdef double dprojgamma_trig(
+        np.ndarray[dtype = np.float64_t, ndim = 2] s_theta,
+        np.ndarray[dtype = np.float64_t, ndim = 2] c_theta,
+        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
+        np.ndarray[dtype = np.float64_t, ndim = 1 ]beta,
+        bint logd = False
+        ):
+    cdef np.ndarray[dtype = np.float64_t, ndim = 2] coss, sins, sinp
+    cdef double ld
+
     coss = np.vstack((c_theta.T, 1)).T
     sins = np.vstack((1, s_theta.T)).T
     sinp = np.cumprod(sins, axis = 1)
@@ -109,8 +131,8 @@ def dprojgamma_trig(s_theta, c_theta, alpha, beta, logd = False):
     else:
         return exp(ld)
 
-def dprojgamma_latent(Y, alpha, beta):
-    pass
+# def dprojgamma_latent(Y, alpha, beta):
+#     pass
 
 ## Function for sampling from projected gamma
 
@@ -121,9 +143,14 @@ def rprojgamma():
 ## a projected gamma likelihood.
 
 # @lru_cache(maxsize = 32)
-def log_post_log_alpha_1(log_alpha_1, y_1, prior):
+cpdef double log_post_log_alpha_1(
+        double log_alpha_1,
+        np.ndarray[dtype = np.float_t, ndim = 1] y_1,
+        GammaPrior prior,
+        ):
     """ Log posterior for log-alpha_1 assuming a gamma distribution,
     with beta assumed to be 1. """
+
     alpha_1 = exp(log_alpha_1)
     n_1     = y_1.shape[0]
     lp = (
@@ -134,11 +161,16 @@ def log_post_log_alpha_1(log_alpha_1, y_1, prior):
         )
     return lp
 
-def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.1):
+cpdef double sample_alpha_1_mh(
+        double curr_alpha_1,
+        np.ndarray[dtype = np.float64_t, ndim = 1] y_1,
+        GammaPrior prior,
+        proposal_sd = 0.1,
+        ):
     """ Sampling function for shape parameter, with gamma likelihood and
     gamma prior.  Assumes rate parameter = 1.  uses Metropolis Hastings
     algorithm with random walk for sampling. """
-    if len(y_1) < 1:
+    if len(y_1) <= 1:
         return gamma.rvs(prior.a, scale = 1./prior.b)
 
     curr_log_alpha_1 = log(curr_alpha_1)
@@ -152,12 +184,22 @@ def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.1):
     else:
         return curr_alpha_1
 
-def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 0.2):
-    f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
+cpdef double sample_alpha_1_slice(
+        double curr_alpha_1,
+        np.ndarray[dtype = np.float64_t, ndim = 1] y_1,
+        GammaPrior prior,
+        double increment_size = 0.2
+        ):
+    cdef double f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
     return exp(univariate_slice_sample(f, log(curr_alpha_1), increment_size))
 
 #@lru_cache(maxsize = 128)
-def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
+cpdef double log_post_log_alpha(
+        double log_alpha,
+        np.ndarray[dtype = np.float64_t, ndim = 1] y,
+        GammaPrior prior_a,
+        GammaPrior prior_b,
+        ):
     """ Log posterior for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
     alpha = exp(log_alpha)
@@ -172,7 +214,13 @@ def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
         )
     return lp
 
-def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.1):
+cpdef double sample_alpha_k_mh(
+        double curr_alpha_k,
+        np.ndarray[dtype = np.float64_t, ndim = 1] y_k,
+        GammaPrior prior_a,
+        gammaPrior prior_b,
+        double proposal_sd = 0.1
+        ):
     """ Sampling Function for shape parameter, with Gamma likelihood and Gamma
     prior, with rate (with gamma prior) integrated out. """
     if len(y_k) <= 1:
@@ -181,8 +229,8 @@ def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.1):
     curr_log_alpha_k = log(curr_alpha_k)
     prop_log_alpha_k = curr_log_alpha_k + normal.rvs(scale = proposal_sd)
 
-    curr_lp = log_post_log_alpha_k(curr_log_alpha_k, y_k, prior_a, prior_b)
-    prop_lp = log_post_log_alpha_k(prop_log_alpha_k, y_k, prior_a, prior_b)
+    curr_lp = log_post_log_alpha(curr_log_alpha_k, y_k, prior_a, prior_b)
+    prop_lp = log_post_log_alpha(prop_log_alpha_k, y_k, prior_a, prior_b)
 
     if log(uniform.rvs()) < prop_lp - curr_lp:
         return exp(prop_log_alpha_k)
