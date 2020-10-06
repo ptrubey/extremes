@@ -16,6 +16,14 @@ from slice import univariate_slice_sample, skip_univariate_slice_sample
 GammaPrior     = namedtuple('GammaPrior', 'a b')
 DirichletPrior = namedtuple('DirichletPrior', 'a')
 
+def to_angular(hyp):
+    """ Convert data to angular representation. """
+    n, k  = hyp.shape
+    theta = np.empty((n, k - 1))
+    for i in range(k - 1):
+        theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1) + 1e-7))
+    return theta
+
 ## Functions related to projected gamma density
 
 def logdprojgamma(coss, sins, sinp, alpha, beta):
@@ -114,8 +122,10 @@ def dprojgamma_latent(Y, alpha, beta):
 
 ## Function for sampling from projected gamma
 
-def rprojgamma():
-    pass
+def rprojgamma(alpha, beta):
+    gammas = gamma(alpha, scale = 1/beta).rvs()
+    thetas = to_angular(gammas)
+    return thetas
 
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
@@ -152,7 +162,7 @@ def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.1):
     else:
         return curr_alpha_1
 
-def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 0.2):
+def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 1.):
     f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
     return exp(univariate_slice_sample(f, log(curr_alpha_1), increment_size))
 
@@ -189,7 +199,7 @@ def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.1):
     else:
         return curr_alpha_k
 
-def sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size = 0.2):
+def sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size = 1.):
     f = lambda log_alpha_k: log_post_log_alpha_k(log_alpha_k, y_k, prior_a, prior_b)
     return exp(univariate_slice_sample(f, log(curr_alpha_k), increment_size))
 

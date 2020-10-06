@@ -1,10 +1,9 @@
 cimport numpy as np
 import numpy as np
 from numpy.random import uniform
-
 from libc.math cimport log, exp
 
-cpdef double univariate_sample(logd, double starter, double increment_size):
+cpdef double univariate_slice_sample(object logd, double starter, double increment_size = 1.):
     cdef double bound_logd, lb, ub, try_value
 
     bound_logd = log(uniform(0, exp(logd(starter))))
@@ -28,12 +27,12 @@ cpdef double univariate_sample(logd, double starter, double increment_size):
 
     return try_value
 
-cpdef double skip_univariate_sample(logd, double starter, double increment_size, int skips):
+cpdef double skip_univariate_slice_sample(object logd, double starter, double increment_size = 1., int skips = 2):
     cdef double try_value
     cdef int _
     try_value = starter
     for _ in range(skips):
-        try_value = univariate_sample(logd, try_value, increment_size)
+        try_value = univariate_slice_sample(logd, try_value, increment_size)
     return try_value
 
 # EOF

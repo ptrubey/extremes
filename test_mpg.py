@@ -1,4 +1,4 @@
-from mixture_projgamma import MPG
+from m_projgamma import MPG
 from projgamma import Data_From_Raw
 from pandas import read_csv
 

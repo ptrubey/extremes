@@ -1,23 +1,53 @@
+# from cProjgamma import *
 from projgamma import *
 from scipy.stats import gamma, multinomial
 from numpy.random import choice
 from collections import namedtuple
 import numpy as np
+import sqlite3 as sql
+import pandas as pd
 
-MPGPrior       = namedtuple('PGPrior', 'alpha beta eta')
+MPGPrior   = namedtuple('MPGPrior', 'alpha beta eta')
+# GammaPrior = namedtuple('GammaPrior', 'a b')
+class MPGSamples(object):
+    alpha = None
+    beta  = None
+    eta   = None
+    delta = None
+    r     = None
+
+    def __init__(self, nSamp, nDat, nCol, nMix):
+        self.alpha = np.empty((nSamp + 1, nMix, nCol))
+        self.beta  = np.empty((nSamp + 1, nMix, nCol))
+        self.eta   = np.empty((nSamp + 1, nMix))
+        self.delta = np.empty((nSamp + 1, nDat), dtype = int)
+        self.r     = np.empty((nSamp + 1, nDat))
+        return
 
 class MPG(object):
-    samples_alpha  = None
-    samples_beta   = None
-    samples_eta    = None
-    samples_delta  = None
-    samples_r      = None
+    samples        = None
     priors_alpha   = None
     priors_beta    = None
+    def plot_posterior_predictive(self, nburn):
+        delta = np.apply_along_axis(
+            lambda p: choice(nmix, 1, p = p),
+            1,
+            self.samples.delta[nburn:],
+            ).flatten()
+        alphas = np.array([
+                self.samples.alpha[nburn:][i,j]
+                for i, j in enumerate(delta)
+                ])
+        betas  = np.array([
+                self.samples.beta[nburn:][i,j]
+                for i, j in enumerate(delta)
+                ])
+        theta_new = rprojgamma(alphas, betas)
 
     def sample_alpha(self, R, curr_alpha, delta):
         Y = (self.data.Yl.T * R).T
         prop_alpha = np.empty(curr_alpha.shape)
+        # This part should be parallelized!
         for j in range(self.nMix):
             Yj = Y[delta == j]
             prop_alpha[j,0] = sample_alpha_1_mh(
@@ -76,49 +106,61 @@ class MPG(object):
         return gmat
 
     def set_priors(self):
-        self.alpha_prior = gamma(self.priors.alpha.a, 1 / self.priors.alpha.b)
-        self.beta_prior  = gamma(self.priors.beta.a,  1 / self.priors.beta.b)
+        self.alpha_prior = gamma(self.priors.alpha.a, scale = 1 / self.priors.alpha.b)
+        self.beta_prior  = gamma(self.priors.beta.a,  scale = 1 / self.priors.beta.b)
         return
 
     def initialize_sampler(self, ns):
         # set sampler target
-        self.samples_alpha  = np.empty((ns, self.nMix, self.nCol))
-        self.samples_beta   = np.empty((ns, self.nMix, self.nCol))
-        self.samples_eta    = np.empty((ns, self.nMix))
-        self.samples_delta  = np.empty((ns, self.nDat), dtype = int)
-        self.samples_r      = np.empty((ns, self.nDat))
+        self.samples = MPGSamples(ns, self.nDat, self.nCol, self.nMix)
+        # self.samples_alpha  = np.empty((ns, self.nMix, self.nCol))
+        # self.samples_beta   = np.empty((ns, self.nMix, self.nCol))
+        # self.samples_eta    = np.empty((ns, self.nMix))
+        # self.samples_delta  = np.empty((ns, self.nDat), dtype = int)
+        # self.samples_r      = np.empty((ns, self.nDat))
         # set initial values
-        self.samples_alpha[0] = self.alpha_prior.rvs(size = (self.nMix, self.nCol))
-        self.samples_beta[0]  = self.beta_prior.rvs(size = (self.nMix, self.nCol))
-        self.samples_beta[:,:,0] = 1.
-        self.samples_eta[0]  = 1. / self.nMix
-        self.samples_r[0]    = 1.
+        self.samples.alpha[0] = self.alpha_prior.rvs(size = (self.nMix, self.nCol))
+        self.samples.beta[0]  = self.beta_prior.rvs(size = (self.nMix, self.nCol))
+        self.samples.beta[:,:,0] = 1.
+        self.samples.eta[0]  = 1. / self.nMix
+        self.samples.r[0]    = 1.
         return
 
     def sample(self, ns):
-        self.initialize_sampler(ns + 1)
+        self.initialize_sampler(ns)
         for i in range(1, ns + 1):
-            self.samples_delta[i] = self.sample_delta(
-                self.samples_eta[i-1],
-                self.samples_alpha[i-1],
-                self.samples_beta[i-1],
+            self.samples.delta[i] = self.sample_delta(
+                self.samples.eta[i-1],
+                self.samples.alpha[i-1],
+                self.samples.beta[i-1],
                 )
-            self.samples_r[i] = self.sample_r(
-                self.samples_alpha[i-1],
-                self.samples_beta[i-1],
-                self.samples_delta[i],
+            self.samples.r[i] = self.sample_r(
+                self.samples.alpha[i-1],
+                self.samples.beta[i-1],
+                self.samples.delta[i],
                 )
-            self.samples_eta[i] = self.sample_eta(self.samples_delta[i])
-            self.samples_alpha[i] = self.sample_alpha(
-                self.samples_r[i],
-                self.samples_alpha[i-1],
-                self.samples_delta[i],
+            self.samples.eta[i] = self.sample_eta(self.samples.delta[i])
+            self.samples.alpha[i] = self.sample_alpha(
+                self.samples.r[i],
+                self.samples.alpha[i-1],
+                self.samples.delta[i],
                 )
-            self.samples_beta[i] = self.sample_beta(
-                self.samples_r[i],
-                self.samples_alpha[i],
-                self.samples_delta[i],
+            self.samples.beta[i] = self.sample_beta(
+                self.samples.r[i],
+                self.samples.alpha[i],
+                self.samples.delta[i],
                 )
+        return
+
+    def write_to_disk(self, path, nBurn, thin = 1):
+        nSamp = self.samples.alpha.shape[0]
+        nKeep = nSamp - nBurn - 1
+        conn  = sql.connection(path)
+        alpha = self.samples.alpha[- nKeep :: thin]
+        beta  = self.samples.beta[- nKeep :: thin]
+        eta   = self.samples.eta[- nKeep :: thin]
+        delta = self.samples.delta[- nKeep :: thin]
+        r     = self.samples.r[- nKeep :: thin]
         return
 
     def __init__(

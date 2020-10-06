@@ -5,27 +5,112 @@ import numpy as np
 from numpy.linalg import norm
 from math import cos, sin, log, acos, exp
 from scipy.stats import gamma, uniform, norm as normal
-from scipy.special import gammaln
 from functools import lru_cache
-from genpareto import gpd_fit
 from collections import namedtuple
-from cSlice import SliceSample
+cimport scipy.special.cython_special as csp
 cimport numpy as np
-
+from cSlice import univariate_slice_sample #, f_type_1
 
 # Tuples for storing priors
 
-GammaPrior     = namedtuple('GammaPrior', 'a b')
-DirichletPrior = namedtuple('DirichletPrior', 'a')
+# GammaPrior     = namedtuple('GammaPrior', 'a b')
+# DirichletPrior = namedtuple('DirichletPrior', 'a')
+cdef class GammaPrior:
+    cdef double a, b
+
+    @property
+    def a(self):
+        return self.a
+
+    @property
+    def b(self):
+        return self.b
+
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+        return
+
+cdef class DirichletPrior:
+    cdef double a
+
+    @property
+    def a(self):
+        return self.a
+
+    def __init__(self, a):
+        self.a = a
+        return
+
+# Utility functions
+cdef double vector_sum(double[:] Y):
+    """ sum over one-dimensional vector Y """
+    cdef int N = Y.shape[0]
+    cdef double s = Y[0]
+    cdef int i
+    for i in range(1,N):
+      s += Y[i]
+    return s
+
+cdef double [:] vector_cumsum(double[:] Y):
+    """ cumulative sum over one-dimensional vector Y """
+    cdef int N = Y.shape[0]
+    cdef double s = Y[0]
+    cdef int i
+    cdef np.ndarray[dtype = np.float_t, ndim = 1] S = np.empty(N)
+    S[0] = s
+    for i in range(1, N):
+        s += Y[i]
+        S[i] = s
+    return S
+
+cdef double [:,:] hadamard_product(double[:,:] mat1, double[:,:] mat2):
+    """ hadamard product for matrix multiplication => Z[i,j] = X[i,j] * Y[i,j] for all i,j """
+    assert mat1.shape == mat2.shape
+    cdef int n = mat1.shape[0]
+    cdef int k = mat1.shape[1]
+    cdef np.ndarray[dtype = np.float_t, ndim = 2] out = np.empty(mat1.shape)
+    for i in range(n):
+        for j in range(k):
+            out[i,j] = mat1[i,j] * mat2[i,j]
+    return out
+
+cdef double [:,:] dot_product(double[:,:] mat1, double[:,:] mat2):
+    assert mat1.shape[1] == mat2.shape[0]
+    cdef int n = mat1.shape[0]
+    cdef int m = mat2.shape[1]
+    cdef int o = mat1.shape[1]
+    cdef double s
+    cdef np.ndarray[dtype = np.float_t, ndim = 2] out = np.zeros((n, m))
+    for i in range(n):
+       for j in range(m):
+          s = 0.
+          for k in range(o):
+              s += mat1[i,k] * mat2[k,j]
+          out[i,j] = s
+    return out
+
+cdef double [:] dot_product_s(double[:,:] mat, double[:] vec):
+    assert mat.shape[1] == vec.shape[0]
+    cdef int n = mat.shape[0]
+    cdef int o = mat.shape[1]
+    cdef double s
+    cdef np.ndarray[dtype = np.float_t, ndim = 1] out = np.zeros(n)
+    for i in range(n):
+        s = 0
+        for k in range(o):
+            s += mat[i,k] * vec[k]
+        out[i] = s
+    return out
 
 ## Functions related to projected gamma density
 
 cpdef double logdprojgamma(
-        np.ndarray[dtype = np.float64_t, ndim = 2] coss,
-        np.ndarray[dtype = np.float64_t, ndim = 2] sins,
-        np.ndarray[dtype = np.float64_t, ndim = 2] sinp,
-        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
-        np.ndarray[dtype = np.float64_t, ndim = 1] beta
+        np.ndarray[dtype = np.float_t, ndim = 1] coss,
+        np.ndarray[dtype = np.float_t, ndim = 1] sins,
+        np.ndarray[dtype = np.float_t, ndim = 1] sinp,
+        np.ndarray[dtype = np.float_t, ndim = 1] alpha,
+        np.ndarray[dtype = np.float_t, ndim = 1] beta,
         ):
     """ Log-density of projected gamma.  Inputs have already been
     pre-formatted for use.
@@ -35,23 +120,54 @@ cpdef double logdprojgamma(
     alpha = vector of shape parameters for underlying gamma distributions
     beta  = vector of rate parameters for underlying gamma distributions
     """
-    cdef np.ndarray[dtype = np.float_t, ndim = 2] Yl
+    cdef np.ndarray[dtype = np.float_t, ndim = 1] Yl
     cdef np.ndarray[dtype = np.float_t, ndim = 1] B, asinv
     cdef double A, lp
+    cdef int k
 
     Yl    = coss * sinp
     A     = alpha.sum()
-    B     = (beta * Yl).sum(axis = 1)
+    B     = Yl @ beta
     asinv = np.cumsum(alpha[1:][::-1])[::-1]
+    k     = Yl.shape[1]
 
     lp = (
-        + gammaln(A)
+        + csp.gammaln(A)
         - A * log(B)
-        + (alpha * log(beta) - gammaln(alpha)).sum()
+        + (alpha * log(beta) - csp.gammaln(alpha)).sum()
         + (log(coss[:,:(k-1)]) * (alpha[:(k-1)] - 1)).sum(axis = 1)
         + (log(sins[:,1:]) * (asinv - 1)).sum(axis = 1)
         )
     return lp
+
+cpdef double logdprojgamma_pre_single(
+        double[:] lcoss,
+        double[:] lsins,
+        double[:] Yl,
+        double[:] alpha,
+        double[:] beta
+        ):
+    """ Log density of projected gamma for a single (k-1) dimensional obsv. """
+    cdef np.ndarray[dtype = np.float_t, ndim = 1] B, asinv
+    cdef double A, lp, line1, line2, line3, line4, line5
+    cdef int i
+    cdef int k = Yl.shape[1]
+    A = vector_sum(alpha)
+    B = 0.
+    for j in range(k):
+        B += Yl[j] * beta[j]
+    asinv = vector_cumsum(alpha[1:][::-1])[::-1]
+    line1 = csp.gammaln(A)
+    line2 = - A * log(B)
+    line3 = 0
+    line4 = 0
+    line5 = 0
+    for i in range(k):
+       line3 += alpha[i] * log(beta[i]) - csp.gammaln(alpha[i])
+    for i in range(k - 1):
+       line4 += lcoss[i] * (alpha[i] - 1)
+       line5 += lsins[i + 1] * (asinv[i] - 1)
+    return line1 + line2 + line3 + line4 + line5
 
 cpdef double logdprojgamma_pre(
         np.ndarray[dtype = np.float64_t, ndim = 2] lcoss,
@@ -70,107 +186,95 @@ cpdef double logdprojgamma_pre(
     beta  = vector of rate parameters for underlying gamma distributions
     """
     cdef np.ndarray[dtype = np.float_t, ndim = 1] B, asinv
-    cdef double A, lp
+    cdef double A, lp, line1, line2, line3, line4, line5
     cdef int k
-
-    A = alpha.sum()
-    B = (beta * Yl).sum(axis = 1)
+    A = vector_sum(alpha)
+    B = dot_product_s(Yl, beta)
+    asinv = vector_cumsum(alpha[1:][::-1])[::-1]
     k = lcoss.shape[1]
-    asinv = np.cumsum(alpha[1:][::-1])[::-1]
     lp = (
-        + gammaln(A)
-        - A * np.log(B)
-        + (alpha * np.log(beta) - gammaln(alpha)).sum()
-        + (lcoss[:,:(k - 1)] * (alpha[:(k - 1)] - 1)).sum(axis = 1)
+        + csp.gammaln(A)
+        - A * log(B)
+        + (alpha * np.log(beta) - csp.gammaln(alpha)).sum()
+        + (lcoss[:,:(k - 1)] * (alpha[:(k - 1)] - 1)).sum()
         + (lsins[:,1:] * (asinv - 1)).sum(axis = 1)
         )
     return lp
 
-cpdef double dprojgamma(
-        np.ndarray[dtype = np.float64_t, ndim = 2] theta,
-        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
-        np.ndarray[dtype = np.float64_t, ndim = 1] beta,
-        bint logd = False,
-        ):
-    cdef int k
-    cdef np.ndarray[dtype = np.float64_t, ndim = 2] coss, sins, sinp
-    cdef double ld
-
-    k = len(alpha)
-    assert all(len(theta) == k - 1, len(beta) == k)
-
-    coss = np.vstack((np.cos(theta).T, 1)).T
-    sins = np.vstack((1,np.sin(theta).T)).T
-    sinp = np.cumprod(sins, axis = 1)
-
-    ld = logdprojgamma(coss, sins, sinp, alpha, beta)
-
-    if logd:
-        return ld
-    else:
-        return exp(ld)
-
-cpdef double dprojgamma_trig(
-        np.ndarray[dtype = np.float64_t, ndim = 2] s_theta,
-        np.ndarray[dtype = np.float64_t, ndim = 2] c_theta,
-        np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
-        np.ndarray[dtype = np.float64_t, ndim = 1 ]beta,
-        bint logd = False
-        ):
-    cdef np.ndarray[dtype = np.float64_t, ndim = 2] coss, sins, sinp
-    cdef double ld
-
-    coss = np.vstack((c_theta.T, 1)).T
-    sins = np.vstack((1, s_theta.T)).T
-    sinp = np.cumprod(sins, axis = 1)
-
-    ld = logdprojgamma(coss, sins, sinp, alpha, beta)
-
-    if logd:
-        return ld
-    else:
-        return exp(ld)
-
-# def dprojgamma_latent(Y, alpha, beta):
-#     pass
-
-## Function for sampling from projected gamma
-
-def rprojgamma():
-    pass
+# cpdef double dprojgamma(
+#         np.ndarray[dtype = np.float64_t, ndim = 2] theta,
+#         np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
+#         np.ndarray[dtype = np.float64_t, ndim = 1] beta,
+#         bint logd = False,
+#         ):
+#     cdef int k
+#     cdef np.ndarray[dtype = np.float64_t, ndim = 2] coss, sins, sinp
+#     cdef double ld
+#
+#     k = len(alpha)
+#     assert all(len(theta) == k - 1, len(beta) == k)
+#
+#     coss = np.vstack((np.cos(theta).T, 1)).T
+#     sins = np.vstack((1,np.sin(theta).T)).T
+#     sinp = np.cumprod(sins, axis = 1)
+#
+#     ld = logdprojgamma(coss, sins, sinp, alpha, beta)
+#
+#     if logd:
+#         return ld
+#     else:
+#         return exp(ld)
+#
+# cpdef double dprojgamma_trig(
+#         np.ndarray[dtype = np.float64_t, ndim = 2] s_theta,
+#         np.ndarray[dtype = np.float64_t, ndim = 2] c_theta,
+#         np.ndarray[dtype = np.float64_t, ndim = 1] alpha,
+#         np.ndarray[dtype = np.float64_t, ndim = 1 ]beta,
+#         bint logd = False
+#         ):
+#     cdef np.ndarray[dtype = np.float64_t, ndim = 2] coss, sins, sinp
+#     cdef double ld
+#
+#     coss = np.vstack((c_theta.T, 1)).T
+#     sins = np.vstack((1, s_theta.T)).T
+#     sinp = np.cumprod(sins, axis = 1)
+#
+#     ld = logdprojgamma(coss, sins, sinp, alpha, beta)
+#
+#     if logd:
+#         return ld
+#     else:
+#         return exp(ld)
 
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
-
-# @lru_cache(maxsize = 32)
-cpdef double log_post_log_alpha_1(
-        double log_alpha_1,
-        np.ndarray[dtype = np.float_t, ndim = 1] y_1,
-        GammaPrior prior,
-        ):
+cpdef double log_post_log_alpha_1(double log_alpha_1, double [:] y_1, GammaPrior prior):
     """ Log posterior for log-alpha_1 assuming a gamma distribution,
     with beta assumed to be 1. """
-
+    cdef double alpha_1, lp
+    cdef int n_1
     alpha_1 = exp(log_alpha_1)
     n_1     = y_1.shape[0]
     lp = (
         + prior.a * log_alpha_1
         - prior.b * alpha_1
         + (alpha_1 - 1) * np.log(y_1).sum()
-        - n_1 * gammaln(alpha_1)
+        - n_1 * csp.gammaln(alpha_1)
         )
     return lp
 
 cpdef double sample_alpha_1_mh(
         double curr_alpha_1,
-        np.ndarray[dtype = np.float64_t, ndim = 1] y_1,
+        double [:] y_1,
         GammaPrior prior,
-        proposal_sd = 0.1,
+        double proposal_sd = 0.1,
         ):
     """ Sampling function for shape parameter, with gamma likelihood and
     gamma prior.  Assumes rate parameter = 1.  uses Metropolis Hastings
     algorithm with random walk for sampling. """
-    if len(y_1) <= 1:
+    cdef double curr_log_alpha_1, prop_log_alpha_1, curr_lp, prop_lp
+
+    if len(y_1) < 1:
         return gamma.rvs(prior.a, scale = 1./prior.b)
 
     curr_log_alpha_1 = log(curr_alpha_1)
@@ -184,33 +288,43 @@ cpdef double sample_alpha_1_mh(
     else:
         return curr_alpha_1
 
-cpdef double sample_alpha_1_slice(
+cdef double _sample_alpha_1_slice(
         double curr_alpha_1,
-        np.ndarray[dtype = np.float64_t, ndim = 1] y_1,
+        double[:] y_1,
         GammaPrior prior,
-        double increment_size = 0.2
+        double increment_size
         ):
-    cdef double f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
+    cdef object f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
     return exp(univariate_slice_sample(f, log(curr_alpha_1), increment_size))
 
-#@lru_cache(maxsize = 128)
-cpdef double log_post_log_alpha(
-        double log_alpha,
-        np.ndarray[dtype = np.float64_t, ndim = 1] y,
+cpdef double sample_alpha_1_slice(
+        double curr_alpha_1,
+        double[:] y_1,
+        GammaPrior prior,
+        double increment_size = 0.5
+        ):
+    return _sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size)
+
+cpdef double log_post_log_alpha_k(
+        double log_alpha_k,
+        double[:] y_k,
         GammaPrior prior_a,
         GammaPrior prior_b,
         ):
     """ Log posterior for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
-    alpha = exp(log_alpha)
-    n     = y.shape[0]
+    cdef double alpha_k, lp
+    cdef int n_k
+
+    alpha_k = exp(log_alpha_k)
+    n_k     = y_k.shape[0]
     lp = (
-        + (alpha - 1) * np.log(y).sum()
-        - n * gammaln(alpha)
-        + prior_a.a * log_alpha
-        - prior_a.b * alpha
-        + gammaln(n * alpha + prior_b.a)
-        - (n * alpha + prior_b.a) * log(y.sum() + prior_b.b)
+        + (alpha_k - 1) * np.log(y_k).sum()
+        - n_k * csp.gammaln(alpha_k)
+        + prior_a.a * log_alpha_k
+        - prior_a.b * alpha_k
+        + csp.gammaln(n_k * alpha_k + prior_b.a)
+        - (n_k * alpha_k + prior_b.a) * log(y_k.sum() + prior_b.b)
         )
     return lp
 
@@ -218,122 +332,49 @@ cpdef double sample_alpha_k_mh(
         double curr_alpha_k,
         np.ndarray[dtype = np.float64_t, ndim = 1] y_k,
         GammaPrior prior_a,
-        gammaPrior prior_b,
+        GammaPrior prior_b,
         double proposal_sd = 0.1
         ):
     """ Sampling Function for shape parameter, with Gamma likelihood and Gamma
     prior, with rate (with gamma prior) integrated out. """
+    cdef double curr_log_alpha_k, prop_log_alpha_k, curr_lp, prop_lp
     if len(y_k) <= 1:
         return gamma.rvs(prior_a.a, scale = 1./prior_a.b)
 
     curr_log_alpha_k = log(curr_alpha_k)
     prop_log_alpha_k = curr_log_alpha_k + normal.rvs(scale = proposal_sd)
 
-    curr_lp = log_post_log_alpha(curr_log_alpha_k, y_k, prior_a, prior_b)
-    prop_lp = log_post_log_alpha(prop_log_alpha_k, y_k, prior_a, prior_b)
+    curr_lp = log_post_log_alpha_k(curr_log_alpha_k, y_k, prior_a, prior_b)
+    prop_lp = log_post_log_alpha_k(prop_log_alpha_k, y_k, prior_a, prior_b)
 
     if log(uniform.rvs()) < prop_lp - curr_lp:
         return exp(prop_log_alpha_k)
     else:
         return curr_alpha_k
 
-def sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size = 0.2):
-    f = lambda log_alpha_k: log_post_log_alpha_k(log_alpha_k, y_k, prior_a, prior_b)
+cdef double _sample_alpha_k_slice(
+        double curr_alpha_k,
+        double[:] y_k,
+        GammaPrior prior_a,
+        GammaPrior prior_b,
+        double increment_size
+        ):
+    cdef object f = lambda log_alpha_k: log_post_log_alpha_k(log_alpha_k, y_k, prior_a, prior_b)
     return exp(univariate_slice_sample(f, log(curr_alpha_k), increment_size))
 
-def sample_beta_fc(alpha, y, prior):
-    aa = len(y) * alpha + prior.a
-    bb = sum(y) + prior.b
+cpdef double sample_alpha_k_slice(
+        double curr_alpha_k,
+        double[:] y_k,
+        GammaPrior prior_a,
+        GammaPrior prior_b,
+        double increment_size = 0.5
+        ):
+    return _sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size)
+
+cpdef double sample_beta_fc(double alpha, double[:] y, GammaPrior prior):
+    cdef double aa, bb
+    aa = y.shape[0] * alpha + prior.a
+    bb = vector_sum(y) + prior.b
     return gamma.rvs(aa, scale = 1. / bb)
-
-class Data(object):
-    @staticmethod
-    def to_euclidean(theta):
-        """ casts angles in radians onto unit hypersphere in Euclidean space """
-        coss = np.vstack((np.cos(theta).T, 1)).T
-        sins = np.vstack((1, np.sin(theta).T)).T
-        sinp = np.cumprod(sins, axis = 1)
-        return coss * sinp
-
-    def fill_out(self):
-        self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
-        self.sins  = np.vstack((np.ones(self.A.shape[0]), np.sin(self.A).T)).T
-        self.sinp  = np.cumprod(self.sins, axis = 1)
-        self.Yl    = self.coss * self.sinp
-        self.lsins = np.log(self.sins)
-        self.lcoss = np.log(self.coss)
-        return
-
-    def __init__(self, path):
-        self.A = read.csv(path)
-        self.fill_out()
-        return
-
-class Data_From_Raw(Data):
-    raw = None # raw data
-    Z   = None # Standardized Pareto Transformed (for those > 1)
-    P   = None # Generalized Pareto Parameters (threshold, scale, extreme index)
-    V   = None # Z cast to unit Hypersphere
-    R   = None # row maximum under standardized Pareto
-    I   = None # index of observation in raw corresponding to observation in V
-               # (because we're subsetting to only observations w/ max > 1)
-    A   = None # Angular Data
-
-    @staticmethod
-    def to_angular(hyp):
-        """ Convert data to angular representation. """
-        n, k  = hyp.shape
-        theta = np.empty((n, k - 1))
-        for i in range(k - 1):
-            theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1) + 1e-7))
-        return theta
-
-    @staticmethod
-    def to_hypercube(par):
-        """ Projects data that is marginally standardized Pareto (for those
-        obsv for which the row max > 1) onto the unit hypercube. returns those
-        projections, the row max, and the indices in the original data
-        corresponding to the observations """
-        R = par.max(axis = 1)
-        V = (par.T / R).T
-        I = np.where(R > 1)
-        return V[I], R[I], I
-
-    @staticmethod
-    def to_pareto(raw, q = 0.95):
-        """ convert data to marginal std pareto -- q is the threshold quantile
-        returns an array of observations which > 1 follows standardized pareto,
-        as well as an array of GP parameters (univariate threshold, scale, xi)
-        """
-        def compute_gp_parameters(raw_vector, q):
-            b = np.quantile(raw_vector, q)
-            a, xi = gpd_fit(raw_vector, b)
-            return np.array((b,a,xi))
-
-        P = np.apply_along_axis(lambda x: compute_gp_parameters(x, q), 0, raw)
-        Z = (1 + P[2] * (raw - P[0]) / P[1])**(1/P[2])
-        Z[Z < 0.] = 0.
-        return Z, P
-
-    def __init__(self, raw):
-        # if input is pandas dataframe, then take numpy array representation
-        try:
-            self.raw = raw.values
-        # else assume input is numpy array
-        except AttributeError:
-            self.raw = raw
-        # Compute standardized pareto margins
-        self.Z, self.P = self.to_pareto(self.raw)
-        # Cast to hypercube, keep only observations extreme in >= 1 dimension
-        self.V, self.R, self.I = self.to_hypercube(self.Z)
-        # proceed with angular representation
-        self.A = self.to_angular(self.V)
-        # Number of columns for Gamma representation
-        self.nCol = self.A.shape[1] + 1
-        # Number of rows in data
-        self.nDat = self.A.shape[0]
-        # Pre-compute the trig components of the likelihood.
-        self.fill_out()
-        return
 
 # EOF

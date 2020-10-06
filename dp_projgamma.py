@@ -9,32 +9,93 @@ BNPPGPrior = namedtuple('BNPPGPrior', 'alpha beta eta')
 Theta      = namedtuple('Theta','alpha beta')
 
 def log_density_gamma_i(args):
-    return logdprojgamma_pre(*args)
+    return logdprojgamma_pre_single(*args)
+def update_alpha_wrapper(args):
+    if args[0] == 0:
+        return sample_alpha_1_mh(*args[1:])
+    elif args[0] > 0:
+        return sample_alpha_k_mh(*args[1:])
+    else:
+        raise ValueError('Something other than col index was passed!')
+def update_beta_wrapper(args):
+    return sample_beta_fc(*args)
 
-
-class NPPG(object):
-    samples_theta = []
+class DPMPG(object):
+    samples_alpha = []
+    samples_beta = []
     samples_delta = None
     executor = None
 
-    def clean_delta(self, delta):
+    def clean_delta(self, deltas, alphas, betas, i):
         """ delta is a vector of cluster assignments.  If the delta vector has
         0 entries for one index, and > 0 entries for a higher index, then the
         higher indices are shuffled down by one.  This is kind of wasteful if it
         need happen several times... """
-        nj = np.array(
-                [(delta == j).sum() for j in range(delta.max() + 1)],
-                dtype = np.int,
-                )
-        j = np.where(nj == 0)[0]
-        while(delta.max() > j):
-            delta[delta > j] = delta[delta > j] - 1
-            nj = np.array(
-                    [(delta == j).sum() for j in range(delta.max() + 1)],
-                    dtype = np.int,
-                    )
-            j = np.where(nj == 0)[0]
-        return delta
+        assert (deltas.max() + 1 == alphas.shape[0])
+        _delta = np.delete(deltas, i)
+        _alpha = alphas[np.array([j for j in range(_delta.max() + 1) if j in set(_delta)])]
+        _beta  = betas[np.array([j for j in range(_delta.max() + 1) if j in set(_delta)])]
+        nj     = np.array([(_delta == j).sum() for j in range(_delta.max() + 2)], dtype = int)
+        fz     = np.where(nj == 0)[0][0]
+        while fz <= _delta.max():
+            _delta[_delta > fz] = _delta[_delta > fz] - 1
+            nj = np.array([(_delta == j).sum() for j in range(_delta.max() + 2)], dtype = int)
+            fz = np.where(nj == 0)[0][0]
+        return _delta, _alpha, _beta
+
+    def sample_delta_i(self, deltas, alphas, betas, eta, i):
+        # Clean the deltas, alphsas, and betas.  calculate the new max delta
+        _delta, _alpha, _beta = self.clean_delta(deltas, alphas, betas, i)
+        _dmax = _delta.max()
+        # Compute the prior probabilities for the collapsed sampler.
+        nj = np.array([(_delta == j).sum() for j in range(_dmax + 1 + self.m)])
+        lj = nj + (nj == 0) * eta / self.m
+        # Generate potential new clusters
+        alpha_new, beta_new = self.sample_alpha_beta_new()
+        alpha_stack = np.vstack(_alpha, alpha_new)
+        beta_stack  = np.vstack(_beta, beta_new)
+        assert (alpha_stack.shape[0] == lj.shape[0])
+        # Calculate log-posteriors under each cluster
+        args = zip(
+            repeat(self.data.lcoss[i]),
+            repeat(self.data.lsins[i]),
+            repeat(self.data.Yl[i]),
+            alpha_stack.tolist(),
+            beta_stack.tolist(),
+            )
+        lps = self.pool.map(log_density_gamma_i, args)
+        unnormalized = exp(lps) * lj
+        normalized = unnormalized / unnormalized.sum()
+        dnew = choice(range(_dmax + self.m + 1), 1, p = normalized)
+        if dnew > _dmax:
+            alpha = np.vstack((_alpha, alpha_stack[dnew]))
+            beta  = np.vstack((_beta,  beta_stack[dnew]))
+            delta = np.insert(_delta, i, dnew)
+        else:
+            delta = np.insert(_delta, i, dnew)
+            alpha = _alpha
+            beta  = _beta
+        return delta, alpha, beta
+
+    def sample_alpha_beta_new(self):
+        alphas = self.alpha_prior.rvs(size = (self.m, self.d))
+        betas  = np.hstack(ones(self.m), self.beta_prior.rvs(size = (self.m, self.d - 1)))
+        return alphas, betas
+
+    def update_alpha_beta(self, curr_alphas, deltas, Y):
+        nClust = deltas.max() + 1
+        djs  = [(delta == j) for j in range(nClust)]
+        Yjks = [Y[djs[j], k] for j in range(nClust) for k in range(self.nCol)]
+        idxs = list(range(self.nCol)) * nClust
+        alpha_args = zip(idxs, curr_alphas.reshape(-1), Yjks, repeat(self.priors.alpha))
+        prop_alphas = (pool.map(update_alpha_wrapper, alpha_args)).reshape(curr_alphas.shape)
+        Yjks = [Y[djs[j], k] for k in range(1, self.nCol) for j in range(nClust)]
+        beta_args = zip(prop_alphas[:,1:].reshape(-1), Yjks, repeat(self.priors.beta))
+        prop_betas = np.hstack(
+            np.ones(nClust),
+            (pool.map(update_beta_wrapper), beta_args).reshape(nClust, self.nCol - 1),
+            )
+        return prop_alphas, prop_betas
 
     def sample_beta_j(self, alpha_j, Yj):
         """ Sampler for beta vector associated with cluster j """
@@ -62,12 +123,14 @@ class NPPG(object):
         #         )
         # prop_alpha = np.array([future.result() for future in futures])
         prop_alpha = np.empty(self.nCol)
+        Yjg = gmean(Yj, axis = 0)
+
         prop_alpha[0] = sample_alpha_1_slice(
-            gmean(Yj[:,0]), Yj[:,0], self.priors.alpha,
+            Yjg[0], Yj[:,0], self.priors.alpha,
             )
         for k in range(1, self.nCol):
             prop_alpha[k] = sample_alpha_k_slice(
-                gmean(Yj[:,k]), Yj[:,k], self.priors.alpha, self.priors.beta,
+                Yjg[k], Yj[:,k], self.priors.alpha, self.priors.beta,
                 )
         return prop_alpha
 
@@ -140,7 +203,7 @@ class NPPG(object):
         bb = self.priors.eta.b - log(g)
         eps = (aa - 1) / (self.nDat * bb + aa - 1)
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
-        return gamma.rvs(aaa, 1./bb)
+        return gamma.rvs(aaa, bb)
 
     def set_priors(self):
         self.alpha_prior = gamma(self.priors.alpha.a, 1 / self.priors.alpha.b)
