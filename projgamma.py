@@ -144,7 +144,7 @@ def log_post_log_alpha_1(log_alpha_1, y_1, prior):
         )
     return lp
 
-def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.1):
+def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.2):
     """ Sampling function for shape parameter, with gamma likelihood and
     gamma prior.  Assumes rate parameter = 1.  uses Metropolis Hastings
     algorithm with random walk for sampling. """
@@ -162,7 +162,7 @@ def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.1):
     else:
         return curr_alpha_1
 
-def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 1.):
+def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 2.):
     f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
     return exp(univariate_slice_sample(f, log(curr_alpha_1), increment_size))
 
@@ -171,7 +171,7 @@ def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
     """ Log posterior for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
     alpha = exp(log_alpha)
-    n     = y.shape[0]
+    n  = y.shape[0]
     lp = (
         + (alpha - 1) * np.log(y).sum()
         - n * gammaln(alpha)
@@ -182,7 +182,7 @@ def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
         )
     return lp
 
-def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.1):
+def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.2):
     """ Sampling Function for shape parameter, with Gamma likelihood and Gamma
     prior, with rate (with gamma prior) integrated out. """
     if len(y_k) <= 1:
@@ -199,7 +199,7 @@ def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.1):
     else:
         return curr_alpha_k
 
-def sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size = 1.):
+def sample_alpha_k_slice(curr_alpha_k, y_k, prior_a, prior_b, increment_size = 2.):
     f = lambda log_alpha_k: log_post_log_alpha_k(log_alpha_k, y_k, prior_a, prior_b)
     return exp(univariate_slice_sample(f, log(curr_alpha_k), increment_size))
 

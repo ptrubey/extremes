@@ -2,14 +2,25 @@ import numpy as np
 from genpareto import gpd_fit
 from numpy.linalg import norm
 
+def to_euclidean(theta):
+    """ casts angles in radians onto unit hypersphere in Euclidean space """
+    coss = np.vstack((np.cos(theta).T, 1)).T
+    sins = np.vstack((1, np.sin(theta).T)).T
+    sinp = np.cumprod(sins, axis = 1)
+    return coss * sinp
+
+def to_angular(hyp):
+    """ Convert data to angular representation. """
+    n, k  = hyp.shape
+    theta = np.empty((n, k - 1))
+    for i in range(k - 1):
+        theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1) + 1e-7))
+    return theta
+
 class Data(object):
     @staticmethod
     def to_euclidean(theta):
-        """ casts angles in radians onto unit hypersphere in Euclidean space """
-        coss = np.vstack((np.cos(theta).T, 1)).T
-        sins = np.vstack((1, np.sin(theta).T)).T
-        sinp = np.cumprod(sins, axis = 1)
-        return coss * sinp
+        return to_euclidean(theta)
 
     def fill_out(self):
         self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
@@ -37,12 +48,7 @@ class Data_From_Raw(Data):
 
     @staticmethod
     def to_angular(hyp):
-        """ Convert data to angular representation. """
-        n, k  = hyp.shape
-        theta = np.empty((n, k - 1))
-        for i in range(k - 1):
-            theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1) + 1e-7))
-        return theta
+        return to_angular(hyp)
 
     @staticmethod
     def to_hypercube(par):
