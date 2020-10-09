@@ -10,6 +10,7 @@ if __name__ == '__main__':
     mpg = MPG(data, nMix = 20)
     mpg.initialize_sampler(10000)
     mpg.sample(10000)
+    mpg.write_to_disk('samples_mpg.db')
 
 
 # EOF

@@ -10,6 +10,7 @@ import sqlite3 as sql
 import pandas as pd
 import data as dm
 import cUtility as cu
+import os
 
 BNPPGPrior = namedtuple('BNPPGPrior', 'alpha beta eta')
 Theta      = namedtuple('Theta','alpha beta')
@@ -114,29 +115,14 @@ class DPMPG(object):
         return
 
     def clean_delta(self, deltas, alphas, betas, i):
-        """ delta is a vector of cluster assignments.  If the delta vector has
-        0 entries for one index, and > 0 entries for a higher index, then the
-        higher indices are shuffled down by one.  This is kind of wasteful if it
-        need happen several times... """
-        try:
-            assert (deltas.max() + 1 == alphas.shape[0])
-        except AssertionError:
-            print('nclust : {}'.format(deltas.max() + 1))
-            print('alpha size: {}'.format(alphas.shape))
-            raise
-        _delta = np.delete(deltas, i) # need to rewrite this!
-        _alpha = alphas[np.array([j for j in range(_delta.max() + 1) if j in set(_delta)])]
-        _beta  = betas[np.array([j for j in range(_delta.max() + 1) if j in set(_delta)])]
-        # nj     = np.array([(_delta == j).sum() for j in range(_delta.max() + 2)], dtype = int)
+        assert (deltas.max() + 1 == alphas.shape[0])
+        _delta = np.delete(deltas, i)
         nj     = cu.counter(_delta, _delta.max() + 2)
         fz     = cu.first_zero(nj)
-        # fz     = np.where(nj == 0)[0][0]
-        while fz <= _delta.max():
+        _alpha = alphas[np.where(nj > 0)[0]]
+        _beta  = betas[np.where(nj > 0)[0]]
+        if (fz == deltas[i]) and (fz <= _delta.max()):
             _delta[_delta > fz] = _delta[_delta > fz] - 1
-            # nj = np.array([(_delta == j).sum() for j in range(_delta.max() + 2)], dtype = int)
-            nj = cu.counter(_delta, _delta.max() + 2)
-            fz = cu.first_zero(nj)
-            # fz = np.where(nj == 0)[0][0]
         return _delta, _alpha, _beta
 
     def sample_delta_i(self, deltas, alphas, betas, eta, i):
@@ -301,15 +287,20 @@ class ResultDPMPG(object):
             #     for j in range(dmax + 1)
             #     ], dtype = int)
             prob = njs / njs.sum()
-            deltas = np.choice(range(dmax + 1), size = n_per_sample, p = prob)
+            deltas = np.random.choice(range(dmax + 1), size = n_per_sample, p = prob)
             alpha = self.samples.alpha[i][deltas]
             beta  = self.samples.beta[i][deltas]
             new_gammas.append(gamma.rvs(alpha, scale = 1 / beta))
         new_gamma_arr = np.vstack(new_gammas)
         return dm.to_angular(new_gamma_arr)
 
-    def plot_posterior_predictive(self):
-        pass
+    def write_posterior_predictive(self, path):
+        thetas = pd.DataFrame(
+            self.generate_posterior_predictive(),
+            columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
+            )
+        thetas.to_csv(path, index = False)
+        return
 
     def load_data(self, path):
         conn = sql.connect(path)
@@ -321,7 +312,7 @@ class ResultDPMPG(object):
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
-        self.nCol  = alphas.shape[1]
+        self.nCol  = alphas.shape[1] - 1
 
         self.samples = SamplesDPMPG(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
