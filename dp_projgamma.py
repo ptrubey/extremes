@@ -5,6 +5,7 @@ from collections import namedtuple
 from itertools import repeat
 from math import ceil
 import numpy as np
+np.seterr(under = 'ignore')
 import multiprocessing as mp
 import sqlite3 as sql
 import pandas as pd
@@ -259,7 +260,7 @@ class DPMPG(object):
             data,
             prior_alpha = GammaPrior(1.,1.),
             prior_beta = GammaPrior(1.,1.),
-            prior_eta = GammaPrior(4.,1.),
+            prior_eta = GammaPrior(2.,15.),
             m = 20
             ):
         self.m = m
@@ -278,6 +279,17 @@ class ResultDPMPG(object):
     nCol    = None
 
     def generate_posterior_predictive(self, n_per_sample = 10):
+        """ Generates posterior prediction, projects to hypercube, then
+        casts to angular space """
+        hyp = self.generate_posterior_predictive_hypercube(n_per_sample)
+        return to_angular(hyp)
+
+    def generate_posterior_predictive_hypercube(self, n_per_sample):
+        """ Generates a posterior prediction, and projects it to the hypercube """
+        gnew = self.generate_posterior_predictive_gammas(n_per_sample)
+        return (gnew.T / gnew.max(axis = 1)).T
+    
+    def generate_posterior_predictive_gammas(self, n_per_sample = 10):
         new_gammas = []
         for i in range(self.nSamp):
             dmax = self.samples.delta[i].max()
@@ -287,7 +299,8 @@ class ResultDPMPG(object):
             #     for j in range(dmax + 1)
             #     ], dtype = int)
             prob = njs / njs.sum()
-            deltas = np.random.choice(range(dmax + 1), size = n_per_sample, p = prob)
+            # deltas = np.random.choice(range(dmax + 1), size = n_per_sample, p = prob)
+            deltas = cu.generate_indices(prob, n_per_sample)
             alpha = self.samples.alpha[i][deltas]
             beta  = self.samples.beta[i][deltas]
             new_gammas.append(gamma.rvs(alpha, scale = 1 / beta))

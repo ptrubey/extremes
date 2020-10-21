@@ -1,6 +1,10 @@
 import numpy as np
+import sqlite3 as sql
+import pandas as pd
 from genpareto import gpd_fit
 from numpy.linalg import norm
+
+
 
 def to_euclidean(theta):
     """ casts angles in radians onto unit hypersphere in Euclidean space """
@@ -14,10 +18,48 @@ def to_angular(hyp):
     n, k  = hyp.shape
     theta = np.empty((n, k - 1))
     for i in range(k - 1):
-        theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1) + 1e-7))
+        # establish that the denominator is always greater
+        # (even if by *tiny* amount) than numerator
+        # temp = np.sqrt((hyp[:,i:] * hyp[:,i:]).sum(axis = 1))
+        temp = hyp[:,i] / norm(hyp[:,i:], axis = 1)
+        temp[temp > (1 - 1e-7)] = 1 - 1e-7
+        # tdiff = temp - hyp[:,i]
+        # temp[np.where(tdiff < 1e-7)[0]] = 1e-7
+        # then theta is arccos of that ratio
+        theta[:,i] = np.arccos(temp)
     return theta
 
+def cluster_max_row_ids(series):
+    nDat = series.shape[0]
+    lst = []
+    clu = np.empty(0, dtype = int)
+    for i in range(nDat):
+        if series[i] > 1:
+            clu = np.append(clu, i)
+        else:
+            if clu.shape[0] > 0:
+                lst.append(clu)
+                clu = np.empty(0, dtype = int)
+            else:
+                pass
+    else:
+        if clu.shape[0] > 0:
+            lst.append(clu)
+    max_ids = np.empty(0, dtype = int)
+    for cluster in lst:
+        max_ids = np.append(max_ids, cluster[np.argmax(series[cluster])])
+    return max_ids
+
 class Data(object):
+    def write_empirical(self, path):
+        ncol   = self.A.shape[1] + 1
+        thetas = pd.DataFrame(
+            self.A,
+            columns = ['theta_{}'.format(i) for i in range(1, ncol)],
+            )
+        thetas.to_csv(path, index = False)
+        return
+
     @staticmethod
     def to_euclidean(theta):
         return to_euclidean(theta)
@@ -36,6 +78,8 @@ class Data(object):
         self.fill_out()
         return
 
+
+
 class Data_From_Raw(Data):
     raw = None # raw data
     Z   = None # Standardized Pareto Transformed (for those > 1)
@@ -51,14 +95,17 @@ class Data_From_Raw(Data):
         return to_angular(hyp)
 
     @staticmethod
-    def to_hypercube(par):
+    def to_hypercube(par, decluster):
         """ Projects data that is marginally standardized Pareto (for those
         obsv for which the row max > 1) onto the unit hypercube. returns those
         projections, the row max, and the indices in the original data
         corresponding to the observations """
         R = par.max(axis = 1)
         V = (par.T / R).T
-        I = np.where(R > 1)
+        if decluster:
+            I = cluster_max_row_ids(R)
+        else:
+            I = np.where(R > 1)
         return V[I], R[I], I
 
     @staticmethod
@@ -77,7 +124,7 @@ class Data_From_Raw(Data):
         Z[Z < 0.] = 0.
         return Z, P
 
-    def __init__(self, raw):
+    def __init__(self, raw, decluster = False):
         # if input is pandas dataframe, then take numpy array representation
         try:
             self.raw = raw.values
@@ -87,7 +134,7 @@ class Data_From_Raw(Data):
         # Compute standardized pareto margins
         self.Z, self.P = self.to_pareto(self.raw)
         # Cast to hypercube, keep only observations extreme in >= 1 dimension
-        self.V, self.R, self.I = self.to_hypercube(self.Z)
+        self.V, self.R, self.I = self.to_hypercube(self.Z, decluster)
         # proceed with angular representation
         self.A = self.to_angular(self.V)
         # Number of columns for Gamma representation
