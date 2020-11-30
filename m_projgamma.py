@@ -313,4 +313,6 @@ class MPGResult(object):
     def __init__(self, path):
         self.load_data(path)
         return
+
+
 # EOF

@@ -13,6 +13,8 @@ import data as dm
 import cUtility as cu
 import os
 
+import pt
+
 BNPPGPrior = namedtuple('BNPPGPrior', 'alpha beta eta')
 Theta      = namedtuple('Theta','alpha beta')
 
@@ -27,17 +29,51 @@ def update_alpha_wrapper(args):
         raise ValueError('Something other than col index was passed!')
 def update_beta_wrapper(args):
     return sample_beta_fc(*args)
+def log_density_log_alpha_j(log_alpha_j, Y_j, Sigma, mu, prior_beta):
+    alpha_j = exp(log_alpha_j)
+    sum_y, prod_y, n = Y_j.sum(axis = 0), Y_j.prod(axis = 0), Y_j.shape[0]
+    SigmaL = cho_factor(Sigma)
+    SigmaI = cho_solve(SigmaL, np.eye(Sigma.shape[0]))
+    lp = (
+        + ((alpha_j - 1) * log(prod_y)).sum()
+        - (n * lgamma(alpha_j)).sum()
+        + (lgamma(n * alpha_j[1:] + prior_beta.a)).sum()
+        - ((n * alpha_j[1:] + prior_beta.a) * log(sum_y[1:] + prior_beta.b)).sum()
+        - 0.5 * log(SigmaL.diag()).sum()
+        - 0.5 * ((log_alpha_j - mu).T @ SigmaI @ (log_alpha_j - mu)).sum()
+        )
+    return lp
+def log_density_mvnormal(x, mu, cov_chol, cov_inv):
+    lp = (
+        - 0.5 * log(cov_chol.diag()).sum()
+        - 0.5 * ((x - mu).T @ cov_inv @ (x - mu)).sum()
+        )
+    return lp
 
-class SamplesDPMPG(object):
+def update_alpha_wrapper(args):
+    curr_log_alpha_j = log(args[0])
+    Yj, Sigma, mu, prior_beta, prop_cov, prop_cov_chol, prop_cov_inv = args[1:]
+    prop_log_alpha_j = curr_log_alpha_j + prop_cov_chol @ normal.rvs(size = self.nCol)
+    curr_lp = log_density_log_alpha_j(curr_log_alpha_j, Yj, Sigma, mu, prior_beta)
+    prop_lp = log_density_log_alpha_j(prop_log_alpha_j, Yj, Sigma, mu, prior_beta)
+    cp_ld = mvnormal(curr_log_alpha_j, prop_log_alpha_j, )
+
+
+
+
+    if log(uniform.rvs()) < prop_lp - curr_lp
+
+class DPMPG_Samples(object):
     alpha = None # list, each entry is np.array; each row of array pertains to a cluster
     beta  = None # same as alpha
     delta = None # numpy array; int; indicates cluster membership
     eta   = None # Dispersion variable for DP algorithm
     r     = None # (latent) observation radius
-    alpha_shape = None
-    alpha_rate  = None
-    beta_shape  = None
-    beta_rate   = None
+    mu    = None # Hierarchical Mean of shapes
+    Sigma = None # Covariance Matrix for Cluster Dispersion from Hierarchial Mean
+    # beta_shape = None
+    # beta_rate  = None
+    accepted   = None
 
     def __init__(self, nSamp, nDat, nCol):
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
@@ -45,10 +81,9 @@ class SamplesDPMPG(object):
         self.eta   = np.empty(nSamp + 1)
         self.alpha = []
         self.beta  = []
-        self.alpha_shape = np.empty((nSamp + 1, nCol))
-        # self.alpha_rate  = np.empty((nSamp + 1, nCol))
-        self.beta_shape  = np.empty((nSamp + 1, nCol - 1))
-        # self.beta_rate   = np.empty((nSamp + 1, nCol - 1))
+        self.mu    = np.empty((nSamp + 1, nCol))
+        self.Sigma = np.empty((nSamp + 1, nCol, nCol))
+        self.accepted = None
         return
 
 class DPMPG(object):
@@ -270,7 +305,7 @@ class DPMPG(object):
             )
         prop_alphas = np.array(list(self.pool.map(update_alpha_wrapper, alpha_args))).reshape(curr_alphas.shape)
         # prop_alphas = np.array(list(map(update_alpha_wrapper, alpha_args))).reshape(curr_alphas.shape)
-        Yjks = [Y[djs[j], k] for j in range(nClust) for k in range(1, self.nCol)]
+        Yjks = [Y[djs[j], k] for k in range(1, self.nCol) for j in range(nClust)]
         beta_args = zip(prop_alphas[:,1:].reshape(-1), Yjks, priors_beta_primitive * nClust)
         prop_betas = np.hstack((
             np.ones((nClust, 1)),
@@ -482,5 +517,142 @@ class ResultDPMPG(object):
     def __init__(self, path):
         self.load_data(path)
         return
+
+class DPMPG_State(self):
+    __slots__ = ('alphas','betas','delta','eta','r','mu','Sigma','temp')
+
+    def __init__(self, alphas, betas, delta, eta, r, mu, Sigma, temp):
+        self.alphas = alphas
+        self.betas = betas
+        self.delta = delta
+        self.eta = eta
+        self.r = r
+        self.mu = mu
+        self.Sigma = Sigma
+        self.temp = temp
+        return
+
+def sample_alpha_i(self, args):
+    pass
+
+def sample_beta_i(self, args):
+    pass
+
+class DPMPG_Chain(pt.PTChain):
+    @property
+    def curr_alphas(self):
+        return self.samples.alpha[self.curr_iter].copy()
+
+    @property
+    def curr_betas(self):
+        return self.samples.beta[self.curr_iter].copy()
+
+    @property
+    def curr_delta(self):
+        return self.samples.delta[self.curr_iter].copy()
+
+    @property
+    def curr_eta(self):
+        return self.samples.eta[self.curr_iter].copy()
+
+    @property
+    def curr_r(self):
+        return self.samples.r[self.curr_iter].copy()
+
+    @property
+    def curr_mu(self):
+        return self.samples.mu[self.curr_iter].copy()
+
+    @property
+    def curr_Sigma(self):
+        return self.samples.Sigma[self.curr_iter].copy()
+
+    def get_state(self):
+        state = DPMPG_State(self.curr_alphas, self.curr_betas, self.curr_delta, self.curr_eta,
+                            self.curr_r, self.curr_mu, self.curr_Sigma, self.temper_temp)
+        return state
+
+    def set_state(self, state):
+        self.samples.alpha[self.curr_iter] = state.alphas
+        self.samples.beta[self.curr_iter]  = state.betas
+        self.samples.delta[self.curr_iter] = state.delta
+        self.samples.eta[self.curr_iter]   = state.eta
+        self.samples.r[self.curr_iter]     = state.r
+        self.samples.mu[self.curr_iter]    = state.mu
+        self.samples.Sigma[self.curr_iter] = state.Sigma
+        return
+
+    def initialize_chain(self, nSamp):
+        self.samples = DPMPG_Samples(nSamp, self.nCol, self.nDat)
+        return
+
+    def log_posterior_state(self, state):
+        pass
+
+    def clean_delta(self, delta, alphas, betas, i, mu, Sigma, eta, i):
+        _deltas, _alphas, _betas = self.clean_delta(deltas, alphas, betas, i)
+        _dmax = _deltas.max()
+        njs = cu.counter(_deltas, _dmax + 1 + self.m)
+        ljs = njs + (njs == 0) * eta / self.m
+        alphas_new = self.sample_alpha_beta_new()
+        pass
+
+    def update_alpha_beta(self, curr_alpha, delta, r, mu, Sigma):
+        Y = r.T * self.data.Yl
+        nClust = delta.max() + 1
+        djs = [np.where(deltas == j)[0] for i in range(nClust)]
+        Yjs = [Y[djs[j]] for j in range(nClust)]
+        alpha_args = zip(curr_alpha, Yjs, repeat(mu), repeat(Sigma))
+        prop_alpha = np.array(list(self.pool.map(
+                        update_alpha_wrapper, alpha_args
+                        ))).reshape(curr_alpha.shape)
+        Yjks = [Y[djs[j], k] for j in range(nClust) for k in range(1, self.nCol)]
+        beta_args = zip(prop_alpha.reshape(-1), Yjks, repeat(self.priors.beta))
+        prop_beta = np.hstack((
+            np.ones(nClust, 1)),
+            np.array(list(self.pool.map(
+                    update_beta_wrapper, beta_args
+                    ))).reshape((nClust, self.nCol - 1)
+            ))
+        return prop_alpha, prop_beta
+
+
+    def sample_alpha(self, delta, r):
+        Y = r.T * self.data.Yl
+        nClust = delta.max() + 1
+        Yjs =
+        pass
+
+    def sample_beta(self, alpha, delta):
+        nClust = delta.max() + 1
+        djs = [np.where(deltas == j)[0] for j in range(nClust)]
+        Yjs = [Y[djs[j]] for j in range(nClust)
+        args =
+        pass
+
+    def sample_eta(self, curr_eta, delta):
+        nClust = delta.max() + 1
+        g = beta.rvs(curr_eta + 1, nClust)
+        aa = self.priors.eta.a + nClust
+        bb = self.priors.eta.b - log(g)
+        eps = (aa - 1) / (self.nDat * bb + aa - 1)
+        aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
+        return gamma.rvs(aaa, bb)
+
+    def sample_r(self, alphas, betas, delta):
+        alpha = alphas[delta]
+        beta = betas[delta]
+        As = alpha.sum(axis = 1)
+        Bs = (self.data.Yl * beta).sum(axis = 1)
+        return gamma.rvs(As, scale = 1/Bs)
+
+    def sample_mu(self, Sigma, alphas):
+        pass
+
+    def sample_Sigma(self, mu, alphas):
+        pass
+
+    def iter_sample(self):
+        pass
 
 # EOF

@@ -8,9 +8,9 @@ path = './datasets/ivt_nov_mar.csv'
 
 if __name__ == '__main__':
     raw  = read_csv(path)
-    cols = raw.columns.values.tolist()
-    shuffle(cols)
-    raw  = raw.reindex(columns = cols)
+    # cols = raw.columns.values.tolist()
+    # shuffle(cols)
+    # raw  = raw.reindex(columns = cols)
     data = Data_From_Raw(raw, True)
     data.write_empirical('./output/dpmpg_empirical_decluster.csv')
 
