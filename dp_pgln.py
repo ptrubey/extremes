@@ -36,18 +36,20 @@ class Bunch(object):
         self.__dict__.update(**kwargs)
         return
 
-def log_density_gamma_i(args): # Y, alpha, beta_prior
-    Y, alpha, beta_prior = args
-    lp = (
-        + (alpha[0] - 1) * log(Y[0])
-        - lgamma(alpha[0])
-        - log(Y[0])
-        + ((alpha[1:] - 1) * np.log(Y[1:])).sum()
-        - loggamma(alpha[1:]).sum()
-        + loggamma(alpha[1:] + beta_prior.a).sum()
-        - ((alpha[1:] + beta_prior.a) * np.log(Y[1:] + beta_prior.b)).sum()
-        )
-    return lp
+# def log_density_gamma_i(args): # Y, alpha, beta_prior
+#     Y, alpha, beta_prior = args
+#     lp = (
+#         + (alpha[0] - 1) * log(Y[0])
+#         - lgamma(alpha[0])
+#         - log(Y[0])
+#         + ((alpha[1:] - 1) * np.log(Y[1:])).sum()
+#         - loggamma(alpha[1:]).sum()
+#         + loggamma(alpha[1:] + beta_prior.a).sum()
+#         - ((alpha[1:] + beta_prior.a) * np.log(Y[1:] + beta_prior.b)).sum()
+#         )
+#     return lp
+def log_density_gamma_i(args):
+    return logdprojgamma_pre_single(*args)
 
 def update_beta_wrapper(args):
     return sample_beta_fc(*args)
@@ -58,29 +60,29 @@ def log_density_theta_i(args):
 def log_density_log_alpha_j(log_alpha_j, Y_j, Sigma_cho, Sigma_inv, mu, prior_beta):
     alpha_j = np.exp(log_alpha_j)
     sum_y, n = Y_j.sum(axis = 0), Y_j.shape[0]
-    lp1 = + ((alpha_j - 1) * np.log(Y_j).sum(axis = 0)).sum()
-    lp2 = - (n * loggamma(alpha_j)).sum()
-    lp3 = + (loggamma(n * alpha_j[1:] + prior_beta.a)).sum()
-    lp4 = - ((n * alpha_j[1:] + prior_beta.a) * np.log(Y_j.T[1:].sum(axis = 1) + prior_beta.b)).sum()
-    lp5 = + log_density_mvnormal(log_alpha_j, mu, Sigma_cho, Sigma_inv)
-    try:
-        lp = lp1+lp2+lp3+lp4+lp5
-    except:
-        print('lp1: {}'.format(lp1))
-        print('lp2: {}'.format(lp2))
-        print('lp3: {}'.format(lp3))
-        print('lp4: {}'.format(lp4))
-        print('lp5: {}'.format(lp5))
-        raise
-    return lp
-    # lp = (
-    #     + ((alpha_j - 1) * np.log(Y_j).sum(axis = 0)).sum()
-    #     - (n * loggamma(alpha_j)).sum()
-    #     + (loggamma(n * alpha_j[1:] + prior_beta.a)).sum()
-    #     - ((n * alpha_j[1:] + prior_beta.a) * np.log(Y_j.T[1:].sum(axis = 0) + prior_beta.b)).sum()
-    #     + log_density_mvnormal(log_alpha_j, mu, Sigma_cho, Sigma_inv)
-    #     )
+    # lp1 = + ((alpha_j - 1) * np.log(Y_j).sum(axis = 0)).sum()
+    # lp2 = - (n * loggamma(alpha_j)).sum()
+    # lp3 = + (loggamma(n * alpha_j[1:] + prior_beta.a)).sum()
+    # lp4 = - ((n * alpha_j[1:] + prior_beta.a) * np.log(Y_j.T[1:].sum(axis = 1) + prior_beta.b)).sum()
+    # lp5 = + log_density_mvnormal(log_alpha_j, mu, Sigma_cho, Sigma_inv)
+    # try:
+    #     lp = lp1+lp2+lp3+lp4+lp5
+    # except:
+    #     print('lp1: {}'.format(lp1))
+    #     print('lp2: {}'.format(lp2))
+    #     print('lp3: {}'.format(lp3))
+    #     print('lp4: {}'.format(lp4))
+    #     print('lp5: {}'.format(lp5))
+    #     raise
     # return lp
+    lp = (
+        + ((alpha_j - 1) * np.log(Y_j).sum(axis = 0)).sum()
+        - (n * loggamma(alpha_j)).sum()
+        + (loggamma(n * alpha_j[1:] + prior_beta.a)).sum()
+        - ((n * alpha_j[1:] + prior_beta.a) * np.log(Y_j.T[1:].sum(axis = 1) + prior_beta.b)).sum()
+        + log_density_mvnormal(log_alpha_j, mu, Sigma_cho, Sigma_inv)
+        )
+    return lp
 
 def log_density_mvnormal(x, mu, cov_chol, cov_inv):
     lp = (
@@ -109,8 +111,8 @@ class DPMPG_Samples(object):
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
         self.r     = np.empty((nSamp + 1, nDat))
         self.eta   = np.empty(nSamp + 1)
-        self.alpha = []
-        self.beta  = []
+        self.alpha = [None] * (nSamp + 1)
+        self.beta  = [None] * (nSamp + 1)
         self.log_alpha = np.empty((0, nCol))
         self.mu    = np.empty((nSamp + 1, nCol))
         self.Sigma = np.empty((nSamp + 1, nCol, nCol))
@@ -270,8 +272,11 @@ class DPMPG_Chain(pt.PTChain):
         self.curr_iter = 0
         self.samples.mu[0] = self.priors.mu.mu + self.priors.mu.SCho @ normal.rvs(size = self.nCol)
         self.samples.Sigma[0] = invwishart(df = self.priors.Sigma.nu, scale = self.priors.Sigma.psi).rvs()
-        self.samples.alpha.append(self.sample_alpha_new(self.curr_mu, cho_factor(self.curr_Sigma), self.nDat))
-        self.samples.beta.append(np.ones(self.curr_alphas.shape))
+        alpha_new, beta_new = self.sample_alpha_beta_new(self.curr_mu, cho_factor(self.curr_Sigma), self.nDat)
+        self.samples.alpha[0] = alpha_new
+        self.samples.beta[0] = beta_new
+        # self.samples.alpha.append(self.sample_alpha_new(self.curr_mu, cho_factor(self.curr_Sigma), self.nDat))
+        # self.samples.beta.append(np.ones(self.curr_alphas.shape))
         self.samples.delta[0] = range(self.nDat)
         self.samples.r[0] = self.sample_r(self.curr_alphas, self.curr_betas, self.curr_delta)
         self.samples.eta[0] = 5.
@@ -294,29 +299,33 @@ class DPMPG_Chain(pt.PTChain):
         lp_eta = gamma(self.priors.eta.a, scale = 1 / self.priors.eta.b).logpdf(state.eta)
         return (llik + lp_alpha + lp_beta + lp_mu + lp_Sigma + lp_eta) * self.inv_temper_temp
 
-    def clean_delta(self, delta, alpha, i):
+    def clean_delta(self, delta, alpha, beta, i):
         assert(delta.max() + 1 == alpha.shape[0])
         _delta = np.delete(delta, i)
         nj = cu.counter(_delta, _delta.max() + 2)
         fz = cu.first_zero(nj)
         _alpha = alpha[np.where(nj > 0)[0]]
+        _beta  = beta[np.where(nj > 0)[0]]
         if (fz == delta[i]) and (fz <= _delta.max()):
             _delta[_delta > fz] = _delta[_delta > fz] - 1
-        return _delta, _alpha
+        return _delta, _alpha, _beta
 
-    def sample_delta_i(self, delta, r, alpha, eta, mu, Sigma_chol, i):
-        _delta, _alpha = self.clean_delta(delta, alpha, i)
-        yi = r[i] * self.data.Yl[i]
+    def sample_delta_i(self, delta, r, alpha, beta, eta, mu, Sigma_chol, i):
+        _delta, _alpha, _beta = self.clean_delta(delta, alpha, beta, i)
+        # yi = r[i] * self.data.Yl[i]
         _dmax = _delta.max()
         njs = cu.counter(_delta, _dmax + 1 + self.m)
         ljs = njs + (njs == 0) * (eta / self.m)
-        alpha_new = self.sample_alpha_new(mu, Sigma_chol, self.m)
+        alpha_new, beta_new = self.sample_alpha_beta_new(mu, Sigma_chol, self.m)
         alpha_stack = np.vstack((_alpha, alpha_new))
+        beta_stack = np.vstack((_beta, beta_new))
         assert (alpha_stack.shape[0] == ljs.shape[0])
         args = zip(
-            repeat(yi),
+            repeat(self.data.lcoss[i]),
+            repeat(self.data.lsins[i]),
+            repeat(self.data.Yl[i]),
             alpha_stack,
-            repeat(self.priors.beta)
+            beta_stack,
             )
         # res = self.pool.map(log_density_gamma_i, args, chunksize = ceil(ljs.shape[0]/8))
         res = map(log_density_gamma_i, args)
@@ -328,11 +337,13 @@ class DPMPG_Chain(pt.PTChain):
         dnew = choice(range(_dmax + self.m + 1), 1, p = normalized)
         if dnew > _dmax:
             _alpha_ = np.vstack((_alpha, alpha_stack[dnew]))
+            _beta_  = np.vstack((_beta, beta_stack[dnew]))
             _delta_ = np.insert(_delta, i, _dmax + 1)
         else:
             _delta_ = np.insert(_delta, i, dnew)
             _alpha_ = _alpha.copy()
-        return _delta_, _alpha_
+            _beta_  = _beta.copy()
+        return _delta_, _alpha_, _beta_
 
     def sample_alpha_j(self, curr_alpha_j, Yj, Sigma_cho, Sigma_inv, mu):
         curr_log_alpha_j = np.log(curr_alpha_j)
@@ -360,9 +371,14 @@ class DPMPG_Chain(pt.PTChain):
             return curr_alpha_j
         pass
 
-    def sample_alpha_new(self, mu, Sigma_chol, n):
+    def sample_alpha_beta_new(self, mu, Sigma_chol, n):
         log_alpha = mu.reshape(1,-1) + (np.triu(Sigma_chol[0]) @ normal.rvs(size = (self.nCol, n))).T
-        return np.exp(log_alpha)
+        alpha = np.exp(log_alpha)
+        beta = np.hstack((
+            np.ones((n,1)),
+            gamma(self.priors.beta.a, scale = 1/self.priors.beta.b).rvs(size = (n, self.nCol - 1)),
+            ))
+        return alpha, beta
 
     def sample_alpha(self, curr_alpha, delta, r, Sigma_cho, Sigma_inv, mu):
         Y = (self.data.Yl.T * r).T
@@ -423,10 +439,11 @@ class DPMPG_Chain(pt.PTChain):
 
     def sample_Sigma(self, mu, alphas):
         n = alphas.shape[0]
-        diff = alphas - mu
-        C = np.zeros((self.nCol, self.nCol))
-        for i in range(n):
-            C += np.outer(diff[i], diff[i])
+        diff = np.log(alphas) - mu
+        C = sum([np.outer(diff[i], diff[i]) for i in range(alphas.shape[0])])
+        # C = np.zeros((self.nCol, self.nCol))
+        # for i in range(n):
+        #     C += np.outer(diff[i], diff[i])
         _psi = self.priors.Sigma.psi + C * self.inv_temper_temp
         _nu  = self.priors.Sigma.nu + n * self.inv_temper_temp
         return invwishart.rvs(df = _nu, scale = _psi)
@@ -446,18 +463,25 @@ class DPMPG_Chain(pt.PTChain):
 
         self.curr_iter += 1
 
-        self.samples.r[self.curr_iter] = self.sample_r(alphas, betas, delta)
-
         for i in range(self.nDat):
-            delta, alphas = self.sample_delta_i(delta, self.curr_r, alphas, eta, mu, Sigma_chol, i)
+            delta, alphas, betas = self.sample_delta_i(
+                    delta, self.curr_r, alphas, betas, eta, mu, Sigma_chol, i,
+                    )
 
         self.samples.delta[self.curr_iter] = delta
-        self.samples.alpha.append(
-            self.sample_alpha(alphas, self.curr_delta, self.curr_r, Sigma_chol, Sigma_inv, mu)
-            )
-        self.samples.beta.append(
-            self.sample_beta(self.curr_alphas, self.curr_delta, self.curr_r)
-            )
+        self.samples.r[self.curr_iter] = self.sample_r(alphas, betas, self.curr_delta)
+        self.samples.alpha[self.curr_iter] = self.sample_alpha(
+                alphas, self.curr_delta, self.curr_r, Sigma_chol, Sigma_inv, mu,
+                )
+        self.samples.beta[self.curr_iter] = self.sample_beta(
+                self.curr_alphas, self.curr_delta, self.curr_r,
+                )
+        # self.samples.alpha.append(
+        #     self.sample_alpha(alphas, self.curr_delta, self.curr_r, Sigma_chol, Sigma_inv, mu)
+        #     )
+        # self.samples.beta.append(
+        #     self.sample_beta(self.curr_alphas, self.curr_delta, self.curr_r)
+        #     )
         self.samples.mu[self.curr_iter] = self.sample_mu(Sigma_inv, self.curr_alphas)
         self.samples.Sigma[self.curr_iter] = self.sample_Sigma(self.curr_mu, self.curr_alphas)
         self.samples.eta[self.curr_iter] = self.sample_eta(eta, self.curr_delta)
@@ -547,8 +571,8 @@ class DPMPG_Chain(pt.PTChain):
         self.nDat = data.nDat
         prior_mu = NormalPrior(np.zeros(self.nCol), (np.sqrt(2) * np.eye(self.nCol),), 0.5 * np.eye(self.nCol))
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
-        prior_beta = GammaPrior(1.,1.)
-        prior_eta = GammaPrior(1.,1.)
+        prior_beta = GammaPrior(2.,2.)
+        prior_eta = GammaPrior(2.,1.)
         self.priors = DPMPG_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
         self.r0   = 0.5
         self.psi0 = 1e-3
