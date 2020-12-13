@@ -391,8 +391,8 @@ class DPMPG(object):
     def __init__(
             self,
             data,
-            prior_alpha = GammaPrior(0.5,0.5),
-            prior_beta = GammaPrior(0.5,0.5),
+            prior_alpha = GammaPrior(2.,2.),
+            prior_beta = GammaPrior(2.,2.),
             prior_eta = GammaPrior(2.,1.),
             m = 30
             ):

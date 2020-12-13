@@ -11,14 +11,14 @@ if __name__ == '__main__':
     # shuffle(cols)
     # raw = raw.reindex(columns = cols)
     data = Data_From_Raw(raw, True)
-    data.write_empirical('./output/mpg_10_empirical_decluster.csv')
+    data.write_empirical('./output/mpg/empirical.csv')
 
     mpg = MPG(data, nMix = 10)
     mpg.initialize_sampler(10000)
     mpg.sample(10000)
-    mpg.write_to_disk('./output/mpg_10_results_decluster.db', 5000, 1)
+    mpg.write_to_disk('./output/mpg/results_10.db', 5000, 1)
 
-    res = MPGResult('./output/mpg_10_results_decluster.db')
-    res.write_posterior_predictive('./output/mpg_10_postpred_decluster.csv')
+    res = MPGResult('./output/mpg/results_10.db')
+    res.write_posterior_predictive('./output/mpg/postpred_10.csv')
 
 # EOF

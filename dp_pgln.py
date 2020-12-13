@@ -1,5 +1,5 @@
 # from projgamma import *
-from projgamma import sample_beta_fc, logdprojgamma_pre_single
+from projgamma import sample_beta_fc, logdprojgamma_pre_single, to_angular
 from scipy.stats import gamma, beta, gmean, norm as normal, invwishart, uniform
 from scipy.linalg import cho_factor, cho_solve, cholesky
 from scipy.special import loggamma
@@ -119,7 +119,7 @@ class DPMPG_Samples(object):
         self.accepted = None
         return
 
-class ResultDPMPG(object):
+class DPMPG_Result(object):
     samples = None
     nSamp   = None
     nDat    = None
@@ -136,6 +136,15 @@ class ResultDPMPG(object):
         gnew = self.generate_posterior_predictive_gammas(n_per_sample)
         return (gnew.T / gnew.max(axis = 1)).T
 
+    def generate_alpha_beta_new(self, mu, Sigma, m):
+        log_alpha = mu.reshape(1,-1) + (cholesky(Sigma) @ normal.rvs(size = (self.nCol, m))).T
+        alpha = np.exp(log_alpha)
+        beta  = np.hstack((
+            np.ones((m, 1)),
+            gamma(self.priors.beta.a, scale = 1/self.priors.beta.b).rvs(size = (m, self.nCol - 1))
+            ))
+        return alpha, beta
+
     def generate_posterior_predictive_gammas(self, n_per_sample = 10, m = 20):
         new_gammas = []
         for i in range(self.nSamp):
@@ -143,11 +152,7 @@ class ResultDPMPG(object):
             njs    = cu.counter(self.samples.delta[i], dmax + 1 + m)
             ljs    = njs + (njs == 0) * self.samples.eta[i] / m
             # This part needs to be fixed.
-            new_alphas = gamma.rvs(a = self.samples.alpha_shape[i], size = (m, self.nCol))
-            new_betas  = np.hstack((
-                np.ones((m, 1)),
-                gamma.rvs(a = self.samples.beta_shape[i], size = (m, self.nCol - 1)),
-                ))
+            new_alphas, new_betas = self.generate_alpha_beta_new(self.samples.mu[i], self.samples.Sigma[i], m)
             prob   = ljs / ljs.sum()
             deltas = cu.generate_indices(prob, n_per_sample)
             alpha  = np.vstack((self.samples.alpha[i], new_alphas))[deltas]
@@ -166,8 +171,8 @@ class ResultDPMPG(object):
 
     def load_data(self, path):
         conn    = sql.connect(path)
-        ashapes = pd.read_sql('select * from alpha_shape;', conn).values
-        bshapes = pd.read_sql('select * from beta_shape;', conn).values
+        mu      = pd.read_sql('select * from mu;', conn).values
+        Sigma   = pd.read_sql('select * from Sigma;', conn).values
         alphas  = pd.read_sql('select * from alphas;', conn).values
         betas   = pd.read_sql('select * from betas;', conn).values
         deltas  = pd.read_sql('select * from deltas;', conn).values.astype(int)
@@ -176,9 +181,11 @@ class ResultDPMPG(object):
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
-        self.nCol  = ashapes.shape[1]
+        self.nCol  = mu.shape[1]
 
-        self.samples = SamplesDPMPG(self.nSamp, self.nDat, self.nCol)
+        self.samples = DPMPG_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples.mu = mu
+        self.samples.Sigma = Sigma.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.delta = deltas
         self.samples.eta = eta
         self.samples.r = rs
@@ -190,12 +197,15 @@ class ResultDPMPG(object):
             betas[np.where(betas.T[0] == i)[0], 1:]
             for i in range(self.nSamp)
             ]
-        self.samples.alpha_shape = ashapes
-        self.samples.beta_shape  = bshapes
         return
 
     def __init__(self, path):
         self.load_data(path)
+        prior_mu = NormalPrior(np.zeros(self.nCol), (np.sqrt(2) * np.eye(self.nCol),), 0.5 * np.eye(self.nCol))
+        prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
+        prior_beta = GammaPrior(2.,2.)
+        prior_eta = GammaPrior(2.,1.)
+        self.priors = DPMPG_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
         return
 
 # class DPMPG_State(object):
