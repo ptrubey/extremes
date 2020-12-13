@@ -572,6 +572,8 @@ class DPMPG_Chain(pt.PTChain):
     def __init__(
             self,
             data,
+            prior_beta = GammaPrior(2.,2.),
+            prior_eta = GammaPrior(2.,1.),
             m = 20,
             temperature = 1.
             ):
@@ -581,8 +583,6 @@ class DPMPG_Chain(pt.PTChain):
         self.nDat = data.nDat
         prior_mu = NormalPrior(np.zeros(self.nCol), (np.sqrt(2) * np.eye(self.nCol),), 0.5 * np.eye(self.nCol))
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
-        prior_beta = GammaPrior(2.,2.)
-        prior_eta = GammaPrior(2.,1.)
         self.priors = DPMPG_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
         self.r0   = 0.5
         self.psi0 = 1e-3
