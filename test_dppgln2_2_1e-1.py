@@ -17,7 +17,8 @@ if rank > 0:
 
 if rank == 0:
     raw  = read_csv('./datasets/ivt_nov_mar.csv')
-    data = Data_From_Raw(raw, True)
+    raw2 = np.hstack((raw.T[-2:].T, raw.T[:-2].T))
+    data = Data_From_Raw(raw2, True)
     data.write_empirical('./output/dppgln2/empirical.csv')
 
     model = pt.PTMaster(

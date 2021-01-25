@@ -107,15 +107,17 @@ class MPG(object):
         Bs = (self.data.Yl * beta[delta]).sum(axis = 1)
         return gamma.rvs(As, scale = 1/Bs)
 
-    def log_posterior_delta_j(self, alpha_j, beta_j):
-        lp = logdprojgamma_pre(
-            self.data.lcoss, self.data.lsins, self.data.Yl, alpha_j, beta_j,
-            )
-        return lp
+    def log_posterior_delta_j(self, r, alpha_j, beta_j):
+        # lp = logdprojgamma_pre(
+        #     self.data.lcoss, self.data.lsins, self.data.Yl, alpha_j, beta_j,
+        #     )
+        Y = (self.data.Yl.T * r).T
+        return gamma.logpdf(Y, a = alpha_j, scale = 1/beta_j).sum(axis = 1)
+        # return lp
 
-    def sample_delta(self, eta, alpha, beta):
+    def sample_delta(self, eta, r, alpha, beta):
         lps = np.vstack([
-            self.log_posterior_delta_j(alpha[j], beta[j])
+            self.log_posterior_delta_j(r, alpha[j], beta[j])
             for j in range(self.nMix)
             ]).T
         lps[np.isnan(lps)] = - np.inf
@@ -154,9 +156,10 @@ class MPG(object):
         eta   = self.curr_eta
         alpha = self.curr_alpha
         beta  = self.curr_beta
+        r     = self.curr_r
 
         self.curr_iter += 1
-        self.samples.delta[self.curr_iter] = self.sample_delta(eta, alpha, beta)
+        self.samples.delta[self.curr_iter] = self.sample_delta(eta, r, alpha, beta)
         self.samples.r[self.curr_iter] = self.sample_r(alpha, beta, self.curr_delta)
         self.samples.eta[self.curr_iter] = self.sample_eta(self.curr_delta)
         self.samples.alpha[self.curr_iter] = self.sample_alpha(

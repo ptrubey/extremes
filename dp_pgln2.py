@@ -146,8 +146,8 @@ class DPMPG_Result(object):
             prob   = ljs / ljs.sum()
             deltas = cu.generate_indices(prob, n_per_sample)
             labs   = np.vstack((self.samples.log_alphabeta[i], new_labs))[deltas]
-            alpha = np.exp(labs[:self.nCol])
-            beta  = np.vstack(np.ones(labs.shape[0],np.exp(labs[self.nCol:]).T)).T
+            alpha = np.exp(labs.T[:self.nCol].T)
+            beta  = np.hstack((np.ones(labs.shape[0]).reshape(-1,1), np.exp(labs.T[self.nCol:].T)))
             new_gammas.append(gamma.rvs(alpha, scale = 1 / beta))
         new_gamma_arr = np.vstack(new_gammas)
         return new_gamma_arr
@@ -165,7 +165,7 @@ class DPMPG_Result(object):
         mu     = pd.read_sql('select * from mu;', conn).values
         Sigma  = pd.read_sql('select * from Sigma;', conn).values
         deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        eta    = pd.read_sql('select * from eta;', conn).values.T[0]
+        eta    = pd.read_sql('select * from eta;', conn).values.reshape(-1)
         labs   = pd.read_sql('select * from log_alphabetas', conn)
 
         self.nSamp = deltas.shape[0]
@@ -173,13 +173,13 @@ class DPMPG_Result(object):
         self.nCol  = ceil(mu.shape[1] / 2)
         mu_cols = mu.shape[1]
 
-        self.samples = DPMPG_Samples(self.nSamp, self.nDat, mu_cols)
+        self.samples = DPMPG_Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.mu = mu
         self.samples.Sigma = Sigma.reshape(self.nSamp, mu_cols, mu_cols)
         self.samples.delta = deltas
         self.samples.eta = eta
         self.samples.log_alphabeta = [
-            labs[np.where(labs.T[0] == i)[0]].T[1:].T
+            labs.values[np.where(labs.iter == i)[0], 1:]
             for i in range(self.nSamp)
             ]
         return

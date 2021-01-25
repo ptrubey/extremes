@@ -305,6 +305,8 @@ class DPMPG(object):
         self.samples.delta[0] = np.array(list(range(self.nDat)))
         self.samples.r[0]     = 1.
         self.samples.eta[0]   = 5.
+        if self.fixed_eta:
+            self.samples.eta[0] = self.fixed_eta
         self.samples.alpha_shape[0] = 1.
         # elf.samples.alpha_rate[0] = 1.
         self.samples.beta_shape[0] = 1.
@@ -374,7 +376,10 @@ class DPMPG(object):
                 )
         self.samples.alpha.append(alphas)
         self.samples.beta.append(betas)
-        self.samples.eta[self.curr_iter] = self.sample_eta(eta, alphas.shape[0])
+        if self.fixed_eta:
+            self.samples.eta[self.curr_iter] = self.fixed_eta
+        else:
+            self.samples.eta[self.curr_iter] = self.sample_eta(eta, alphas.shape[0])
         return
 
     def sample(self, ns):
@@ -394,12 +399,15 @@ class DPMPG(object):
             prior_alpha = GammaPrior(2.,2.),
             prior_beta = GammaPrior(2.,2.),
             prior_eta = GammaPrior(2.,1.),
-            m = 30
+            m = 30,
+            fixed_eta = False,
             ):
         self.m = m
         self.data = data
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
+        if fixed_eta:
+            self.fixed_eta = fixed_eta
         self.priors = BNPPGPrior(prior_alpha, prior_beta, prior_eta)
         self.set_prior_samplers()
         self.pool = mp.Pool(8)

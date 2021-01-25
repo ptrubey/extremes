@@ -289,7 +289,10 @@ class DPMPG_Chain(pt.PTChain):
         # self.samples.beta.append(np.ones(self.curr_alphas.shape))
         self.samples.delta[0] = range(self.nDat)
         self.samples.r[0] = self.sample_r(self.curr_alphas, self.curr_betas, self.curr_delta)
-        self.samples.eta[0] = 5.
+        if self.fixed_eta:
+            self.samples.eta[0] = self.fixed_eta
+        else:
+            self.samples.eta[0] = 5.
         return
 
     def log_posterior_state(self, state):
@@ -494,7 +497,10 @@ class DPMPG_Chain(pt.PTChain):
         #     )
         self.samples.mu[self.curr_iter] = self.sample_mu(Sigma_inv, self.curr_alphas)
         self.samples.Sigma[self.curr_iter] = self.sample_Sigma(self.curr_mu, self.curr_alphas)
-        self.samples.eta[self.curr_iter] = self.sample_eta(eta, self.curr_delta)
+        if self.fixed_eta:
+            self.samples.eta[self.curr_iter] = self.fixed_eta
+        else:
+            self.samples.eta[self.curr_iter] = self.sample_eta(eta, self.curr_delta)
         return
 
     def localcov(self, target):
@@ -575,12 +581,15 @@ class DPMPG_Chain(pt.PTChain):
             prior_beta = GammaPrior(2.,2.),
             prior_eta = GammaPrior(2.,1.),
             m = 20,
-            temperature = 1.
+            temperature = 1.,
+            fixed_eta = False,
             ):
         self.m = m
         self.data = data
         self.nCol = data.nCol
         self.nDat = data.nDat
+        if fixed_eta:
+            self.fixed_eta = fixed_eta
         prior_mu = NormalPrior(np.zeros(self.nCol), (np.sqrt(2) * np.eye(self.nCol),), 0.5 * np.eye(self.nCol))
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
         self.priors = DPMPG_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)

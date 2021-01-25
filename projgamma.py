@@ -2,6 +2,7 @@
 parameterized such that E(x) = alpha / beta (treat beta as rate parameter). """
 
 import numpy as np
+np.seterr(under = 'ignore', over = 'raise')
 from numpy.linalg import norm
 from math import cos, sin, log, acos, exp
 from scipy.stats import gamma, uniform, norm as normal
@@ -20,8 +21,9 @@ def to_angular(hyp):
     """ Convert data to angular representation. """
     n, k  = hyp.shape
     theta = np.empty((n, k - 1))
+    hyp = np.maximum(hyp, 1e-7)
     for i in range(k - 1):
-        theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1) + 1e-7))
+        theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1)))
     return theta
 
 ## Functions related to projected gamma density
