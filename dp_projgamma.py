@@ -360,7 +360,7 @@ class DPMPG(object):
         # Sample cluster assignments
         for i in range(self.nDat):
             deltas, alphas, betas = self.sample_delta_i(
-                    rs, deltas, alphas, betas,
+                    deltas, rs, alphas, betas,
                     self.curr_alpha_shape, self.curr_beta_shape,
                     # self.curr_alpha_shape, self.curr_alpha_rate,
                     # self.curr_beta_shape, self.curr_beta_rate,
