@@ -16,8 +16,8 @@ import os
 BNPPGPrior = namedtuple('BNPPGPrior', 'alpha beta eta')
 Theta      = namedtuple('Theta','alpha beta')
 
-def log_density_gamma_i(args):
-    return logdprojgamma_pre_single(*args)
+# def log_density_gamma_i(args):
+#     return logdprojgamma_pre_single(*args)
 def update_alpha_wrapper(args):
     if args[0] == 0:
         return sample_alpha_1_mh(*args[1:4])
@@ -27,6 +27,13 @@ def update_alpha_wrapper(args):
         raise ValueError('Something other than col index was passed!')
 def update_beta_wrapper(args):
     return sample_beta_fc(*args)
+
+def log_density_gamma_i(args):
+    # Y, alpha, beta
+    return gamma(a = args[1], scale = 1/args[2]).logpdf(args[0]).sum()
+
+
+
 
 class SamplesDPMPG(object):
     alpha = None # list, each entry is np.array; each row of array pertains to a cluster
@@ -189,7 +196,7 @@ class DPMPG(object):
         prop_rate = np.array(list(self.pool.map(update_beta_wrapper, args))).reshape(-1)
         return prop_rate
 
-    def sample_delta_i(self, deltas, alphas, betas, ashape, bshape, eta, i): # bshape, brate, eta, i):
+    def sample_delta_i(self, deltas, rs, alphas, betas, ashape, bshape, eta, i): # bshape, brate, eta, i):
         # Clean the deltas, alphas, and betas.  calculate the new max delta
         _delta, _alpha, _beta = self.clean_delta(deltas, alphas, betas, i)
         _dmax = _delta.max()
@@ -204,13 +211,14 @@ class DPMPG(object):
         beta_stack  = np.vstack((_beta, beta_new))
         assert (alpha_stack.shape[0] == ljs.shape[0])
         # Calculate log-posteriors under each cluster
-        args = zip(
-            repeat(self.data.lcoss[i]),
-            repeat(self.data.lsins[i]),
-            repeat(self.data.Yl[i]),
-            alpha_stack,
-            beta_stack,
-            )
+        # args = zip(
+        #     repeat(self.data.lcoss[i]),
+        #     repeat(self.data.lsins[i]),
+        #     repeat(self.data.Yl[i]),
+        #     alpha_stack,
+        #     beta_stack,
+        #     )
+        args = zip(repeat(rs[i] * self.data.Yl[i]), alpha_stack, beta_stack)
         res = self.pool.map(log_density_gamma_i, args, chunksize = ceil(ljs.shape[0]/8))
         lps = np.array(list(res))
         # lps = np.array(list(map(log_density_gamma_i, args)))
@@ -327,12 +335,13 @@ class DPMPG(object):
         # Fix the current estimates
         alphas, betas = self.curr_alphas, self.curr_betas
         deltas, eta   = self.curr_deltas, self.curr_eta
-        alpha_shapes = self.curr_alpha_shape
+        alpha_shapes  = self.curr_alpha_shape
+        rs            = self.curr_r
         # alpha_rates  = self.curr_alpha_rate
         beta_shapes  = self.curr_beta_shape
         # beta_rate    = self.curr_beta_rate
 
-        Y = (self.data.Yl.T * self.curr_r).T
+        Y = (self.data.Yl.T * rs).T
 
         # advance the iterator
         self.curr_iter += 1
@@ -350,12 +359,13 @@ class DPMPG(object):
         # Sample cluster assignments
         for i in range(self.nDat):
             deltas, alphas, betas = self.sample_delta_i(
-                    deltas, alphas, betas,
+                    rs, deltas, alphas, betas,
                     self.curr_alpha_shape, self.curr_beta_shape,
                     # self.curr_alpha_shape, self.curr_alpha_rate,
                     # self.curr_beta_shape, self.curr_beta_rate,
                     eta, i,
                     )
+            # Resampling alpha_j, beta_j as cluster_j changes
             di = deltas[i]
             dix = np.where(deltas == di)[0]
             alphas[di] = self.update_alpha_j(alphas[di], Y[dix], alpha_shapes, beta_shapes)
@@ -396,9 +406,9 @@ class DPMPG(object):
     def __init__(
             self,
             data,
-            prior_alpha = GammaPrior(2.,2.),
-            prior_beta = GammaPrior(2.,2.),
-            prior_eta = GammaPrior(2.,1.),
+            prior_alpha = GammaPrior(1.,0.5),
+            prior_beta = GammaPrior(1.,0.5),
+            prior_eta = GammaPrior(2.,.5),
             m = 30,
             fixed_eta = False,
             ):
