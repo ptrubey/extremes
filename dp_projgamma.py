@@ -60,6 +60,7 @@ class SamplesDPMPG(object):
 
 class DPMPG(object):
     samples = None
+    fixed_eta = False
 
     @property
     def curr_alpha_shape(self):
