@@ -48,8 +48,10 @@ class Bunch(object):
 #         - ((alpha[1:] + beta_prior.a) * np.log(Y[1:] + beta_prior.b)).sum()
 #         )
 #     return lp
+# def log_density_gamma_i(args):
+#     return logdprojgamma_pre_single(*args)
 def log_density_gamma_i(args):
-    return logdprojgamma_pre_single(*args)
+    return gamma(a = args[1], scale = 1/args[2]).logpdf(args[0]).sum()
 
 def update_beta_wrapper(args):
     return sample_beta_fc(*args)
@@ -300,7 +302,9 @@ class DPMPG_Chain(pt.PTChain):
         betas  = state.betas[state.delta]
         Sigma_chol = cho_factor(state.Sigma)
         Sigma_inv = cho_solve(Sigma_chol, np.eye(self.nCol))
-        args = zip(self.data.lcoss, self.data.lsins, self.data.Yl, alphas, betas)
+        # args = zip(self.data.lcoss, self.data.lsins, self.data.Yl, alphas, betas)
+        Y = (self.data.Yl.T * state.r).T
+        args = zip(Y, alphas, betas)
         # llik = np.array(list(self.pool.map(log_density_theta_i, args, chunksize = self.nDat / 8))).sum()
         llik = np.array(list(map(log_density_theta_i, args))).sum()
         args = zip(np.log(state.alphas), repeat(state.mu), repeat(Sigma_chol), repeat(Sigma_inv))
@@ -333,16 +337,19 @@ class DPMPG_Chain(pt.PTChain):
         alpha_stack = np.vstack((_alpha, alpha_new))
         beta_stack = np.vstack((_beta, beta_new))
         assert (alpha_stack.shape[0] == ljs.shape[0])
-        args = zip(
-            repeat(self.data.lcoss[i]),
-            repeat(self.data.lsins[i]),
-            repeat(self.data.Yl[i]),
-            alpha_stack,
-            beta_stack,
-            )
+        Y = self.data.Yl[i] * r[i]
+        args = zip(repeat(Y), alpha_stack, beta_stack)
+        # args = zip(
+        #     repeat(self.data.lcoss[i]),
+        #     repeat(self.data.lsins[i]),
+        #     repeat(self.data.Yl[i]),
+        #     alpha_stack,
+        #     beta_stack,
+        #     )
         # res = self.pool.map(log_density_gamma_i, args, chunksize = ceil(ljs.shape[0]/8))
-        res = map(log_density_gamma_i, args)
-        lps = np.array(list(res)) * self.inv_temper_temp
+        # res = map(log_density_gamma_i, args)
+        lps = np.array(list(map(log_density_gamma_i, args))) * self.inv_temper_temp
+        # lps = np.array(list(res)) * self.inv_temper_temp
         lps[np.where(np.isnan(lps))] = - np.inf
         lps -= lps.max()
         unnormalized = np.exp(lps) * ljs
@@ -537,11 +544,11 @@ class DPMPG_Chain(pt.PTChain):
         mu     = self.samples.mu[nburn::thin]
         Sigma  = self.samples.Sigma[nburn::thin]
         # Assemble output DataFrames
-        df_mu = pd.DataFrame(
+        df_mu     = pd.DataFrame(
             mu,
             columns = ['mu_{}'.format(i) for i in range(self.nCol)]
             )
-        df_Sigma = pd.DataFrame(
+        df_Sigma  = pd.DataFrame(
             Sigma.reshape(-1, self.nCol * self.nCol),
             columns = ['Sigma_{}_{}'.format(i,j) for i in range(self.nCol) for j in range(self.nCol)]
             )
@@ -557,11 +564,11 @@ class DPMPG_Chain(pt.PTChain):
             deltas,
             columns = ['delta_{}'.format(i) for i in range(self.nDat)]
             )
-        df_rs = pd.DataFrame(
+        df_rs     = pd.DataFrame(
             rs,
             columns = ['r_{}'.format(i) for i in range(self.nDat)]
             )
-        df_eta = pd.DataFrame({'eta' : eta})
+        df_eta    = pd.DataFrame({'eta' : eta})
         # Write Dataframes to SQL Connection
         df_mu.to_sql('mu',         conn, index = False)
         df_Sigma.to_sql('Sigma',   conn, index = False)
