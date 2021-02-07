@@ -308,7 +308,7 @@ class DPMPG_Chain(pt.PTChain):
         Y = (self.data.Yl.T * state.r).T
         args = zip(Y, alphas, betas)
         # llik = np.array(list(self.pool.map(log_density_theta_i, args, chunksize = self.nDat / 8))).sum()
-        llik = np.array(list(map(log_density_theta_i, args))).sum()
+        llik = np.array(list(map(log_density_gamma_i, args))).sum()
         args = zip(np.log(state.alphas), repeat(state.mu), repeat(Sigma_chol), repeat(Sigma_inv))
         # lp_alpha = np.array(list(self.pool.map(log_density_mvnormal_wrapper, args))).sum()
         lp_alpha = np.array(list(map(log_density_mvnormal_wrapper, args))).sum()
