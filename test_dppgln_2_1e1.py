@@ -30,8 +30,8 @@ if rank == 0:
         data = data,
         prior_eta = GammaPrior(2.,10.)
         )
-    model.sample(20000)
-    model.write_to_disk('./output/dppgln/results_2_1e1.db', 10000, 1)
+    model.sample(50000)
+    model.write_to_disk('./output/dppgln/results_2_1e1.db', 25000, 5)
     model.complete()
 
     res = DPMPG_Result('./output/dppgln/results_2_1e1.db')
