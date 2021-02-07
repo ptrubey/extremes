@@ -228,6 +228,8 @@ DPMPG_State = namedtuple('DPMPG_State','alphas betas delta eta r mu Sigma temp')
 
 
 class DPMPG_Chain(pt.PTChain):
+    fixed_eta = None
+
     @property
     def curr_alphas(self):
         return self.samples.alpha[self.curr_iter].copy()
