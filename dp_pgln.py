@@ -341,17 +341,7 @@ class DPMPG_Chain(pt.PTChain):
         assert (alpha_stack.shape[0] == ljs.shape[0])
         Y = self.data.Yl[i] * r[i]
         args = zip(repeat(Y), alpha_stack, beta_stack)
-        # args = zip(
-        #     repeat(self.data.lcoss[i]),
-        #     repeat(self.data.lsins[i]),
-        #     repeat(self.data.Yl[i]),
-        #     alpha_stack,
-        #     beta_stack,
-        #     )
-        # res = self.pool.map(log_density_gamma_i, args, chunksize = ceil(ljs.shape[0]/8))
-        # res = map(log_density_gamma_i, args)
         lps = np.array(list(map(log_density_gamma_i, args))) * self.inv_temper_temp
-        # lps = np.array(list(res)) * self.inv_temper_temp
         lps[np.where(np.isnan(lps))] = - np.inf
         lps -= lps.max()
         unnormalized = np.exp(lps) * ljs
@@ -482,12 +472,13 @@ class DPMPG_Chain(pt.PTChain):
         mu = self.curr_mu
         eta = self.curr_eta
         delta = self.curr_delta
+        r = self.curr_r
 
         self.curr_iter += 1
 
         for i in range(self.nDat):
             delta, alphas, betas = self.sample_delta_i(
-                    delta, self.curr_r, alphas, betas, eta, mu, Sigma_chol, i,
+                    delta, r, alphas, betas, eta, mu, Sigma_chol, i,
                     )
 
         self.samples.delta[self.curr_iter] = delta
