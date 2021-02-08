@@ -86,39 +86,6 @@ def sample_eta_j(args):
         prop[l] = sample_eta_jl(curr_eta[l], Xj.T[l], prior)
     return prop
 
-# def sample_eta_j(args):
-#     curr_eta = args[0]
-#     Xj = args[1]
-#     prior = args[2]
-#     for l in range(curr_eta.shape[0]):
-#         curr_log_eta = log(curr_eta)
-#         prop_log_eta = curr_log_eta.copy()
-#         prop_log_eta[l] += normal.rvs(scale = 0.2)
-#         curr_ld = log_posterior_log_eta_jl(curr_log_eta, Xj.T[l], l, prior)
-#         prop_ld = log_posterior_log_eta_jl(curr_log_eta, Xj.T[l], l, prior)
-#         if log(uniform.rvs()) < prop_ld - curr_ld:
-#             curr_eta = exp(prop_log_eta)
-#     return curr_eta
-#
-# def sample_eta_jl(args):
-#     # Parse arguments
-#     curr_eta = args[0]
-#     Xjl = args[1]
-#     l = args[2]
-#     prior = args[3]
-#
-#     # Compute Log densities
-#     curr_log_eta = log(curr_eta)
-#     prop_log_eta = curr_log_eta.copy()
-#     prop_log_eta[l] += normal.rvs(scale = 0.2)
-#     curr_ld = log_posterior_log_eta_jl(curr_log_eta, Xjl, l, prior)
-#     prop_ld = log_posterior_log_eta_jl(prop_log_eta, Xjl, l, prior)
-#
-#     # return sample
-#     if log(uniform.rvs()) < prop_ld - curr_ld:
-#         return exp(prop_log_eta[l])
-#     return curr_eta[l]
-
 def to_simplex(data):
     return ((data + epsilon).T / (data + epsilon).sum(axis = 1)).T
 
@@ -176,36 +143,9 @@ class FMIX_Chain(object):
         return gamma.rvs(a = eta_sum, scale = 1)
 
     def sample_eta(self, curr_eta, r, delta):
-        # curr_eta = args[0]
-        # Xj = args[1]
-        # prior = args[2]
-
         Y = (self.data.S.T * r).T
-        Yj = [Y[np.where(delta == j)[0])] for j in range(self.nMix)]
+        Yj = [Y[np.where(delta == j)[0]] for j in range(self.nMix)]
         args = zip(curr_eta, Yj, repeat(self.priors.eta))
-        prop_eta = np.array(list(self.pool.map(sample_eta_j, args))).reshape(self.nMix, self.nCol)
-        return prop_eta
-
-
-
-        # curr_eta, Xjl, l, prior
-        # dj = [np.where(delta == j)[0] for j in range(self.nMix)]
-        Xj = [self.data.S[np.where(delta == j)[0]] for j in range(self.nMix)]
-        # Xjl = [self.data.S[i, l] for i in dj for l in range(self.nCol)]
-        # chain.from_iterable(repeat(dj, self.Col))
-        # args = zip(
-        #     np.repeat(curr_eta, self.nCol, axis = 0),
-        #     Xjl,
-        #     list(range(self.nCol)) * self.nMix,
-        #     repeat(self.priors.eta)
-        #     )
-        # prop_eta = np.array(list(self.pool.map(sample_eta_jl, args))).reshape(self.nMix, self.nCol)
-        # return prop_eta
-        args = zip(
-            curr_eta,
-            Xj,
-            repeat(self.priors.eta)
-            )
         prop_eta = np.array(list(self.pool.map(sample_eta_j, args))).reshape(self.nMix, self.nCol)
         return prop_eta
 
@@ -221,20 +161,23 @@ class FMIX_Chain(object):
                 )
         self.samples.pi[0] = 1. / self.nMix
         self.samples.delta[0] = self.sample_delta(self.samples.eta[0], self.samples.pi[0])
+        self.samples.r[0] = self.sample_r(self.samples.eta[0], self.samples.delta[0])
         self.curr_iter = 0
         return
 
     def iter_sample(self):
         # Pull current values
-        eta = self.curr_eta
-        pi = self.curr_pi
+        eta   = self.curr_eta
+        pi    = self.curr_pi
         delta = self.curr_delta
+        r     = self.curr_r
         # Advance the iterator
         self.curr_iter += 1
         # Compute new values
-        self.samples.eta[self.curr_iter] = self.sample_eta(eta, delta)
+        self.samples.eta[self.curr_iter] = self.sample_eta(eta, r, delta)
         self.samples.delta[self.curr_iter] = self.sample_delta(self.curr_eta, pi)
         self.samples.pi[self.curr_iter] = self.sample_pi(self.curr_delta)
+        self.samples.r[self.curr_iter] = self.sample_r(self.curr_eta, self.curr_delta)
         return
 
     def sample(self, ns):
@@ -254,9 +197,10 @@ class FMIX_Chain(object):
             os.remove(path)
         conn = sql.connect(path)
         # declare the resulting sample set
-        etas = self.samples.eta[-nTail :: nThin]
+        etas   = self.samples.eta[-nTail :: nThin]
         deltas = self.samples.delta[-nTail :: nThin]
-        pis = self.samples.pi[-nTail :: nThin]
+        pis    = self.samples.pi[-nTail :: nThin]
+        rs     = self.samples.r[-nTail :: nThin]
         # get the output sample size
         nSamp = deltas.shape[0]
         # set up resulting data frames
@@ -264,10 +208,12 @@ class FMIX_Chain(object):
                                 columns = ['eta_{}'.format(i) for i in range(self.nCol)])
         deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
         pis_df = pd.DataFrame(pis, columns = ['pi_{}'.format(i) for i in range(self.nMix)])
+        rs_df = pd.DataFrame(rs, columns = ['r_{}'.format(i) for i in range(self.nDat)])
         # write to disk
         etas_df.to_sql('etas', conn, index = False)
         deltas_df.to_sql('deltas', conn, index = False)
         pis_df.to_sql('pis', conn, index = False)
+        rs_df.to_sql('rs', conn, index = False)
         return
 
     def __init__(self, data, nMix, prior_eta = GammaPrior(1.,1.), prior_pi = DirichletPrior(1.)):
