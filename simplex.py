@@ -8,14 +8,14 @@ import numpy as np
 from numpy import log, exp
 from scipy.special import loggamma
 from data import *
-# from multiprocessing import Pool
+from multiprocessing import Pool
 import os
 import sqlite3 as sql
 
 import cUtility as cu
 from projgamma import sample_alpha_1_mh as sample_eta_jl
 
-epsilon = 1e-5
+epsilon = 1e-9
 
 GammaPrior = namedtuple('GammaPrior','a b')
 DirichletPrior = namedtuple('DirichletPrior','a')
@@ -146,14 +146,14 @@ class FMIX_Chain(object):
         Y = (self.data.S.T * r).T
         Yj = [Y[np.where(delta == j)[0]] for j in range(self.nMix)]
         args = zip(curr_eta, Yj, repeat(self.priors.eta))
-        # prop_eta = np.array(list(self.pool.map(sample_eta_j, args))).reshape(self.nMix, self.nCol)
-        prop_eta = np.array(list(map(sample_eta_j, args))).reshape(self.nMix, self.nCol)
+        prop_eta = np.array(list(self.pool.map(sample_eta_j, args))).reshape(self.nMix, self.nCol)
+        # prop_eta = np.array(list(map(sample_eta_j, args))).reshape(self.nMix, self.nCol)
         return prop_eta
 
     def sample_delta(self, eta, pi):
         args = zip(self.data.S, repeat(eta), repeat(pi))
-        # return np.array(list(self.pool.map(sample_delta_i, args))).reshape(-1)
-        return np.array(list(map(sample_delta_i, args))).reshape(-1)
+        # return np.array(list(map(sample_delta_i, args))).reshape(-1)
+        return np.array(list(self.pool.map(sample_delta_i, args))).reshape(-1)
 
     def initialize_sampler(self, ns):
         self.samples = FMIX_Samples(ns, self.nDat, self.nCol, self.nMix)
@@ -225,7 +225,7 @@ class FMIX_Chain(object):
         self.nDat = self.data.nDat
         self.nMix = nMix
         self.priors = FMIX_Prior(prior_eta, prior_pi)
-        # self.pool = Pool(processes = 8)
+        self.pool = Pool(processes = 8)
         return
 
 class FMIX_Result(object):

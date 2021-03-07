@@ -2,3 +2,5 @@
 *.cp*
 *.html
 **build/
+output/
+*.png
