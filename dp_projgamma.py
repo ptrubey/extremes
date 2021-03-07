@@ -32,9 +32,6 @@ def log_density_gamma_i(args):
     # Y, alpha, beta
     return gamma(a = args[1], scale = 1/args[2]).logpdf(args[0]).sum()
 
-
-
-
 class SamplesDPMPG(object):
     alpha = None # list, each entry is np.array; each row of array pertains to a cluster
     beta  = None # same as alpha

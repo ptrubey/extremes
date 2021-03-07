@@ -4,12 +4,28 @@ import pandas as pd
 from genpareto import gpd_fit
 from numpy.linalg import norm
 
+def to_hypercube(theta):
+    """ Assuming data in polar, casts to euclidean then divides by row max
+    to achieve projection onto hypercube. """
+    euc = to_euclidean(theta)
+    return (euc.T / euc.max(axis = 1)).T
 
+def to_simplex(theta):
+    euc = to_euclidean(theta)
+    return (euc.T / euc.sum(axis = 1)).T
+
+def euclidean_to_simplex(euc):
+    return (euc.T / euc.sum(axis = 1)).T
+
+def euclidean_to_hypercube(euc):
+    return (euc.T / euc.max(axis = 1)).T
 
 def to_euclidean(theta):
     """ casts angles in radians onto unit hypersphere in Euclidean space """
-    coss = np.vstack((np.cos(theta).T, 1)).T
-    sins = np.vstack((1, np.sin(theta).T)).T
+    # coss = np.vstack((np.cos(theta).T, np.ones(theta.shape[0]))).T
+    coss = np.hstack((np.cos(theta), np.ones(shape = (theta.shape[0], 1))))
+    # sins = np.vstack((np.ones(theta.shape[0]), np.sin(theta).T)).T
+    sins = np.hstack((np.ones(shape = (theta.shape[0], 1)), np.sin(theta)))
     sinp = np.cumprod(sins, axis = 1)
     return coss * sinp
 
@@ -74,7 +90,7 @@ class Data(object):
         return
 
     def __init__(self, path):
-        self.A = read.csv(path)
+        self.A = pd.read_csv(path).values
         self.fill_out()
         return
 
