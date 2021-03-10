@@ -92,17 +92,17 @@ class FMIX_Result(smp.FMIX_Result, PostPredLoss):
         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
-class DPSimplex_Result(smp.DMSimplex_Result, PostPredLoss):
+class DPSimplex_Result(smp.DPSimplex_Result, PostPredLoss):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for ds in range(self.nSamp):
+        for s in range(self.nSamp):
             zeta = self.samples.zeta[s][self.samples.delta[s]]
             predicted[s] = gamma.rvs(a = zeta) + epsilon
         return predicted
 
     def __init__(self, path):
         super().__init__(path)
-        self.delta = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 class MPG_Result(mpg.MPGResult, PostPredLoss):
@@ -152,11 +152,12 @@ Result = {
     'mpg'    : MPG_Result,
     'dpmpg'  : DPMPG_Result,
     'dppgln' : DPPGLN_Result,
+    'dpmix'  : DPSimplex_Result,
     }
 
 if __name__ == '__main__':
     base_path = './output'
-    model_types = ['fmix','dpmpg','dppgln','mpg','dpmix'] #,'dpmp']
+    model_types = ['dpmix']# ['fmix','dpmpg','dppgln','mpg','dpmix'] #,'dpmp']
 
     models = []
     for model_type in model_types:

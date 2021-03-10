@@ -163,7 +163,8 @@ if __name__ == '__main__':
     print_string = '{}:{} : crps {}, Hellinger {}, TV {}'
     for post in posteriors:
         print(print_string.format(post.type, post.name, post.crps, post.hell, post.tv))
-    df = pd.DataFrame([posterior[1:] for posterior in posteriors], columns = ('type','name','crps','hellinger','tv'))
+    df = pd.DataFrame([posterior[1:] for posterior in posteriors],
+                        columns = ('type','name','crps','hellinger','tv'))
     df.to_csv('./output/distance.csv')
 
 # EOF

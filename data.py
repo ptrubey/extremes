@@ -94,8 +94,6 @@ class Data(object):
         self.fill_out()
         return
 
-
-
 class Data_From_Raw(Data):
     raw = None # raw data
     Z   = None # Standardized Pareto Transformed (for those > 1)
