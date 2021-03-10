@@ -298,7 +298,7 @@ class DPMPG(object):
         bb = self.priors.eta.b - log(g)
         eps = (aa - 1) / (self.nDat * bb + aa - 1)
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
-        return gamma.rvs(aaa, bb)
+        return gamma.rvs(a = aaa, scale = bb)
 
     def set_prior_samplers(self):
         self.alpha_prior = gamma(self.priors.alpha.a, scale = 1. / self.priors.alpha.b)

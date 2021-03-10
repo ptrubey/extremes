@@ -4,6 +4,7 @@ import pandas as pd
 from collections import defaultdict, namedtuple
 from math import log, sqrt
 from data import to_hypercube
+from sklearn.metrics import pairwise_distances
 
 def check_shape(data1,data2):
     try:
@@ -116,21 +117,18 @@ def cdf_distance(data1, data2, resolution = 10):
 def energy_score(prediction, target):
     """ Computes Energy Score (Multivariate CRPS) between target and
         posterior predictive density """
-    nSamp, nDat, nCol = prediction.shape[0]
+    nSamp, nDat, nCol = prediction.shape
 
     GF = np.empty(nDat)
     PR = np.empty(nDat)
 
     for i in range(nDat):
-        diff = prediction[:,i] - target[i]
-        GF[i] = (diff * diff).sum(axis = 1).mean()
+        #diff = prediction[:,i] - target[i]
+        #GF[i] = np.sqrt((diff * diff).sum(axis = 1)).mean()
+        GF[i] = pairwise_distances(prediction[:,i], target[i].reshape(1,-1)).mean()
 
-    for i in range(ndat):
-        temp = 0.
-        for j in range(nSamp):
-            diff = prediction[:,i] - prediction[j,i]
-            temp += (diff * diff).sum(axis = 1).sum()
-        PR[i] = temp / (nSamp * nSamp)
+    for i in range(nDat):
+        PR[i] = pairwise_distances(prediction[:,i]).mean()
 
     return GF.mean() + 0.5 * PR.mean()
 
@@ -169,3 +167,4 @@ if __name__ == '__main__':
     df.to_csv('./output/distance.csv')
 
 # EOF
+#cython: boundscheck=False, wraparound=False, nonecheck=False

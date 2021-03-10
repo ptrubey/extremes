@@ -146,7 +146,7 @@ def log_post_log_alpha_1(log_alpha_1, y_1, prior):
         )
     return lp
 
-def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.2):
+def sample_alpha_1_mh(curr_alpha_1, y_1, prior, proposal_sd = 0.3):
     """ Sampling function for shape parameter, with gamma likelihood and
     gamma prior.  Assumes rate parameter = 1.  uses Metropolis Hastings
     algorithm with random walk for sampling. """
@@ -184,7 +184,7 @@ def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
         )
     return lp
 
-def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.2):
+def sample_alpha_k_mh(curr_alpha_k, y_k, prior_a, prior_b, proposal_sd = 0.3):
     """ Sampling Function for shape parameter, with Gamma likelihood and Gamma
     prior, with rate (with gamma prior) integrated out. """
     if len(y_k) <= 1:
