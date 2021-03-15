@@ -112,12 +112,12 @@ class DPMPG(object):
             )
         df_etas = pd.DataFrame({'eta' : etas})
         # Write Dataframes to SQL Connection
-        df_zetas.to_sql('alpha_shape', conn, index = False)
-        df_alphas.to_sql('beta_shape', conn, index = False)
-        df_betas.to_sql('alphas', conn, index = False)
+        df_zetas.to_sql('zetas', conn, index = False)
+        df_alphas.to_sql('alphas', conn, index = False)
+        df_betas.to_sql('betas', conn, index = False)
         df_deltas.to_sql('deltas', conn, index = False)
         df_rs.to_sql('rs', conn, index = False)
-        df_etas.to_sql('eta', conn, index = False)
+        df_etas.to_sql('etas', conn, index = False)
         # Commit and Close
         conn.commit()
         conn.close()
@@ -306,33 +306,35 @@ class ResultDPMPG(object):
         return
 
     def load_data(self, path):
-        conn    = sql.connect(path)
-        ashapes = pd.read_sql('select * from alpha_shape;', conn).values
-        bshapes = pd.read_sql('select * from beta_shape;', conn).values
-        alphas  = pd.read_sql('select * from alphas;', conn).values
-        betas   = pd.read_sql('select * from betas;', conn).values
-        deltas  = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        rs      = pd.read_sql('select * from rs', conn).values
-        eta     = pd.read_sql('select * from eta;', conn).values.T[0]
+        # df_zetas.to_sql('zetas', conn, index = False)
+        # df_alphas.to_sql('alphas', conn, index = False)
+        # df_betas.to_sql('betas', conn, index = False)
+        # df_deltas.to_sql('deltas', conn, index = False)
+        # df_rs.to_sql('rs', conn, index = False)
+        # df_etas.to_sql('etas', conn, index = False)
+
+        conn   = sql.connect(path)
+        zetas  = pd.read_sql('select * from zetas;' , conn).values
+        alphas = pd.read_sql('select * from alphas;', conn).values
+        betas  = pd.read_sql('select * from betas;' , conn).values
+        deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
+        rs     = pd.read_sql('select * from rs'     , conn).values
+        etas   = pd.read_sql('select * from etas;'  , conn).values.reshape(-1)
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
-        self.nCol  = ashapes.shape[1]
+        self.nCol  = alphas.shape[1]
 
         self.samples = SamplesDPMPG(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
-        self.samples.eta = eta
-        self.samples.r = rs
-        self.samples.alpha = [
-            alphas[np.where(alphas.T[0] == i)[0], 1:]
+        self.samples.eta   = etas
+        self.samples.r     = rs
+        self.samples.alpha = alphas
+        self.samples.beta  = betas
+        self.samples.zeta  = [
+            zetas[np.where(zetas.T[0] == i)[0], 1:]
             for i in range(self.nSamp)
             ]
-        self.samples.beta = [
-            betas[np.where(betas.T[0] == i)[0], 1:]
-            for i in range(self.nSamp)
-            ]
-        self.samples.alpha_shape = ashapes
-        self.samples.beta_shape  = bshapes
         return
 
     def __init__(self, path):
