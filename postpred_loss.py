@@ -166,6 +166,7 @@ Result = {
     'fmix'   : FMIX_Result,
     'mpg'    : MPG_Result,
     'dpmpg'  : DPMPG_Result,
+    'dpmrpg' : DPMRPG_Result,
     'dppgln' : DPPGLN_Result,
     'dpmix'  : DPSimplex_Result,
     }
