@@ -20,11 +20,10 @@ if __name__ == '__main__':
         data,
         prior_eta = GammaPrior(2.,1e-1)
         )
-    dpmpg.initialize_sampler(20000)
     dpmpg.sample(20000)
-    dpmpg.write_to_disk('./output/dprmpg/results_2_1e-1.db', 10000,2)
+    dpmpg.write_to_disk('./output/dpmrpg/results_2_1e-1.db', 10000, 2)
 
-    res = ResultDPMPG('./output/dprmpg/results_2_1e-1.db')
+    res = ResultDPMPG('./output/dpmrpg/results_2_1e-1.db')
     res.write_posterior_predictive('./output/dpmrpg/postpred_2_1e-1.csv')
 
 # EOF

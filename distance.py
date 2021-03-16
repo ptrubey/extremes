@@ -130,7 +130,7 @@ def energy_score(prediction, target):
     for i in range(nDat):
         PR[i] = pairwise_distances(prediction[:,i]).mean()
 
-    return GF.mean() - 0.5 * PR.mean()
+    return 0.5 * PR.mean() - GF.mean()
 
 if __name__ == '__main__':
     import glob, os

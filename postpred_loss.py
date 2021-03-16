@@ -12,7 +12,9 @@ from collections import namedtuple
 import simplex as smp
 import m_projgamma as mpg
 import dp_projgamma as dpmpg
+import dp_rprojgamma as dpmrpg
 import dp_pgln as dppgln
+
 # from cEnergy import energy_score
 from distance import energy_score
 
@@ -133,6 +135,19 @@ class DPMPG_Result(dpmpg.ResultDPMPG, PostPredLoss):
         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
+class DPMRPG_Result(dpmrpg.ResultDPMPG, PostPredLoss):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            predicted[s] = gamma.rvs(a = zeta) + epsilon
+        return predicted
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
 class DPPGLN_Result(dppgln.DPMPG_Result, PostPredLoss):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
@@ -157,7 +172,7 @@ Result = {
 
 if __name__ == '__main__':
     base_path = './output'
-    model_types = ['dpmix']# ['fmix','dpmpg','dppgln','mpg','dpmix'] #,'dpmp']
+    model_types = ['fmix', 'dpmix', 'dpmrpg', 'dpmpg', 'dppgln', 'mpg']
 
     models = []
     for model_type in model_types:
