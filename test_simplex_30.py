@@ -11,14 +11,15 @@ if __name__ == '__main__':
 
     fmix = FMIX_Chain(
             data, 30,
-            GammaPrior(1.,1.),
+            GammaPrior(0.5,0.5),
+            GammaPrior(2.,2.),
             DirichletPrior(1.),
             )
-    fmix.sample(50000)
-    fmix.write_to_disk('./output/fmix/results_30.db',25000,5)
+    fmix.sample(1000)
+    fmix.write_to_disk('./output/fmix/test.db',500,5)
 
-    res = FMIX_Result('./output/fmix/results_30.db')
-    res.write_posterior_predictive('./output/fmix/postpred_30.csv')
+    #res = FMIX_Result('./output/fmix/test.db')
+    #res.write_posterior_predictive('./output/fmix/test.csv')
 
 
 # EOF
