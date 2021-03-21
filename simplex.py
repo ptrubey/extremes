@@ -1,7 +1,7 @@
 from scipy.stats import gamma, beta, gmean, norm as normal, invwishart, uniform, dirichlet
 from scipy.linalg import cho_factor, cho_solve, cholesky
 from scipy.special import loggamma
-from numpy.random import choice
+from numpy.random import choice, gamma, beta, normal, uniform
 from collections import namedtuple
 from itertools import repeat, chain
 import numpy as np
@@ -144,12 +144,12 @@ class FMIX_Chain(object):
 
     def sample_pi(self, delta):
         shapes = cu.counter(delta, self.nMix) + self.priors.pi.a
-        unnormalized = gamma.rvs(a = shapes)
+        unnormalized = gamma(shape = shapes)
         return unnormalized / unnormalized.sum()
 
     def sample_r(self, zeta, delta):
         shapes = zeta[delta].sum(axis = 1)
-        return gamma.rvs(a = shapes)
+        return gamma(shape = shapes)
 
     def sample_zeta(self, curr_zeta, r, delta, alpha, beta):
         Y = (self.data.S.T * r).T
@@ -174,7 +174,7 @@ class FMIX_Chain(object):
         self.samples = FMIX_Samples(ns, self.nDat, self.nCol, self.nMix)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
-        self.samples.zeta[0] = gamma.rvs(a = 1., size = (self.nMix, self.nCol))
+        self.samples.zeta[0] = gamma(shape = 1., size = (self.nMix, self.nCol))
         self.samples.pi[0] = 1. / self.nMix
         self.samples.delta[0] = self.sample_delta(self.samples.zeta[0], self.samples.pi[0])
         self.samples.r[0] = self.sample_r(self.samples.zeta[0], self.samples.delta[0])
@@ -271,7 +271,7 @@ class FMIX_Result(object):
         for n in range(self.nSamp):
             delta_new = choice(self.nMix, n_per_sample, p = self.samples.pi[n])
             zeta_new = self.samples.zeta[n,delta_new]
-            postpred[n] = to_simplex(gamma.rvs(a = zeta_new, size = (n_per_sample, self.nCol)))
+            postpred[n] = to_simplex(gamma(shape = zeta_new, size = (n_per_sample, self.nCol)))
         simplex = postpred.reshape(self.nSamp * n_per_sample, self.nCol)
         return to_hypercube(simplex)
 
@@ -430,7 +430,7 @@ class DPSimplex_Chain(object):
         return _delta, _zeta
 
     def sample_zeta_new(self, m, alpha, beta):
-        return gamma.rvs(a = alpha, scale = 1/beta, size = (m, self.nCol))
+        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
 
     def sample_zeta(self, curr_zeta, delta, r, alpha, beta):
         Y = ((self.data.S).T * r).T
@@ -459,7 +459,7 @@ class DPSimplex_Chain(object):
 
     def sample_r(self, delta, zeta):
         shapes = zeta[delta].sum(axis = 1)
-        return gamma.rvs(a = shapes)
+        return gamma(shape = shapes)
 
     def sample_eta(self, curr_eta, delta):
         nClust = delta.max() + 1
@@ -468,7 +468,7 @@ class DPSimplex_Chain(object):
         bb = self.priors.eta.b - log(g)
         eps = (aa - 1) / (self.nDat * bb + aa - 1)
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
-        return gamma.rvs(a = aaa, scale = bb)
+        return gamma(shape = aaa, scale = 1 / bb)
 
     def sample_delta_i(self, delta, zeta, r, alpha, beta, eta, i):
         _delta, _zeta = self.clean_delta(delta, zeta, i)
