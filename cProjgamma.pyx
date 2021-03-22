@@ -1,9 +1,11 @@
+# cython: language_level=3, boundscheck=False
+
 """ Functions relating to density of Projected Gamma.  All functions are
 parameterized such that E(x) = alpha / beta (treat beta as rate parameter). """
 
 from libc.math cimport exp, log, lgamma
 from scipy.special.cython_special cimport gamma, gammaincinv
-from numpy.random import uniform, normal
+from numpy.random import uniform, normal, gamma as _gamma
 cimport numpy as np
 
 # Utility Functions
@@ -23,12 +25,21 @@ cdef double sumlog(double[:] y):
         s += log(y[i])
     return s
 
+cdef double sumlgamma(double[:] y):
+    cdef:
+        int i
+        double s = 0.
+    for i in range(y.shape[0]):
+        s += lgamma(y[i])
+    return s
+
 cdef double gamma_rvs(double shape, double rate):
-    return gammaincinv(shape, uniform() * gamma(shape)) / rate
+    # return gammaincinv(shape, uniform() * gamma(shape)) / rate
+    return _gamma(shape = shape, scale = 1. / rate)
 
 ## Functions related to projected gamma density
 
-cdef double logdgamma(double[:] Y, double[:] alpha, double[:] beta):
+cpdef double logdgamma(double[:] Y, double[:] alpha, double[:] beta):
     "logsum of d independent gamma random variables, with "
     cdef:
         int i, nCol
@@ -38,9 +49,25 @@ cdef double logdgamma(double[:] Y, double[:] alpha, double[:] beta):
         s += alpha[i] * log(beta[i]) - lgamma(alpha[i]) + (alpha[i] - 1) * log(Y[i]) - beta[i] * Y[i]
     return s
 
+cpdef double logdgamma_restricted(double[:] Y, double[:] alpha):
+    cdef:
+        int i
+        double s = 0.
+    for i in range(Y.shape[0]):
+        s += (alpha[i] - 1) * log(Y[i]) - Y[i] - lgamma(alpha[i])
+    return s
+
+cpdef double logddirichlet(double[:] X, double[:] alpha):
+    cdef:
+        int i
+        double s = 0.
+    for i in range(X.shape[0]):
+        s += (alpha[i] - 1) * log(X[i])
+    return s + lgamma(sum(alpha)) - sumlgamma(alpha)
+
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
-cdef double log_post_log_alpha_1(
+cpdef double log_post_log_alpha_1(
         double log_alpha_1,
         double [:] y_1,
         double a, double b,
@@ -81,7 +108,7 @@ cpdef double sample_alpha_1_mh(
     curr_lp = log_post_log_alpha_1(curr_log_alpha_1, y_1, a, b)
     prop_lp = log_post_log_alpha_1(prop_log_alpha_1, y_1, a, b)
 
-    if log(uniform.rvs()) < prop_lp - curr_lp:
+    if log(uniform()) < prop_lp - curr_lp:
         return exp(prop_log_alpha_1)
     else:
         return curr_alpha_1
@@ -144,7 +171,7 @@ cpdef double sample_alpha_k_mh(
     curr_lp = log_post_log_alpha_k(curr_log_alpha_k, y_k, a, b, c, d)
     prop_lp = log_post_log_alpha_k(prop_log_alpha_k, y_k, a, b, c, d)
 
-    if log(uniform.rvs()) < prop_lp - curr_lp:
+    if log(uniform()) < prop_lp - curr_lp:
         return exp(prop_log_alpha_k)
     else:
         return curr_alpha_k

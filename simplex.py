@@ -1,4 +1,4 @@
-from scipy.stats import gamma, beta, gmean, norm as normal, invwishart, uniform, dirichlet
+from scipy.stats import gmean, dirichlet, gamma as _gamma
 from scipy.linalg import cho_factor, cho_solve, cholesky
 from scipy.special import loggamma
 from numpy.random import choice, gamma, beta, normal, uniform
@@ -14,26 +14,33 @@ import sqlite3 as sql
 from math import ceil
 
 import cUtility as cu
-from projgamma import sample_alpha_1_mh as sample_eta_jl
-from projgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc
+
+# from projgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc
+from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
+                        logddirichlet, logdgamma, logdgamma_restricted
 
 epsilon = 1e-20
 
 GammaPrior = namedtuple('GammaPrior','a b')
 DirichletPrior = namedtuple('DirichletPrior','a')
 
-def ddirichlet_single(X, alpha, log = True):
-    if log:
-        return dirichlet(alpha).logpdf(X)
-    else:
-        return dirichlet(alpha).pdf(X)
+# def ddirichlet_single(X, alpha, log = True):
+#     if log:
+#         return dirichlet.logpdf(X, alpha = alpha)
+#     else:
+#         return dirichlet.pdf(X, alpha = alpha)
+def dirichlet_logdensity_wrapper(args):
+    return logddirichlet(*args)
+# def dirichlet_logdensity_wrapper(args):
+#     return dirichlet.logpdf(args[0], alpha = args[1])
 
 def sample_delta_i(args):
     Xi = args[0]
     zeta = args[1]
     pi = args[2]
     argset = zip(repeat(Xi), zeta)
-    lps = np.array(list(map(lambda arg: ddirichlet_single(*arg), argset)))
+    # lps = np.array(list(map(lambda arg: ddirichlet_single(*arg), argset)))
+    lps = np.array(list(map(dirichlet_logdensity_wrapper, argset)))
     lps[np.isnan(lps)] = - np.inf
     lps = lps - lps.max()
     unnormalized = np.exp(lps) * pi
@@ -71,8 +78,8 @@ def update_zeta_j(curr_zeta_j, Yj, alpha, beta):
     sample_alpha_1_mh assumes a Gamma likelihood with rate parameter = 1, and a gamma
     prior for the shape parameter.
     """
-    priors = [GammaPrior(a,b) for a,b in zip(alpha,beta)]
-    args = zip(curr_zeta_j, Yj.T, priors)
+    # priors = [GammaPrior(a,b) for a,b in zip(alpha,beta)]
+    args = zip(curr_zeta_j, Yj.T, alpha, beta)
     res = map(update_zeta_jl_wrapper, args)
     return np.array(list(res))
 
@@ -131,13 +138,22 @@ class FMIX_Chain(object):
         return self.samples.beta[self.curr_iter].copy()
 
     def sample_alpha(self, zeta, curr_alpha):
-        args = zip(curr_alpha, zeta.T, repeat(self.priors.alpha), repeat(self.priors.beta))
+        # args = zip(curr_alpha, zeta.T, repeat(self.priors.alpha), repeat(self.priors.beta))
+        args = zip(
+            curr_alpha,
+            zeta.T,
+            repeat(self.priors.alpha.a),
+            repeat(self.priors.alpha.b),
+            repeat(self.priors.beta.a),
+            repeat(self.priors.beta.b),
+            )
         res = map(update_alpha_l_wrapper, args)
-        # res self.pool.map(update_alpha_l_wrapper, args)
+        # res = self.pool.map(update_alpha_l_wrapper, args)
         return np.array(list(res))
 
     def sample_beta(self, zeta, alpha):
-        args = zip(alpha, zeta.T, repeat(self.priors.beta))
+        # args = zip(alpha, zeta.T, repeat(self.priors.beta))
+        args = zip(alpha, zeta.T, repeat(self.priors.beta.a), repeat(self.priors.beta.b))
         res = map(update_beta_l_wrapper, args)
         # res = self.pool.map(update_beta_l_wrapper, args)
         return np.array(list(res))
@@ -153,10 +169,11 @@ class FMIX_Chain(object):
 
     def sample_zeta(self, curr_zeta, r, delta, alpha, beta):
         Y = (self.data.S.T * r).T
-        djs = [np.where(delta == j)[0] for j in range(self.nMix)]
+        # djs = [np.where(delta == j)[0] for j in range(self.nMix)]
         args = zip(
             curr_zeta,
-            [Y[djs[j]] for j in range(self.nMix)],
+            [Y[np.where(delta == j)[0]] for j in range(self.nMix)],
+            # [Y[djs[j]] for j in range(self.nMix)],
             repeat(alpha),
             repeat(beta),
             )
@@ -316,7 +333,8 @@ class FMIX_Result(object):
 # Functions and definitions relating to DP Mixture
 
 def log_density_delta_i(args):
-    return gamma.logpdf(args[0], a = args[1]).sum()
+    # return _gamma.logpdf(args[0], a = args[1]).sum()
+    return logdgamma_restricted(args[0], args[1])
 
 class DPSimplex_Samples(object):
     zeta  = None  # List, each entry is np.array, each row of array pertains to cluster
@@ -344,15 +362,20 @@ class DPSimplex_Result(object):
             dmax = self.samples.delta[s].max()
             njs = cu.counter(self.samples.delta[s], int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
-            new_zetas = gamma.rvs(
-                    a = self.samples.alpha[s],
+            # new_zetas = gamma.rvs(
+            #         a = self.samples.alpha[s],
+            #         scale = 1. / self.samples.beta[s],
+            #         size = (m, self.nCol),
+            #         )
+            new_zetas = gamma(
+                    shape = self.samples.alpha[s],
                     scale = 1. / self.samples.beta[s],
                     size = (m, self.nCol),
                     )
             prob = ljs / ljs.sum()
             deltas = cu.generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
-            new_gammas.append(gamma.rvs(a = zeta))
+            new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 10):
@@ -430,10 +453,10 @@ class DPSimplex_Chain(object):
         return _delta, _zeta
 
     def sample_zeta_new(self, m, alpha, beta):
-        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
+        return gamma(shape = alpha, scale = 1. / beta, size = (m, self.nCol))
 
     def sample_zeta(self, curr_zeta, delta, r, alpha, beta):
-        Y = ((self.data.S).T * r).T
+        Y = (self.data.S.T * r).T
         djs = [np.where(delta == j)[0] for j in range(delta.max() + 1)]
         args = zip(
             curr_zeta,
@@ -446,13 +469,22 @@ class DPSimplex_Chain(object):
         return np.array(list(res))
 
     def sample_alpha(self, zeta, curr_alpha):
-        args = zip(curr_alpha, zeta.T, repeat(self.priors.alpha), repeat(self.priors.beta))
+        # args = zip(curr_alpha, zeta.T, repeat(self.priors.alpha), repeat(self.priors.beta))
+        args = zip(
+            curr_alpha,
+            zeta.T,
+            repeat(self.priors.alpha.a),
+            repeat(self.priors.alpha.b),
+            repeat(self.priors.beta.a),
+            repeat(self.priors.beta.b),
+            )
         # res = self.pool.map(update_alpha_l_wrapper, args)
         res = map(update_alpha_l_wrapper, args)
         return np.array(list(res))
 
     def sample_beta(self, zeta, alpha):
-        args = zip(alpha, zeta.T, repeat(self.priors.beta))
+        # args = zip(alpha, zeta.T, repeat(self.priors.beta))
+        args = zip(alpha, zeta.T, repeat(self.priors.beta.a), repeat(self.priors.beta.b))
         # res = self.pool.map(update_beta_l_wrapper, args)
         res = map(update_beta_l_wrapper, args)
         return np.array(list(res))
@@ -463,7 +495,7 @@ class DPSimplex_Chain(object):
 
     def sample_eta(self, curr_eta, delta):
         nClust = delta.max() + 1
-        g = beta.rvs(curr_eta + 1, self.nDat)
+        g = beta(curr_eta + 1, self.nDat)
         aa = self.priors.eta.a + nClust
         bb = self.priors.eta.b - log(g)
         eps = (aa - 1) / (self.nDat * bb + aa - 1)
