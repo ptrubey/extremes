@@ -76,11 +76,11 @@ class MPG(object):
         for j in range(self.nMix):
             Yj = Y[delta == j]
             prop_alpha[j,0] = sample_alpha_1_mh(
-                curr_alpha[j,0], Yj[:,0], self.priors.alpha,
+                curr_alpha[j,0], Yj[:,0], *self.priors.alpha)
                 )
             for k in range(1, self.nCol):
                 prop_alpha[j,k] = sample_alpha_k_mh(
-                    curr_alpha[j,k], Yj[:,k], self.priors.alpha, self.priors.beta
+                    curr_alpha[j,k], Yj[:,k], *self.priors.alpha, *self.priors.beta
                     )
         return prop_alpha
 
@@ -91,7 +91,7 @@ class MPG(object):
         for j in range(self.nMix):
             Yj = Y[delta == j]
             for k in range(1, self.nCol):
-                prop_beta[j,k] = sample_beta_fc(alpha[j,k], Yj[:,k], self.priors.beta)
+                prop_beta[j,k] = sample_beta_fc(alpha[j,k], Yj[:,k], *self.priors.beta)
         return prop_beta
 
     def sample_eta(self, delta):
@@ -134,11 +134,6 @@ class MPG(object):
         # gmat = np.apply_along_axis(lambda p: multinomial.rvs(1, p), 0, normalized)
         # return np.apply_along_axis(np.where, 1, gmat).flatten().astype(int)
         return gmat
-
-    def set_priors(self):
-        self.alpha_prior = gamma(self.priors.alpha.a, scale = 1 / self.priors.alpha.b)
-        self.beta_prior  = gamma(self.priors.beta.a,  scale = 1 / self.priors.beta.b)
-        return
 
     def initialize_sampler(self, ns):
         # set sampler target

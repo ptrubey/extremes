@@ -4,32 +4,32 @@ import pandas as pd
 from genpareto import gpd_fit
 from numpy.linalg import norm
 
-def to_hypercube(theta):
+epsilon = 1e-30
+
+def angular_to_hypercube(theta):
     """ Assuming data in polar, casts to euclidean then divides by row max
     to achieve projection onto hypercube. """
-    euc = to_euclidean(theta)
-    return (euc.T / euc.max(axis = 1)).T
+    euc = angular_to_euclidean(theta)
+    return euclidean_to_hypercube(euc)
 
-def to_simplex(theta):
-    euc = to_euclidean(theta)
-    return (euc.T / euc.sum(axis = 1)).T
+def angular_to_simplex(theta):
+    euc = angular_to_euclidean(theta)
+    return euclidean_to_simplex(euc)
 
 def euclidean_to_simplex(euc):
-    return (euc.T / euc.sum(axis = 1)).T
+    return ((euc + epsilon).T / (euc + epsilon).sum(axis = 1)).T
 
 def euclidean_to_hypercube(euc):
-    return (euc.T / euc.max(axis = 1)).T
+    return ((euc + epsilon).T / (euc + epsilon).max(axis = 1)).T
 
-def to_euclidean(theta):
+def angular_to_euclidean(theta):
     """ casts angles in radians onto unit hypersphere in Euclidean space """
-    # coss = np.vstack((np.cos(theta).T, np.ones(theta.shape[0]))).T
     coss = np.hstack((np.cos(theta), np.ones(shape = (theta.shape[0], 1))))
-    # sins = np.vstack((np.ones(theta.shape[0]), np.sin(theta).T)).T
     sins = np.hstack((np.ones(shape = (theta.shape[0], 1)), np.sin(theta)))
     sinp = np.cumprod(sins, axis = 1)
     return coss * sinp
 
-def to_angular(hyp):
+def euclidean_to_angular(hyp):
     """ Convert data to angular representation. """
     n, k  = hyp.shape
     theta = np.empty((n, k - 1))
@@ -87,6 +87,7 @@ class Data(object):
         self.Yl    = self.coss * self.sinp
         self.lsins = np.log(self.sins)
         self.lcoss = np.log(self.coss)
+        self.S     = angular_to_simplex(self.A)
         return
 
     def __init__(self, path):
@@ -106,7 +107,7 @@ class Data_From_Raw(Data):
 
     @staticmethod
     def to_angular(hyp):
-        return to_angular(hyp)
+        return euclidean_to_angular(hyp)
 
     @staticmethod
     def to_hypercube(par, decluster):

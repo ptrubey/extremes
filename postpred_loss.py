@@ -4,19 +4,25 @@ import pandas as pd
 import os, glob
 import sqlite3 as sql
 import itertools as it
-from scipy.stats import gamma, norm as normal
+#from scipy.stats import gamma, norm as normal
+from numpy.random import gamma
 from scipy.linalg import cholesky
 from random import sample
 from collections import namedtuple
 
-import simplex as smp
-import m_projgamma as mpg
-import dp_projgamma as dpmpg
-import dp_rprojgamma as dpmrpg
-import dp_pgln as dppgln
+# import simplex as smp
+# import m_projgamma as mpg
+# import dp_projgamma as dpmpg
+# import dp_rprojgamma as dpmrpg
+# import dp_pgln as dppgln
+import model_dirichlet as md
+import model_gendirichlet as mgd
+import model_projgamma as mpg
+import model_projresgamma as mprg
 
-# from cEnergy import energy_score
-from distance import energy_score
+from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
+from energy import energy_score
+# from distance import energy_score
 
 import cUtility as cu
 
@@ -24,7 +30,7 @@ from data import Data, euclidean_to_hypercube, euclidean_to_simplex
 
 np.seterr(under = 'ignore')
 
-epsilon = 1e-20
+epsilon = 1e-30
 
 class PostPredLoss(object):
     def L1(self, data):
@@ -71,35 +77,31 @@ class PostPredLoss(object):
 
     def energy_score_L1(self):
         predicted = self.L1(self.prediction())
-        return energy_score(predicted, euclidean_to_simplex(self.data.Yl))
+        return energy_score_euclidean(predicted, euclidean_to_simplex(self.data.Yl))
 
     def energy_score_L2(self):
         predicted = self.L2(self.prediction())
-        return energy_score(predicted, self.data.Yl)
+        res = energy_score_euclidean(
+                np.moveaxis(predicted, 0, 1),
+                self.data.Yl
+                )
+        return res
 
     def energy_score_Linf(self):
         predicted = self.Linf(self.prediction())
-        return energy_score(predicted, euclidean_to_hypercube(self.data.Yl))
+        # res = energy_score_hypercube(
+        #         np.moveaxis(predicted, 0, 1),
+        #         euclidean_to_hypercube(self.data.Yl),
+        #         )
+        # return res
+        return energy_score(np.moveaxis(predicted, 0, 1), euclidean_to_hypercube(self.data.Yl))
 
-class FMIX_Result(smp.FMIX_Result, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            eta = self.samples.eta[s][self.samples.delta[s]]
-            predicted[s] = gamma.rvs(a = eta) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class DPSimplex_Result(smp.DPSimplex_Result, PostPredLoss):
+class MD_Result(md.MD_Result, PostPredLoss):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
             zeta = self.samples.zeta[s][self.samples.delta[s]]
-            predicted[s] = gamma.rvs(a = zeta) + epsilon
+            predicted[s] = gamma(shape = zeta) + epsilon
         return predicted
 
     def __init__(self, path):
@@ -107,40 +109,12 @@ class DPSimplex_Result(smp.DPSimplex_Result, PostPredLoss):
         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
-class MPG_Result(mpg.MPGResult, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            beta  = self.samples.beta[s][self.samples.delta[s]]
-            predicted[s] = gamma.rvs(a = alpha, scale = 1/beta) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class DPMPG_Result(dpmpg.ResultDPMPG, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            beta  = self.samples.beta[s][self.samples.delta[s]]
-            predicted[s] = gamma.rvs(a = alpha, scale = 1 / beta) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class DPMRPG_Result(dpmrpg.ResultDPMPG, PostPredLoss):
+class DPD_Result(md.DPD_Result, PostPredLoss):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
             zeta = self.samples.zeta[s][self.samples.delta[s]]
-            predicted[s] = gamma.rvs(a = zeta) + epsilon
+            predicted[s] = gamma(shape = zeta) + epsilon
         return predicted
 
     def __init__(self, path):
@@ -148,32 +122,193 @@ class DPMRPG_Result(dpmrpg.ResultDPMPG, PostPredLoss):
         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
-class DPPGLN_Result(dppgln.DPMPG_Result, PostPredLoss):
+class MPRG_Result(mprg.MPRG_Result, PostPredLoss):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            beta  = self.samples.beta[s][self.samples.delta[s]]
-            predicted[s] = gamma.rvs(a = alpha, scale = 1 / beta) + epsilon
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            predicted[s] = gamma(shape = zeta) + epsilon
         return predicted
 
     def __init__(self, path):
         super().__init__(path)
         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
+
+class DPPRG_Result(mprg.DPPRG_Result, PostPredLoss):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            predicted[s] = gamma(shape = zeta) + epsilon
+        return predicted
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
+class MGD_Result(mgd.MGD_Result, PostPredLoss):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            sigma = self.samples.sigma[s][self.samples.delta[s]]
+            predicted[s] = gamma(shape = zeta, scale = 1 / sigma) + epsilon
+        return predicted
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
+class DPGD_Result(mgd.DPGD_Result, PostPredLoss):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            sigma = self.samples.sigma[s][self.samples.delta[s]]
+            predicted[s] = gamma(shape = zeta, scale = 1 / sigma) + epsilon
+        return predicted
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
+class MPG_Result(mpg.MPG_Result, PostPredLoss):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            sigma = self.samples.sigma[s][self.samples.delta[s]]
+            predicted[s] = gamma(shape = zeta, scale = 1 / sigma) + epsilon
+        return predicted
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
+class DPPG_Result(mpg.DPPG_Result, PostPredLoss):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s][self.samples.delta[s]]
+            sigma = self.samples.sigma[s][self.samples.delta[s]]
+            predicted[s] = gamma(shape = zeta, scale = 1 / sigma) + epsilon
+        return predicted
+
+    def __init__(self, path):
+        super().__init__(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
+# class FMIX_Result(smp.FMIX_Result, PostPredLoss):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             eta = self.samples.eta[s][self.samples.delta[s]]
+#             predicted[s] = gamma.rvs(a = eta) + epsilon
+#         return predicted
+#
+#     def __init__(self, path):
+#         super().__init__(path)
+#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+#         return
+#
+# class DPSimplex_Result(smp.DPSimplex_Result, PostPredLoss):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             zeta = self.samples.zeta[s][self.samples.delta[s]]
+#             predicted[s] = gamma.rvs(a = zeta) + epsilon
+#         return predicted
+#
+#     def __init__(self, path):
+#         super().__init__(path)
+#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+#         return
+#
+# class MPG_Result(mpg.MPGResult, PostPredLoss):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             alpha = self.samples.alpha[s][self.samples.delta[s]]
+#             beta  = self.samples.beta[s][self.samples.delta[s]]
+#             predicted[s] = gamma.rvs(a = alpha, scale = 1/beta) + epsilon
+#         return predicted
+#
+#     def __init__(self, path):
+#         super().__init__(path)
+#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+#         return
+#
+# class DPMPG_Result(dpmpg.ResultDPMPG, PostPredLoss):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             alpha = self.samples.alpha[s][self.samples.delta[s]]
+#             beta  = self.samples.beta[s][self.samples.delta[s]]
+#             predicted[s] = gamma.rvs(a = alpha, scale = 1 / beta) + epsilon
+#         return predicted
+#
+#     def __init__(self, path):
+#         super().__init__(path)
+#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+#         return
+#
+# class DPMRPG_Result(dpmrpg.ResultDPMPG, PostPredLoss):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             zeta = self.samples.zeta[s][self.samples.delta[s]]
+#             predicted[s] = gamma.rvs(a = zeta) + epsilon
+#         return predicted
+#
+#     def __init__(self, path):
+#         super().__init__(path)
+#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+#         return
+#
+# class DPPGLN_Result(dppgln.DPMPG_Result, PostPredLoss):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             alpha = self.samples.alpha[s][self.samples.delta[s]]
+#             beta  = self.samples.beta[s][self.samples.delta[s]]
+#             predicted[s] = gamma.rvs(a = alpha, scale = 1 / beta) + epsilon
+#         return predicted
+#
+#     def __init__(self, path):
+#         super().__init__(path)
+#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+#         return
+#
+# Result = {
+#     'fmix'   : FMIX_Result,
+#     'mpg'    : MPG_Result,
+#     'dpmpg'  : DPMPG_Result,
+#     'dpmrpg' : DPMRPG_Result,
+#     'dppgln' : DPPGLN_Result,
+#     'dpmix'  : DPSimplex_Result,
+#     }
 
 Result = {
-    'fmix'   : FMIX_Result,
-    'mpg'    : MPG_Result,
-    'dpmpg'  : DPMPG_Result,
-    'dpmrpg' : DPMRPG_Result,
-    'dppgln' : DPPGLN_Result,
-    'dpmix'  : DPSimplex_Result,
+    'mpg'  : MPG_Result,
+    'mprg' : MPRG_Result,
+    'md'   : MD_Result,
+    'mgd'  : MGD_Result,
+    'dppg' : DPPG_Result,
+    'dpprg' : DPPRG_Result,
+    'dpd'  : DPD_Result,
+    'dpgd' : DPGD_Result,
     }
 
 if __name__ == '__main__':
     base_path = './output'
-    model_types = ['fmix', 'dpmix', 'dpmrpg', 'dpmpg', 'dppgln', 'mpg']
+    #model_types = ['fmix', 'dpmix', 'dpmrpg', 'dpmpg', 'dppgln', 'mpg']
+    model_types = ['md','dpd','mgd','dpgd','mprg','dpprg','mpg','dppg']
 
     models = []
     for model_type in model_types:
@@ -181,11 +316,14 @@ if __name__ == '__main__':
         for m in mm:
             models.append((model_type, m))
 
-    model = models[0]
-    result = Result[model[0]](model[1])
-    PostPredLossResult = namedtuple('PostPredLossResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_L1 ES_L2 ES_Linf')
+    # model = models[0]
+    # result = Result[model[0]](model[1])
+    ppl_slots = 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf'
+    # PostPredLossResult = namedtuple('PostPredLossResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_L1 ES_L2 ES_Linf')
+    PostPredLossResult = namedtuple('PostPredLossResult', ppl_slots)
     postpredlossresults = []
     for model in models:
+        print('Processing {}-{}'.format(*model))
         result = Result[model[0]](model[1])
         postpredlossresults.append(
             PostPredLossResult(
@@ -194,8 +332,8 @@ if __name__ == '__main__':
                 result.posterior_predictive_loss_L1(),
                 result.posterior_predictive_loss_L2(),
                 result.posterior_predictive_loss_Linf(),
-                result.energy_score_L1(),
-                result.energy_score_L2(),
+                # result.energy_score_L1(),
+                # result.energy_score_L2(),
                 result.energy_score_Linf(),
                 )
             )
@@ -203,8 +341,9 @@ if __name__ == '__main__':
 
     df = pd.DataFrame(
         postpredlossresults,
-        columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_L1','ES_L2','ES_Linf'),
+        # columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_L1','ES_L2','ES_Linf'),
+        columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
         )
-    df.to_csv('./output/post_pred_loss_results.csv', index = False)
+    df.to_csv('./output/post_pred_loss_results_abbv.csv', index = False)
 
 # EOF

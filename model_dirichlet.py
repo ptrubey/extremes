@@ -1,26 +1,18 @@
-from scipy.stats import gmean, dirichlet, gamma as _gamma
-from scipy.linalg import cho_factor, cho_solve, cholesky
-from scipy.special import loggamma
 from numpy.random import choice, gamma, beta, normal, uniform
 from collections import namedtuple
-from itertools import repeat, chain
+from itertools import repeat
 import numpy as np
-from numpy import log, exp
-from scipy.special import loggamma
-# from multiprocessing import Pool
+import pandas as pd
 import os
 import sqlite3 as sql
-from math import ceil
+from math import ceil, log
+# from multiprocessing import Pool
 
 import cUtility as cu
-
 from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
                         logddirichlet, logdgamma, logdgamma_restricted
-
-epsilon = 1e-20
-
-GammaPrior = namedtuple('GammaPrior','a b')
-DirichletPrior = namedtuple('DirichletPrior','a')
+from data import euclidean_to_simplex, euclidean_to_hypercube, euclidean_to_angular
+from projgamma import GammaPrior, DirichletPrior
 
 def dirichlet_logdensity_wrapper(args):
     return logddirichlet(*args)
@@ -37,12 +29,6 @@ def sample_delta_i(args):
     unnormalized = np.exp(lps) * pi
     normalized = unnormalized / unnormalized.sum()
     return choice(pi.shape[0], 1, p = normalized)
-
-def to_simplex(data):
-    return ((data + epsilon).T / (data + epsilon).sum(axis = 1)).T
-
-def to_hypercube(data):
-    return (data.T / data.max(axis = 1)).T
 
 def update_alpha_l_wrapper(args):
     """ wrapper for projgamma.sample_alpha_k_mh
@@ -77,7 +63,7 @@ def update_zeta_j(curr_zeta_j, Yj, alpha, beta):
 def update_zeta_j_wrapper(args):
     return update_zeta_j(*args)
 
-class FMIX_Samples(object):
+class MD_Samples(object):
     zeta  = None
     delta = None
     pi    = None
@@ -94,7 +80,7 @@ class FMIX_Samples(object):
         self.r     = np.empty((nSamp + 1, nDat))
         return
 
-class FMIX_Prior(object):
+class MD_Prior(object):
     alpha = None
     beta  = None
     pi    = None
@@ -105,7 +91,7 @@ class FMIX_Prior(object):
         self.pi    = pi_prior
         return
 
-class FMIX_Chain(object):
+class MD_Chain(object):
     samples = None
     priors = None
 
@@ -179,7 +165,7 @@ class FMIX_Chain(object):
         return np.array(list(res)).reshape(-1)
 
     def initialize_sampler(self, ns):
-        self.samples = FMIX_Samples(ns, self.nDat, self.nCol, self.nMix)
+        self.samples = MD_Samples(ns, self.nDat, self.nCol, self.nMix)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(shape = 1., size = (self.nMix, self.nCol))
@@ -256,17 +242,17 @@ class FMIX_Chain(object):
             nMix,
             prior_alpha = GammaPrior(0.5,0.5),
             prior_beta = GammaPrior(2.,2.),
-            prior_pi = DirichletPrior(1.)
+            prior_pi = DirichletPrior(0.5),
             ):
         self.data = data
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
         self.nMix = nMix
-        self.priors = FMIX_Prior(prior_alpha, prior_beta, prior_pi)
+        self.priors = MD_Prior(prior_alpha, prior_beta, prior_pi)
         # self.pool = Pool(processes = 8)
         return
 
-class FMIX_Result(object):
+class MD_Result(object):
     samples = None
     nSamp = None
     nDat = None
@@ -278,7 +264,7 @@ class FMIX_Result(object):
         for n in range(self.nSamp):
             delta_new = choice(self.nMix, n_per_sample, p = self.samples.pi[n])
             zeta_new = self.samples.zeta[n,delta_new]
-            postpred[n] = data.euclidean_to_simplex(
+            postpred[n] = euclidean_to_simplex(
                     gamma(shape = zeta_new, size = (n_per_sample, self.nCol)),
                     )
         simplex = postpred.reshape(self.nSamp * n_per_sample, self.nCol)
@@ -286,7 +272,7 @@ class FMIX_Result(object):
 
     def generate_posterior_predictive_angular(self, n_per_sample = 1):
         hypercube = self.generate_posterior_predictive_hypercube(n_per_sample)
-        return data.euclidean_to_angular(hypercube)
+        return euclidean_to_angular(hypercube)
 
     def write_posterior_predictive(self, path, n_per_sample = 1):
         thetas = pd.DataFrame(
@@ -310,7 +296,7 @@ class FMIX_Result(object):
         self.nMix = pis.shape[1]
         self.nCol = zetas.shape[1]
 
-        self.samples = FMIX_Samples(self.nSamp, self.nDat, self.nCol, self.nMix)
+        self.samples = MD_Samples(self.nSamp, self.nDat, self.nCol, self.nMix)
         self.samples.delta = deltas
         self.samples.pi = pis
         self.samples.zeta = zetas.reshape((self.nSamp, self.nMix, self.nCol))
@@ -325,10 +311,9 @@ class FMIX_Result(object):
 # Functions and definitions relating to DP Mixture
 
 def log_density_delta_i(args):
-    # return _gamma.logpdf(args[0], a = args[1]).sum()
     return logdgamma_restricted(args[0], args[1])
 
-class DPSimplex_Samples(object):
+class DPD_Samples(object):
     zeta  = None  # List, each entry is np.array, each row of array pertains to cluster
     delta = None # np.array, int, indicates cluster membership
     alpha = None # np.array; Shape parameter prior for zeta
@@ -345,20 +330,15 @@ class DPSimplex_Samples(object):
         self.zeta  = [None] * (nSamp + 1)
         return
 
-DPSimplex_Prior = namedtuple('DPSimplex_Prior', 'alpha beta eta')
+DPD_Prior = namedtuple('DPD_Prior', 'alpha beta eta')
 
-class DPSimplex_Result(object):
+class DPD_Result(object):
     def generate_posterior_predictive_gammas(self, n_per_sample = 10, m = 20):
         new_gammas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
             njs = cu.counter(self.samples.delta[s], int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
-            # new_zetas = gamma.rvs(
-            #         a = self.samples.alpha[s],
-            #         scale = 1. / self.samples.beta[s],
-            #         size = (m, self.nCol),
-            #         )
             new_zetas = gamma(
                     shape = self.samples.alpha[s],
                     scale = 1. / self.samples.beta[s],
@@ -371,12 +351,12 @@ class DPSimplex_Result(object):
         return np.vstack(new_gammas)
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 10):
-        gnew = self.generate_posterior_predictive_gammas(n_per_sample) + epsilon
-        return (gnew.T / gnew.max(axis = 1)).T
+        gnew = self.generate_posterior_predictive_gammas(n_per_sample)
+        return euclidean_to_hypercube(gnew)
 
     def generate_posterior_predictive(self, n_per_sample = 10):
-        hyp = self.generate_posterior_predictive_hypercube(n_per_sample) + epsilon
-        return to_angular(hyp)
+        hyp = self.generate_posterior_predictive_hypercube(n_per_sample)
+        return euclidean_to_angular(hyp)
 
     def write_posterior_predictive(self, path, n_per_sample = 10):
         thetas = pd.DataFrame(
@@ -389,31 +369,31 @@ class DPSimplex_Result(object):
     def load_data(self, path):
         conn = sql.connect(path)
 
-        zetas = pd.read_sql('select * from zetas;', conn).values
+        zetas  = pd.read_sql('select * from zetas;', conn).values
         deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
         alphas = pd.read_sql('select * from alphas;', conn).values
-        betas = pd.read_sql('select * from betas;', conn).values
-        rs = pd.read_sql('select * from rs', conn).values
-        etas = pd.read_sql('select * from etas', conn).values.reshape(-1)
+        betas  = pd.read_sql('select * from betas;', conn).values
+        rs     = pd.read_sql('select * from rs', conn).values
+        etas   = pd.read_sql('select * from etas', conn).values.reshape(-1)
 
-        self.nDat = deltas.shape[1]
+        self.nDat  = deltas.shape[1]
         self.nSamp = deltas.shape[0]
-        self.nCol = alphas.shape[1]
+        self.nCol  = alphas.shape[1]
 
-        self.samples = DPSimplex_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples       = DPD_Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
-        self.samples.eta = etas
-        self.samples.r = rs
+        self.samples.eta   = etas
+        self.samples.r     = rs
         self.samples.alpha = alphas
-        self.samples.beta = betas
-        self.samples.zeta = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
+        self.samples.beta  = betas
+        self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
         return
 
     def __init__(self, path):
         self.load_data(path)
         return
 
-class DPSimplex_Chain(object):
+class DPD_Chain(object):
     """ DP clustering of Dirichlet RV's on the Simplex """
     @property
     def curr_zeta(self):
@@ -522,7 +502,7 @@ class DPSimplex_Chain(object):
         return delta, zeta
 
     def initialize_sampler(self, ns):
-        self.samples = DPSimplex_Samples(ns, self.nDat, self.nCol)
+        self.samples = DPD_Samples(ns, self.nDat, self.nCol)
         self.samples.delta[0] = np.array(list(range(self.nDat)), dtype = int)
         self.samples.r[0]     = 1.
         self.samples.eta[0]   = 5.
@@ -608,8 +588,8 @@ class DPSimplex_Chain(object):
     def __init__(
             self,
             data,
-            prior_alpha = GammaPrior(1.,1.),
-            prior_beta = GammaPrior(1.,1.),
+            prior_alpha = GammaPrior(0.5,0.5),
+            prior_beta = GammaPrior(2.,2.),
             prior_eta = GammaPrior(2.,0.5),
             m = 20,
             ):
@@ -617,7 +597,7 @@ class DPSimplex_Chain(object):
         self.data = data
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        self.priors = DPSimplex_Prior(prior_alpha, prior_beta, prior_eta)
+        self.priors = DPD_Prior(prior_alpha, prior_beta, prior_eta)
         # self.pool = Pool(8)
         return
 

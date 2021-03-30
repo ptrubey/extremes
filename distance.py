@@ -135,7 +135,7 @@ def energy_score(prediction, target):
 if __name__ == '__main__':
     import glob, os
     base_path = './output'
-    base_models = ['fmix','mpg','dpmpg','dppgln']
+    base_models = ['fmix','mpg','dpmpg','dppgln','dp']
 
     Posterior = namedtuple('Posterior','path type name crps hell tv')
     posteriors = []
