@@ -770,5 +770,4 @@ class DPGD_Result(object):
         self.load_data(path)
         return
 
-
 # EOF

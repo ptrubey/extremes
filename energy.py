@@ -4,15 +4,6 @@ from itertools import repeat
 from sklearn.metrics import pairwise_distances
 from hypercube_deviance import hcdev
 
-# def hypercube_distance(args):
-#     X,Y = args
-#     starting_face = Y.argmax()
-#     ending_face = X.argmax(axis = 1)
-#     _X = X.copy()
-#     _X[:,ending_face] = 2 - X[:,starting_face]
-#     _X[:,starting_face] = 1.
-#     return pairwise_distances(_X, Y.reshape(1,-1)).sum()
-
 def hypercube_distance(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev).sum()
 
