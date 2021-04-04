@@ -20,8 +20,8 @@ import mpi4py as mpi
 import pt
 from pointcloud import localcov
 
-GammaPrior      = namedtuple('GammaPrior',  'a b')
-DPMPG_Prior     = namedtuple('DPMPG_Prior', 'mu Sigma beta eta')
+GammaPrior      = namedtuple('GammaPrior', 'a b')
+DPPRGLN_Prior   = namedtuple('DPPRGLN_Prior', 'mu Sigma eta')
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 
@@ -144,7 +144,7 @@ class DPPRGLN_Result(object):
         self.nDat  = deltas.shape[1]
         self.nCol  = mu.shape[1]
 
-        self.samples = DPMPG_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples = DPPRGLN_Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.mu = mu
         self.samples.Sigma = Sigma.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.delta = deltas
@@ -161,11 +161,10 @@ class DPPRGLN_Result(object):
         prior_mu = NormalPrior(np.zeros(self.nCol), (np.sqrt(2) * np.eye(self.nCol),), 0.5 * np.eye(self.nCol))
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
         prior_eta = GammaPrior(2.,1.)
-        self.priors = DPMPG_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
+        self.priors = DPPRGLN_Prior(prior_mu, prior_Sigma, prior_eta)
         return
 
 DPPRGLN_State = namedtuple('DPPRGLN_State', 'alphas delta eta r mu Sigma temp')
-DPPRGLN_Prior = namedtuple('DPPRGLN_Prior', 'mu Sigma eta')
 
 class DPPRGLN_Chain(pt.PTChain):
     @property

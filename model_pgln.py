@@ -21,7 +21,7 @@ import pt
 from pointcloud import localcov
 
 GammaPrior      = namedtuple('GammaPrior',  'a b')
-DPMPG_Prior     = namedtuple('DPMPG_Prior', 'mu Sigma beta eta')
+DPPGLN_Prior    = namedtuple('DPPGLN_Prior', 'mu Sigma beta eta')
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 
@@ -162,7 +162,7 @@ class DPPGLN_Result(object):
         self.nDat  = deltas.shape[1]
         self.nCol  = mu.shape[1]
 
-        self.samples = DPMPG_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples = DPPGLN_Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.mu = mu
         self.samples.Sigma = Sigma.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.delta = deltas
@@ -184,11 +184,10 @@ class DPPGLN_Result(object):
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
         prior_beta = GammaPrior(2.,2.)
         prior_eta = GammaPrior(2.,1.)
-        self.priors = DPMPG_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
+        self.priors = DPPGLN_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
         return
 
 DPPGLN_State = namedtuple('DPPGLN_State', 'alphas betas delta eta r mu Sigma temp')
-DPPGLN_Prior = namedtuple('DPPGLN_Prior', 'mu Sigma beta eta')
 
 class DPPGLN_Chain(pt.PTChain):
     @property
