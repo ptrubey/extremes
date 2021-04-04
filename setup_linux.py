@@ -21,8 +21,8 @@ ext_modules_hcdev = [
         'hypercube_deviance',
         ['hypercube_deviance.pyx'],
         include_dirs = [numpy.get_include()],
-        extra_compile_args = ['/openmp'],
-        extra_link_args = ['/openmp'],
+        extra_compile_args = ['-fopenmp'],
+        extra_link_args = ['-fopenmp'],
         )
     ]
 setup(name = 'hypercube_deviance', ext_modules = cythonize(ext_modules_hcdev))
@@ -31,8 +31,8 @@ ext_modules_pointcloud = [
     Extension(
         'pointcloud',
         ['pointcloud.pyx'],
-        extra_compile_args = ['/openmp'],
-        extra_link_args = ['/openmp'],
+        extra_compile_args = ['-fopenmp'],
+        extra_link_args = ['-fopenmp'],
         include_dirs = [numpy.get_include()],
         )
     ]
