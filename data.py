@@ -1,8 +1,10 @@
 import numpy as np
 import sqlite3 as sql
 import pandas as pd
+import os
 from genpareto import gpd_fit
 from numpy.linalg import norm
+
 
 epsilon = 1e-30
 
@@ -68,6 +70,9 @@ def cluster_max_row_ids(series):
 
 class Data(object):
     def write_empirical(self, path):
+        folder = os.path.split(path)[0]
+        if not os.path.exists(folder):
+            os.mkdir(folder)
         ncol   = self.A.shape[1] + 1
         thetas = pd.DataFrame(
             self.A,
