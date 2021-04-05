@@ -1,6 +1,5 @@
-from argparser import argparser_dp as argparser
-from model_pgln import DPPGLN_Chain as Chain, DPPGLN_Result as Result
-from projgamma import GammaPrior
+from argparser import argparser_fm as argparser
+from model_prgln import MPRGLN_Chain as Chain, MPRGLN_Result as Result, GammaPrior, DirichletPrior
 # import pt_mpi as pt
 import pt
 import numpy as np
@@ -16,11 +15,11 @@ import os
 rank = 0
 size = 5
 
-model_type  = 'dppgln'
+model_type  = 'mprgln'
 default_in  = './datasets/ivt_nov_mar.csv'
 default_emp = os.path.join('./output', model_type, 'empirical.csv')
-out_base    = os.path.join('./output', model_type, 'results_{}_{}.db')
-pp_base     = os.path.join('./output', model_type, 'postpred_{}_{}.csv')
+out_base    = os.path.join('./output', model_type, 'results_{}.db')
+pp_base     = os.path.join('./output', model_type, 'postpred_{}.csv')
 
 if rank > 0:
     chain = pt.PTSlave(comm = comm, statmodel = Chain)
@@ -38,15 +37,15 @@ if rank == 0:
         statmodel = Chain,
         temperature_ladder = 1.05 ** np.array(range(size - 1)),
         data = data,
-        prior_eta = GammaPrior(float(args.eta_shape), float(args.eta_rate))
+        nMix = int(args.nMix),
         )
     model.sample(int(args.nSamp))
-    out_path = out_base.format(args.eta_shape, args.eta_rate)
+    out_path = out_base.format(args.nMix)
     model.write_to_disk(out_path, int(args.nKeep), int(args.nThin))
     model.complete()
 
     res = Result(out_path)
-    pp_path = pp_base.format(args.eta_shape, args.eta_rate)
+    pp_path = pp_base.format(args.nMix)
     res.write_posterior_predictive(pp_path)
 
 # EOF

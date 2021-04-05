@@ -85,7 +85,7 @@ def update_beta_j_wrapper(args):
         prop_beta_j[i] = sample_beta_fc(alpha_j[i], Y_j.T[i], beta_prior.a, beta_prior.b)
     return prop_beta_j
 
-class MPGLN_Samples(object):
+class MGDLN_Samples(object):
     alpha = None
     beta  = None
     delta = None
@@ -106,7 +106,7 @@ class MPGLN_Samples(object):
         self.log_alpha = np.empty((0, nCol))
         return
 
-class MPGLN_Result(object):
+class MGDLN_Result(object):
     samples = None
     nSamp = None
     nDat = None
@@ -153,7 +153,7 @@ class MPGLN_Result(object):
         self.nCol  = mu.shape[1]
         self.nMix  = pis.shape[1]
 
-        self.samples = MPGLN_Samples(self.nSamp, self.nDat, self.nCol, self.nMix)
+        self.samples = MGDLN_Samples(self.nSamp, self.nDat, self.nCol, self.nMix)
         self.samples.mu = mu
         self.samples.Sigma = Sigma.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.delta = deltas
@@ -167,10 +167,10 @@ class MPGLN_Result(object):
         self.load_data(path)
         return
 
-MPGLN_State = namedtuple('MPGLN_State', 'alpha beta delta pi r mu Sigma temp')
-MPGLN_Prior = namedtuple('MPGLN_Prior', 'pi beta mu Sigma')
+MGDLN_State = namedtuple('MGDLN_State', 'alpha beta delta pi r mu Sigma temp')
+MGDLN_Prior = namedtuple('MGDLN_Prior', 'pi beta mu Sigma')
 
-class MPGLN_Chain(pt.PTChain):
+class MGDLN_Chain(pt.PTChain):
     samples = None
     priors = None
 
@@ -206,7 +206,7 @@ class MPGLN_Chain(pt.PTChain):
         return
 
     def get_state(self):
-        state = MPGLN_State(self.curr_alpha, self.curr_beta, self.curr_delta, self.curr_pi,
+        state = MGDLN_State(self.curr_alpha, self.curr_beta, self.curr_delta, self.curr_pi,
                             self.curr_r, self.curr_mu, self.curr_Sigma, self.temper_temp)
         return state
 
@@ -221,7 +221,7 @@ class MPGLN_Chain(pt.PTChain):
         return
 
     def initialize_sampler(self, nSamp):
-        self.samples = MPGLN_Samples(nSamp, self.nDat, self.nCol, self.nMix)
+        self.samples = MGDLN_Samples(nSamp, self.nDat, self.nCol, self.nMix)
         self.curr_iter = 0
         self.samples.mu[0] = self.priors.mu.mu + self.priors.mu.SCho @ normal(size = self.nCol)
         self.samples.Sigma[0] = invwishart.rvs(df = self.priors.Sigma.nu, scale = self.priors.Sigma.psi)
@@ -238,7 +238,7 @@ class MPGLN_Chain(pt.PTChain):
         betas  = state.beta[state.delta]
         Sigma_chol = cho_factor(state.Sigma)
         Sigma_inv = cho_solve(Sigma_chol, np.eye(self.nCol))
-        Y = (self.data.Yl.T * state.r).T
+        Y = (self.data.S.T * state.r).T
         args = zip(Y, alphas, betas)
         llik = np.array(list(map(log_density_delta_i, args))).sum()
         args = zip(
@@ -260,7 +260,7 @@ class MPGLN_Chain(pt.PTChain):
         return (llik + lp_alpha + lp_beta + lp_mu + lp_Sigma) * self.inv_temper_temp
 
     def sample_delta(self, alpha, beta, r, pi):
-        Y = (self.data.Yl.T * r).T
+        Y = (self.data.S.T * r).T
         args = zip(Y, repeat(alpha), repeat(beta), repeat(pi))
         res = map(sample_delta_i, args)
         return np.array(list(res), dtype = int).reshape(-1)
@@ -295,7 +295,7 @@ class MPGLN_Chain(pt.PTChain):
         return curr_alpha_j
 
     def sample_alpha(self, curr_alpha, delta, r, Sigma_cho, Sigma_inv, mu):
-        Y = (self.data.Yl.T * r).T
+        Y = (self.data.S.T * r).T
         Yjs = [Y[np.where(delta == j)[0]] for j in range(self.nMix)]
         prop_alpha = np.empty(curr_alpha.shape)
         for j in range(self.nMix):
@@ -314,7 +314,7 @@ class MPGLN_Chain(pt.PTChain):
         return alpha, beta
 
     def sample_beta(self, alpha, delta, r):
-        Y = (self.data.Yl.T * r).T
+        Y = (self.data.S.T * r).T
         Yjs = [Y[np.where(delta == j)[0]] for j in range(self.nMix)]
         args = zip(
                 Yjs,
@@ -329,7 +329,7 @@ class MPGLN_Chain(pt.PTChain):
         alpha = alphas[delta]
         beta = betas[delta]
         As = alpha.sum(axis = 1)
-        Bs = (self.data.Yl * beta).sum(axis = 1)
+        Bs = (self.data.S * beta).sum(axis = 1)
         return gamma(shape = As, scale = 1 / Bs)
 
     def sample_pi(self, delta):
@@ -466,7 +466,7 @@ class MPGLN_Chain(pt.PTChain):
                 self.nCol + prior_Sigma[0],
                 np.eye(self.nCol) * prior_Sigma[1],
                 )
-        self.priors = MPGLN_Prior(prior_pi, prior_beta, prior_mu_actual, prior_Sigma_actual)
+        self.priors = MGDLN_Prior(prior_pi, prior_beta, prior_mu_actual, prior_Sigma_actual)
         self.r0 = r0
         self.psi0 = psi0
         self.nu = nu
@@ -476,7 +476,7 @@ class MPGLN_Chain(pt.PTChain):
         return
     pass
 
-class DPPGLN_Samples(object):
+class DPGDLN_Samples(object):
     alpha = None # list, each entry is np.array; each row of array pertains to a cluster
     beta  = None # same as alpha
     delta = None # numpy array; int; indicates cluster membership
@@ -499,7 +499,7 @@ class DPPGLN_Samples(object):
         self.accepted = None
         return
 
-class DPPGLN_Result(object):
+class DPGDLN_Result(object):
     samples = None
     nSamp   = None
     nDat    = None
@@ -563,7 +563,7 @@ class DPPGLN_Result(object):
         self.nDat  = deltas.shape[1]
         self.nCol  = mu.shape[1]
 
-        self.samples = DPPGLN_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples = DPGDLN_Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.mu = mu
         self.samples.Sigma = Sigma.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.delta = deltas
@@ -585,34 +585,41 @@ class DPPGLN_Result(object):
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
         prior_beta = GammaPrior(2.,2.)
         prior_eta = GammaPrior(2.,1.)
-        self.priors = DPPGLN_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
+        self.priors = DPGDLN_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
         return
 
-DPPGLN_State = namedtuple('DPPGLN_State', 'alphas betas delta eta r mu Sigma temp')
-DPPGLN_Prior = namedtuple('DPPGLN_Prior', 'mu Sigma beta eta')
+DPGDLN_State = namedtuple('DPGDLN_State', 'alphas betas delta eta r mu Sigma temp')
+DPGDLN_Prior = namedtuple('DPGDLN_Prior', 'mu Sigma beta eta')
 
-class DPPGLN_Chain(pt.PTChain):
+class DPGDLN_Chain(pt.PTChain):
     @property
     def curr_alphas(self):
         return self.samples.alpha[self.curr_iter].copy()
+
     @property
     def curr_betas(self):
         return self.samples.beta[self.curr_iter].copy()
+
     @property
     def curr_delta(self):
         return self.samples.delta[self.curr_iter].copy()
+
     @property
     def curr_eta(self):
         return self.samples.eta[self.curr_iter].copy()
+
     @property
     def curr_r(self):
         return self.samples.r[self.curr_iter].copy()
+
     @property
     def curr_mu(self):
         return self.samples.mu[self.curr_iter].copy()
+
     @property
     def curr_Sigma(self):
         return self.samples.Sigma[self.curr_iter].copy()
+
     @property
     def curr_log_alpha_stack(self):
         return self.samples.log_alpha
@@ -624,7 +631,7 @@ class DPPGLN_Chain(pt.PTChain):
         return
 
     def get_state(self):
-        state = DPPGLN_State(self.curr_alphas, self.curr_betas, self.curr_delta, self.curr_eta,
+        state = DPGDLN_State(self.curr_alphas, self.curr_betas, self.curr_delta, self.curr_eta,
                             self.curr_r, self.curr_mu, self.curr_Sigma, self.temper_temp)
         return state
 
@@ -639,7 +646,7 @@ class DPPGLN_Chain(pt.PTChain):
         return
 
     def initialize_sampler(self, nSamp):
-        self.samples = DPPGLN_Samples(nSamp, self.nDat, self.nCol)
+        self.samples = DPGDLN_Samples(nSamp, self.nDat, self.nCol)
         self.curr_iter = 0
         self.samples.mu[0] = self.priors.mu.mu + self.priors.mu.SCho @ normal(size = self.nCol)
         self.samples.Sigma[0] = invwishart.rvs(df = self.priors.Sigma.nu, scale = self.priors.Sigma.psi)
@@ -656,7 +663,7 @@ class DPPGLN_Chain(pt.PTChain):
         betas  = state.betas[state.delta]
         Sigma_chol = cho_factor(state.Sigma)
         Sigma_inv = cho_solve(Sigma_chol, np.eye(self.nCol))
-        Y = (self.data.Yl.T * state.r).T
+        Y = (self.data.S.T * state.r).T
         args = zip(Y, alphas, betas)
         llik = np.array(list(map(log_density_delta_i, args))).sum()
         args = zip(
@@ -698,7 +705,7 @@ class DPPGLN_Chain(pt.PTChain):
         alpha_stack = np.vstack((_alpha, alpha_new))
         beta_stack = np.vstack((_beta, beta_new))
         assert (alpha_stack.shape[0] == ljs.shape[0])
-        Y = self.data.Yl[i] * r[i]
+        Y = self.data.S[i] * r[i]
         args = zip(repeat(Y), alpha_stack, beta_stack)
         lps = np.array(list(map(log_density_delta_i, args))) * self.inv_temper_temp
         lps[np.where(np.isnan(lps))] = - np.inf
@@ -755,13 +762,15 @@ class DPPGLN_Chain(pt.PTChain):
         return curr_alpha_j
 
     def sample_alpha(self, curr_alpha, delta, r, Sigma_cho, Sigma_inv, mu):
-        Y = (self.data.Yl.T * r).T
+        Y = (self.data.S.T * r).T
         nClust = delta.max() + 1
         assert (nClust == curr_alpha.shape[0])
         Yjs = [Y[np.where(delta == j)[0]] for j in range(nClust)]
         prop_alpha = np.empty(curr_alpha.shape)
         for j in range(nClust):
-            prop_alpha[j] = self.sample_alpha_j(curr_alpha[j], Yjs[j], Sigma_cho, Sigma_inv, mu)
+            prop_alpha[j] = self.sample_alpha_j(
+                curr_alpha[j], Yjs[j], Sigma_cho, Sigma_inv, mu
+                )
         # args = zip(
         #     curr_alpha,
         #     Yjs,
@@ -777,7 +786,7 @@ class DPPGLN_Chain(pt.PTChain):
         return prop_alpha
 
     def sample_beta(self, alpha, delta, r):
-        Y = (self.data.Yl.T * r).T
+        Y = (self.data.S.T * r).T
         nClust = delta.max() + 1
         assert (nClust == alpha.shape[0])
         Yjs = [Y[np.where(delta == j)[0]] for j in range(nClust)]
@@ -803,7 +812,7 @@ class DPPGLN_Chain(pt.PTChain):
         alpha = alphas[delta]
         beta = betas[delta]
         As = alpha.sum(axis = 1)
-        Bs = (self.data.Yl * beta).sum(axis = 1)
+        Bs = (self.data.S * beta).sum(axis = 1)
         return gamma(shape = As, scale = 1 / Bs)
 
     def sample_mu(self, Sigma_inv, alphas):
@@ -959,7 +968,7 @@ class DPPGLN_Chain(pt.PTChain):
                 self.nCol + prior_Sigma[0],
                 np.eye(self.nCol) * prior_Sigma[1],
                 )
-        self.priors = DPPGLN_Prior(prior_mu_actual, prior_Sigma_actual, prior_beta, prior_eta)
+        self.priors = DPGDLN_Prior(prior_mu_actual, prior_Sigma_actual, prior_beta, prior_eta)
         self.r0     = r0
         self.psi0   = psi0
         self.nu     = nu

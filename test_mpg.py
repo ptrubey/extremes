@@ -2,12 +2,13 @@ from argparser import argparser_fm as argparser
 from model_projgamma import MPG_Chain as Chain, MPG_Result as Result
 from data import Data_From_Raw
 from pandas import read_csv
+import os
 
 model_type  = 'mpg'
 default_in  = './datasets/ivt_nov_mar.csv'
-default_emp = os.path.join('./results', model_type, 'empirical.csv')
-out_base    = os.path.join('./results', model_type, 'results_{}.db')
-pp_base     = os.path.join('./results', model_type, 'postpred_{}.csv')
+default_emp = os.path.join('./output', model_type, 'empirical.csv')
+out_base    = os.path.join('./output', model_type, 'results_{}.db')
+pp_base     = os.path.join('./output', model_type, 'postpred_{}.csv')
 
 if __name__ == '__main__':
     args = argparser()

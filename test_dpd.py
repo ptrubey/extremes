@@ -5,9 +5,9 @@ from pandas import read_csv
 
 model_type  = 'dpd'
 default_in  = './datasets/ivt_nov_mar.csv'
-default_emp = os.path.join('./results', model_type, 'empirical.csv')
-out_base    = os.path.join('./results', model_type, 'results_{}_{}.db')
-pp_base     = os.path.join('./results', model_type, 'postpred_{}_{}.csv')
+default_emp = os.path.join('./output', model_type, 'empirical.csv')
+out_base    = os.path.join('./output', model_type, 'results_{}_{}.db')
+pp_base     = os.path.join('./output', model_type, 'postpred_{}_{}.csv')
 
 if __name__ == '__main__':
     args = argparser()
@@ -18,7 +18,7 @@ if __name__ == '__main__':
 
     model = Chain(
             data,
-            prior_eta = GammaPrior(double(args.eta_shape), double(args.eta_rate)),
+            prior_eta = GammaPrior(float(args.eta_shape), float(args.eta_rate)),
             )
     model.sample(int(args.nSamp))
 
