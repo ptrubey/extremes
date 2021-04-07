@@ -96,23 +96,23 @@ def cdf_distance(data1, data2, resolution = 10):
     keys = sorted(list(set(d1.keys()).union(set(d2.keys()))))
 
 
-    crps = F1 = F2 = 0.
+    wassenstein2 = F1 = F2 = 0.
     bins_below = 0
     prev_bins_below = 0
     for key in keys:
         bins_below = (np.array(key, dtype = int) * cBin).sum()
-        dL_below = (bins_below - prev_bins_below) / nBin
+        dL_below = (bins_below - prev_bins_below) / (nBin / nCol)
         # crps += dL * (F1 - (1 - F2)) * (F1 - (1 - F2))
         crps = dL_below * (F1 - F2) * (F1 - F2)
 
         F1   += d1[key]
         F2   += d2[key]
 
-        dL_current = 1. / nBin
-        crps += dL_current * (F1 - (1 - F2)) * (F1 - (1 - F2))
+        dL_current = 1. / (nBin / nCol)
+        wassenstein2 += dL_current * (F1 - (1 - F2)) * (F1 - (1 - F2))
 
         prev_bins_below = bins_below + 1
-    return crps
+    return sqrt(wassenstein2)
 
 def energy_score(prediction, target):
     """ Computes Energy Score (Multivariate CRPS) between target and

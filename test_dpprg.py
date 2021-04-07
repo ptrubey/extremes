@@ -1,5 +1,5 @@
 from argparser import argparser_dp as argparser
-from model_projresgamma import DPPRG_Chain as Chain, DPPRG_Result as Result
+from model_projresgamma import DPPRG_Chain as Chain, DPPRG_Result as Result, GammaPrior
 from data import Data_From_Raw
 from pandas import read_csv
 import os
