@@ -309,6 +309,8 @@ class MPG_Chain(object):
         deltas_df.to_sql('deltas', conn, index = False)
         rs_df.to_sql('rs',         conn, index = False)
         pis_df.to_sql('pis',       conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(
@@ -682,6 +684,8 @@ class DPPG_Chain(object):
         deltas_df.to_sql('deltas', conn, index = False)
         rs_df.to_sql('rs',         conn, index = False)
         etas_df.to_sql('etas',     conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(

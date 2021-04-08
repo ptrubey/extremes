@@ -384,6 +384,8 @@ class MDLN_Chain(pt.PTChain):
         r_df.to_sql('rs', conn, index = False)
         mu_df.to_sql('mus', conn, index = False)
         Sigma_df.to_sql('Sigmas', conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(

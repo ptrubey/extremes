@@ -63,6 +63,84 @@ def update_zeta_j(curr_zeta_j, Yj, alpha, beta):
 def update_zeta_j_wrapper(args):
     return update_zeta_j(*args)
 
+class VD_Samples(object):
+    zeta = None
+    r    = None
+
+    def __init__(self, nSamp, nDat, nCol):
+        self.zeta = np.empty((nSamp + 1, nCol))
+        self.r    = np.empty((nSamp + 1, nDat))
+        return
+
+VD_Prior = namedtuple('VD_Prior', 'zeta')
+
+class VD_Chain(object):
+    samples = None
+
+    @property
+    def curr_zeta(self):
+        return self.samples.zeta[self.curr_iter].copy()
+    @property
+    def curr_r(self):
+        return self.samples.r[self.curr_iter].copy()
+
+    def initialize_sampler(self, ns):
+        self.samples = VD_Samples(ns, self.nDat, self.nCol)
+        self.curr_iter = 0
+        self.samples.zeta[0] = 1.
+        self.samples.r[0] = self.sample_r(self.curr_zeta)
+        return
+
+    def sample_zeta(self, curr_zeta, Y):
+        args = zip(curr_zeta, Y.T, repeat(self.priors.zeta.a), repeat(self.priors.zeta.b))
+        res = map(update_zeta_jl_wrapper, args)
+        return np.array(list(res))
+
+    def sample_r(self, zeta):
+        shapes = zeta.sum()
+        return gamma(shape = shapes, size = self.nDat)
+
+    def iter_sample(self):
+        r    = self.curr_r
+        zeta = self.curr_zeta
+
+        self.curr_iter += 1
+
+        self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta, r)
+        self.samples.r[self.curr_iter]    = self.sample_r(self.curr_zeta)
+        return
+
+    def sample(self, ns):
+        self.initialize_sampler(ns)
+        print_string = '\rSampling {:.1%} Completed'
+        print(print_string.format(self.curr_iter / ns), end = '')
+        while (self.curr_iter < ns):
+            if (self.curr_iter % 10) == 0:
+                print(print_string.format(self.curr_iter / ns), end = '')
+            self.iter_sample()
+        print(print_string.format(1))
+        return
+
+    def write_to_disk(self, path, nburn, thin = 1):
+        nTail = self.samples.zeta.shape[0] - nBurn - 1
+        if os.path.exists(path):
+            os.remove(path)
+        conn = sql.connect(path)
+        # declare the resulting sample set
+        zetas  = self.samples.zeta[-nTail :: nThin]
+        rs     = self.samples.r[-nTail :: nThin]
+        # get the output sample size
+        nSamp  = deltas.shape[0]
+        # set up resulting data frames
+        zetas_df  = pd.DataFrame(zetas, columns = ['zeta_{}'.format(i) for i in range(self.nCol)])
+        rs_df     = pd.DataFrame(rs, columns = ['r_{}'.format(i) for i in range(self.nDat)])
+        # write to disk
+        zetas_df.to_sql('zetas', conn, index = False)
+        rs_df.to_sql('rs', conn, index = False)
+        conn.commit()
+        conn.close()
+        return
+
 class MD_Samples(object):
     zeta  = None
     delta = None
@@ -80,16 +158,7 @@ class MD_Samples(object):
         self.r     = np.empty((nSamp + 1, nDat))
         return
 
-class MD_Prior(object):
-    alpha = None
-    beta  = None
-    pi    = None
-
-    def __init__(self, alpha_prior, beta_prior, pi_prior):
-        self.alpha = alpha_prior
-        self.beta  = beta_prior
-        self.pi    = pi_prior
-        return
+MD_Prior = namedtuple('MD_Prior', 'alpha beta pi')
 
 class MD_Chain(object):
     samples = None
@@ -234,6 +303,8 @@ class MD_Chain(object):
         rs_df.to_sql('rs', conn, index = False)
         alphas_df.to_sql('alphas', conn, index = False)
         betas_df.to_sql('betas', conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(

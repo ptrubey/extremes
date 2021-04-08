@@ -22,4 +22,15 @@ def energy_score(predictions, targets):
     res1 = pool.map(prediction_pairwise_distance, predictions)
     res2 = pool.map(target_pairwise_distance, zip(predictions, targets))
     pool.close()
-    return 0.5 * np.array(list(res1)).sum() - np.array(list(res2)).sum()
+    return np.array(list(res2)).mean() - 0.5 * np.array(list(res1)).mean()
+
+def intrinsic_energy_score(dataset):
+    res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
+    pool = Pool(processes = 12)
+    res2 = pool.map(target_pairwise_distance, zip(repeat(dataset),dataset))
+    return np.array(list(res2)).mean() - 0.5 * res1
+
+if __name__ == '__main__':
+    pass
+
+# EOF

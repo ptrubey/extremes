@@ -236,6 +236,8 @@ class MPRG_Chain(object):
         rs_df.to_sql('rs', conn, index = False)
         alphas_df.to_sql('alphas', conn, index = False)
         betas_df.to_sql('betas', conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(

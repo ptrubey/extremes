@@ -172,6 +172,8 @@ class DPPN_Chain(Transformer):
         Sigma0_df.to_sql('Sigma0', conn, index = False)
         eta_df.to_sql('eta', conn, index = False)
         deltas_df.to_sql('delta', conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def clean_delta(self, deltas, mus, Sigmas, i):

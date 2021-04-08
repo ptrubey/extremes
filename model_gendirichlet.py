@@ -58,7 +58,51 @@ def update_xi_l_wrapper(args):
 def update_tau_l_wrapper(args):
     return sample_beta_fc(*args)
 
-MPG_Prior = namedtuple('MPG_Prior', 'pi alpha beta xi tau')
+VGD_Prior = namedtuple('VGD_Prior', 'zeta sigma')
+
+class VGD_Samples(object):
+    zeta  = None
+    sigma = None
+    r     = None
+
+    def __init__(self, nSamp, nDat, nCol):
+        self.zeta  = np.empty((nSamp + 1, nCol))
+        self.sigma = np.empty((nSamp + 1, nCol))
+        self.r     = np.empty((nSamp + 1, nDat))
+        return
+
+class VGD_Chain(object):
+    samples = None
+
+    @property
+    def curr_zeta(self):
+        return self.samples.zeta[self.curr_iter].copy()
+    @property
+    def curr_sigma(self):
+        return self.samples.sigma[self.curr_iter].copy()
+    @property
+    def curr_r(self):
+        return self.samples.r[self.curr_iter].copy()
+
+    def sample_zeta(self, curr_zeta, r):
+        Y = (self.data.S.T * r).T
+        args = zip(
+                curr_zeta,
+                Y.T,
+                repeat(self.priors.zeta.a),
+                repeat(self.priors.zeta.b),
+                repeat(self.priors.sigma.a),
+                repeat(self.priors.sigma.b),
+                )
+        res = map(update_alpha_l_wrapper, args)
+        return np.array(list(res))
+
+    def sample_sigma(self, zeta, r):
+        Y = (self.data.S.T * r).T
+        return update_sigma_j_wrapper((zeta, Y))
+        return
+
+MGD_Prior = namedtuple('MGD_Prior', 'pi alpha beta xi tau')
 
 class MGD_Samples(object):
     zeta  = None
@@ -302,6 +346,8 @@ class MGD_Chain(object):
         deltas_df.to_sql('deltas', conn, index = False)
         rs_df.to_sql('rs',         conn, index = False)
         pis_df.to_sql('pis',       conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(
@@ -318,7 +364,7 @@ class MGD_Chain(object):
         self.nMix = nMix
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        self.priors = MPG_Prior(prior_pi, prior_alpha, prior_beta, prior_xi, prior_tau)
+        self.priors = MGD_Prior(prior_pi, prior_alpha, prior_beta, prior_xi, prior_tau)
         return
 
 class MGD_Result(object):
@@ -675,6 +721,8 @@ class DPGD_Chain(object):
         deltas_df.to_sql('deltas', conn, index = False)
         rs_df.to_sql('rs',         conn, index = False)
         etas_df.to_sql('etas',     conn, index = False)
+        conn.commit()
+        conn.close()
         return
 
     def __init__(

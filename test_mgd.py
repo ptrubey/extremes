@@ -2,6 +2,7 @@ from argparser import argparser_fm as argparser
 from model_gendirichlet import MGD_Chain as Chain, MGD_Result as Result
 from data import Data_From_Raw
 from pandas import read_csv
+import os
 
 model_type  = 'mgd'
 default_in  = './datasets/ivt_nov_mar.csv'

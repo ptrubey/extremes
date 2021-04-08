@@ -2,6 +2,7 @@ from argparser import argparser_dp as argparser
 from model_dirichlet import DPD_Chain as Chain, DPD_Result as Result, GammaPrior
 from data import Data_From_Raw
 from pandas import read_csv
+import os
 
 model_type  = 'dpd'
 default_in  = './datasets/ivt_nov_mar.csv'
