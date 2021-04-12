@@ -19,6 +19,7 @@ import mpi4py as mpi
 
 import pt
 from pointcloud import localcov
+from data import Data
 
 GammaPrior      = namedtuple('GammaPrior', 'a b')
 DirichletPrior  = namedtuple('DirichletPrior', 'a')
@@ -152,6 +153,7 @@ class MPRGLN_Result(object):
 
     def __init__(self, path):
         self.load_data(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 MPRGLN_State = namedtuple('MPRGLN_State', 'alpha delta r pi mu Sigma temp')
@@ -520,6 +522,7 @@ class DPPRGLN_Result(object):
         prior_Sigma = InvWishartPrior(self.nCol + 10, np.eye(self.nCol) * 0.5)
         prior_eta = GammaPrior(2.,1.)
         self.priors = DPPRGLN_Prior(prior_mu, prior_Sigma, prior_eta)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 DPPRGLN_Prior = namedtuple('DPPRGLN_Prior', 'mu Sigma eta')

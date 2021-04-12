@@ -19,6 +19,7 @@ import mpi4py as mpi
 
 import pt
 from pointcloud import localcov
+from data import Data
 
 GammaPrior      = namedtuple('GammaPrior',  'a b')
 DirichletPrior  = namedtuple('DirichletPrior', 'a')
@@ -165,6 +166,7 @@ class MGDLN_Result(object):
 
     def __init__(self, path):
         self.load_data(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 MGDLN_State = namedtuple('MGDLN_State', 'alpha beta delta pi r mu Sigma temp')
@@ -588,6 +590,7 @@ class DPGDLN_Result(object):
         prior_beta = GammaPrior(2.,2.)
         prior_eta = GammaPrior(2.,1.)
         self.priors = DPGDLN_Prior(prior_mu, prior_Sigma, prior_beta, prior_eta)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 DPGDLN_State = namedtuple('DPGDLN_State', 'alphas betas delta eta r mu Sigma temp')

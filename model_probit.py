@@ -15,7 +15,7 @@ import os
 from math import sqrt, log, exp, pi
 
 from projgamma import GammaPrior
-from data import Data_From_Raw as Data_From_Raw_Base
+from data import Data_From_Raw as Data_From_Raw_Base, Data
 import cUtility as cu
 
 def log_density_mvnormal(args):
@@ -426,6 +426,7 @@ class DPPN_Result(Transformer):
 
     def __init__(self, path):
         self.load_data(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 # EOF

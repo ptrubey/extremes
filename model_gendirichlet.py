@@ -11,7 +11,7 @@ from math import ceil, log
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
                         logddirichlet, logdgamma, logdgamma_restricted
-from data import euclidean_to_simplex, euclidean_to_hypercube, euclidean_to_angular
+from data import euclidean_to_simplex, euclidean_to_hypercube, euclidean_to_angular, Data
 from projgamma import GammaPrior, DirichletPrior
 
 def logdgamma_wrapper(args):
@@ -425,6 +425,7 @@ class MGD_Result(object):
 
     def __init__(self, path):
         self.load_data(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 DPGD_Prior = namedtuple('DPGD_Prior', 'eta alpha beta xi tau')
@@ -816,6 +817,7 @@ class DPGD_Result(object):
 
     def __init__(self, path):
         self.load_data(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 # EOF
