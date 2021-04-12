@@ -4,17 +4,12 @@ import pandas as pd
 import os, glob
 import sqlite3 as sql
 import itertools as it
-#from scipy.stats import gamma, norm as normal
+
 from numpy.random import gamma, normal
 from scipy.linalg import cholesky
 from random import sample
 from collections import namedtuple
 
-# import simplex as smp
-# import m_projgamma as mpg
-# import dp_projgamma as dpmpg
-# import dp_rprojgamma as dpmrpg
-# import dp_pgln as dppgln
 import model_dirichlet as d
 import model_gendirichlet as gd
 import model_projgamma as pg
@@ -31,7 +26,7 @@ from energy import energy_score
 
 import cUtility as cu
 
-from data import Data, euclidean_to_hypercube, euclidean_to_simplex
+from data import Data, euclidean_to_hypercube, euclidean_to_simplex, angular_to_euclidean
 
 np.seterr(under = 'ignore')
 
@@ -185,107 +180,16 @@ class MDLN_Result(dln.MDLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restrict
 
 class DPPN_Result(p.DPPN_Result, PostPredLoss):
     def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol + 1))
         for i in range(self.nSamp):
+            pred_temp = np.empty((self.nDat, self.nCol))
             for j in range(self.nDat):
-                predicted[i,j] = 0.5 * np.pi * self.invprobit(
+                pred_temp[j] = 0.5 * np.pi * self.invprobit(
                     + self.samples.mu[i][self.samples.delta[i,j]]
                     + cholesky(self.samples.Sigma[i][self.samples.delta[i,j]]) @ normal(size = self.nCol)
                     )
-        return angular_to_euclidean(predicted)
-
-# class MPN_Result(DPPN_Result):
-#     pass
-
-# class FMIX_Result(smp.FMIX_Result, PostPredLoss):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             eta = self.samples.eta[s][self.samples.delta[s]]
-#             predicted[s] = gamma.rvs(a = eta) + epsilon
-#         return predicted
-#
-#     def __init__(self, path):
-#         super().__init__(path)
-#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-#         return
-#
-# class DPSimplex_Result(smp.DPSimplex_Result, PostPredLoss):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             zeta = self.samples.zeta[s][self.samples.delta[s]]
-#             predicted[s] = gamma.rvs(a = zeta) + epsilon
-#         return predicted
-#
-#     def __init__(self, path):
-#         super().__init__(path)
-#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-#         return
-#
-# class MPG_Result(mpg.MPGResult, PostPredLoss):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             alpha = self.samples.alpha[s][self.samples.delta[s]]
-#             beta  = self.samples.beta[s][self.samples.delta[s]]
-#             predicted[s] = gamma.rvs(a = alpha, scale = 1/beta) + epsilon
-#         return predicted
-#
-#     def __init__(self, path):
-#         super().__init__(path)
-#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-#         return
-#
-# class DPMPG_Result(dpmpg.ResultDPMPG, PostPredLoss):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             alpha = self.samples.alpha[s][self.samples.delta[s]]
-#             beta  = self.samples.beta[s][self.samples.delta[s]]
-#             predicted[s] = gamma.rvs(a = alpha, scale = 1 / beta) + epsilon
-#         return predicted
-#
-#     def __init__(self, path):
-#         super().__init__(path)
-#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-#         return
-#
-# class DPMRPG_Result(dpmrpg.ResultDPMPG, PostPredLoss):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             zeta = self.samples.zeta[s][self.samples.delta[s]]
-#             predicted[s] = gamma.rvs(a = zeta) + epsilon
-#         return predicted
-#
-#     def __init__(self, path):
-#         super().__init__(path)
-#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-#         return
-#
-# class DPPGLN_Result(dppgln.DPMPG_Result, PostPredLoss):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             alpha = self.samples.alpha[s][self.samples.delta[s]]
-#             beta  = self.samples.beta[s][self.samples.delta[s]]
-#             predicted[s] = gamma.rvs(a = alpha, scale = 1 / beta) + epsilon
-#         return predicted
-#
-#     def __init__(self, path):
-#         super().__init__(path)
-#         self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-#         return
-#
-# Result = {
-#     'fmix'   : FMIX_Result,
-#     'mpg'    : MPG_Result,
-#     'dpmpg'  : DPMPG_Result,
-#     'dpmrpg' : DPMRPG_Result,
-#     'dppgln' : DPPGLN_Result,
-#     'dpmix'  : DPSimplex_Result,
-#     }
+            predicted[i] = angular_to_euclidean(pred_temp)
+        return predicted
 
 Result = {
     'mpg'     : MPG_Result,
@@ -305,17 +209,16 @@ Result = {
     'dpdln'   : DPDLN_Result,
     'dpgdln'  : DPGDLN_Result,
     'dppn'    : DPPN_Result,
-    'mpn'     : MPN_Result,
+    # 'mpn'     : MPN_Result,
     }
 
 if __name__ == '__main__':
     base_path = './output'
-    #model_types = ['fmix', 'dpmix', 'dpmrpg', 'dpmpg', 'dppgln', 'mpg']
-    # model_types = [
-    #         'md',   'dpd',   'mgd',   'dpgd',   'mprg',   'dpprg',   'mpg',   'dppg',
-    #         'mdln', 'dpdln', 'mgdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
-    #         ]
-    model_types = ['dppn']
+    model_types = [
+            'md',   'dpd',   'mgd',   'dpgd',   'mprg',   'dpprg',   'mpg',   'dppg',
+            'mdln', 'dpdln', 'mgdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
+            ]
+    # model_types = ['dppn']
 
     models = []
     for model_type in model_types:
