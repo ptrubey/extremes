@@ -37,6 +37,7 @@ np.seterr(under = 'ignore')
 
 epsilon = 1e-30
 
+# Object defining loss criterion
 class PostPredLoss(object):
     def L1(self, data):
         data2 = np.empty(data.shape)
@@ -96,7 +97,9 @@ class PostPredLoss(object):
         predicted = self.Linf(self.prediction())
         return energy_score(np.moveaxis(predicted, 0, 1), euclidean_to_hypercube(self.data.Yl))
 
-class DPD_Result(d.DPD_Result, PostPredLoss):
+# Object defining how predictive distribution is assembled.
+# All of the gamma-based models share a basic prediction method
+class Prediction_Gamma_Restricted(object):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -104,115 +107,25 @@ class DPD_Result(d.DPD_Result, PostPredLoss):
             predicted[s] = gamma(shape = zeta) + epsilon
         return predicted
 
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MD_Result(d.MDResult, DPD_Result):
-    pass
-
-class DPPRG_Result(prg.DPPRG_Result, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            zeta = self.samples.zeta[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = zeta) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MPRG_Result(prg.MPRG_Result, DPPRG_Result):
-    pass
-
-class DPGD_Result(gd.DPGD_Result, PostPredLoss):
+class Prediction_Gamma(object):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
             zeta = self.samples.zeta[s][self.samples.delta[s]]
             sigma = self.samples.sigma[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = zeta, scale = 1 / sigma) + epsilon
+            predicted[s] = gamma(shape = zeta, scale = 1/sigma) + epsilon
         return predicted
 
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MGD_Result(gd.MGD_Result, DPGD_Result):
-    pass
-
-class DPPG_Result(pg.DPPG_Result, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            zeta = self.samples.zeta[s][self.samples.delta[s]]
-            sigma = self.samples.sigma[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = zeta, scale = 1 / sigma) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MPG_Result(pg.MPG_Result, DPPG_Result):
-    pass
-
-class DPPGLN_Result(pgln.DPPGLN_Result, PostPredLoss):
+class Prediction_Gamma_Alter(object):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
             alpha = self.samples.alpha[s][self.samples.delta[s]]
-            beta  = self.samples.beta[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = alpha, scale = 1 / beta) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MPGLN_Result(pgln.MPGLN_Result, DPPGLN_Result):
-    pass
-
-class DPPRGLN_Result(prgln.DPPRGLN_Result, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = alpha) + epsilon
-        return predicted
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MPRGLN_Result(prgln.MPRGLN_Result, DPPRGLN_Result):
-    pass
-
-class DPGDLN_Result(gdln.DPGDLN_Result, PostPredLoss):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            beta  = self.samples.alpha[s][self.samples.delta[s]]
+            beta = self.samples.beta[s][self.samples.delta[s]]
             predicted[s] = gamma(shape = alpha, scale = 1/beta) + epsilon
         return predicted
 
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
-
-class MGDLN_Result(gdln.MGDLN_Result, DPGDLN_Result):
-    pass
-
-class DPDLN_Result(dln.DPDLN_Result, PostPredLoss):
+class Prediction_Gamma_Alter_Restricted(object):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -220,12 +133,54 @@ class DPDLN_Result(dln.DPDLN_Result, PostPredLoss):
             predicted[s] = gamma(shape = alpha) + epsilon
         return predicted
 
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
+# Updating the Result objects with the new methods.
 
-class MDLN_Result(dln.MDLN_Result, DPDLN_Result):
+class DPD_Result(d.DPD_Result, PostPredLoss, Prediction_Gamma_Restricted):
+    pass
+
+class MD_Result(d.MD_Result, PostPredLoss, Prediction_Gamma_Restricted):
+    pass
+
+class DPPRG_Result(prg.DPPRG_Result, PostPredLoss, Prediction_Gamma_Restricted):
+    pass
+
+class MPRG_Result(prg.MPRG_Result, PostPredLoss, Prediction_Gamma_Restricted):
+    pass
+
+class DPGD_Result(gd.DPGD_Result, PostPredLoss, Prediction_Gamma):
+    pass
+
+class MGD_Result(gd.MGD_Result, PostPredLoss, Prediction_Gamma):
+    pass
+
+class DPPG_Result(pg.DPPG_Result, PostPredLoss, Prediction_Gamma):
+    pass
+
+class MPG_Result(pg.MPG_Result, PostPredLoss, Prediction_Gamma):
+    pass
+
+class DPPGLN_Result(pgln.DPPGLN_Result, PostPredLoss, Prediction_Gamma_Alter):
+    pass
+
+class MPGLN_Result(pgln.MPGLN_Result, PostPredLoss, Prediction_Gamma_Alter):
+    pass
+
+class DPPRGLN_Result(prgln.DPPRGLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
+    pass
+
+class MPRGLN_Result(prgln.MPRGLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
+    pass
+
+class DPGDLN_Result(gdln.DPGDLN_Result, PostPredLoss, Prediction_Gamma_Alter):
+    pass
+
+class MGDLN_Result(gdln.MGDLN_Result, PostPredLoss, Prediction_Gamma_Alter):
+    pass
+
+class DPDLN_Result(dln.DPDLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
+    pass
+
+class MDLN_Result(dln.MDLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
     pass
 
 class DPPN_Result(p.DPPN_Result, PostPredLoss):
@@ -238,11 +193,6 @@ class DPPN_Result(p.DPPN_Result, PostPredLoss):
                     + cholesky(self.samples.Sigma[i][self.samples.delta[i,j]]) @ normal(size = self.nCol)
                     )
         return angular_to_euclidean(predicted)
-
-    def __init__(self, path):
-        super().__init__(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
-        return
 
 # class MPN_Result(DPPN_Result):
 #     pass
