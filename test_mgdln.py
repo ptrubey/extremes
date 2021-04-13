@@ -1,5 +1,5 @@
 from argparser import argparser_fm as argparser
-from model_dln import MDLN_Chain as Chain, MDLN_Result as Result, GammaPrior, DirichletPrior
+from model_gdln import MGDLN_Chain as Chain, MGDLN_Result as Result, GammaPrior, DirichletPrior
 # import pt_mpi as pt
 import pt
 import numpy as np
