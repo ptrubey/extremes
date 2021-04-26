@@ -210,4 +210,14 @@ def sample_beta_fc(alpha, y, prior):
     bb = sum(y) + prior.b
     return gamma.rvs(aa, scale = 1. / bb)
 
+def density_projgamma_hypercube(y, alpha, beta):
+    ld = (
+        + gammaln(alpha.sum())
+        - alpha.sum() * np.log(beta * y).sum()
+        + (alpha * np.log(beta)).sum()
+        - gammaln(alpha).sum()
+        + ((alpha - 1) * np.log(y)).sum()
+        )
+    return exp(ld)
+
 # EOF

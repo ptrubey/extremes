@@ -144,7 +144,7 @@ class Data_From_Raw(Data):
         Z[Z < 0.] = 0.
         return Z, P
 
-    def __init__(self, raw, decluster = False):
+    def __init__(self, raw, quantile = 0.95, decluster = False):
         # if input is pandas dataframe, then take numpy array representation
         try:
             self.raw = raw.values
@@ -152,7 +152,7 @@ class Data_From_Raw(Data):
         except AttributeError:
             self.raw = raw
         # Compute standardized pareto margins
-        self.Z, self.P = self.to_pareto(self.raw)
+        self.Z, self.P = self.to_pareto(self.raw, quantile)
         # Cast to hypercube, keep only observations extreme in >= 1 dimension
         self.V, self.R, self.I = self.to_hypercube(self.Z, decluster)
         # proceed with angular representation
