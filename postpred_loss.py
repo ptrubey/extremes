@@ -216,7 +216,10 @@ if __name__ == '__main__':
     base_path = './output'
     model_types = [
             'md',   'dpd',   'mgd',   'dpgd',   'mprg',   'dpprg',   'mpg',   'dppg',
-            'mdln', 'dpdln', 'mgdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
+            # 'mdln', 'dpdln', 'mgdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
+            'mdln', 'dpdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
+            # removed mgdln while it re-runs.
+            'dppn',
             ]
     # model_types = ['dppn']
 
@@ -254,6 +257,6 @@ if __name__ == '__main__':
         # columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_L1','ES_L2','ES_Linf'),
         columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
         )
-    # df.to_csv('./output/post_pred_loss_results_abbv.csv', index = False)
+    df.to_csv('./output/post_pred_loss_results_abbv.csv', index = False)
 
 # EOF

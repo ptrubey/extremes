@@ -61,6 +61,141 @@ def update_zeta_j(curr_zeta_j, Yj, alpha, beta):
 def update_zeta_j_wrapper(args):
     return update_zeta_j(*args)
 
+class VPRG_Samples(object):
+    zeta = None
+    r    = None
+
+    def __init__(self, nSamp, nDat, nCol):
+        self.zeta = np.empty((nSamp + 1, nCol))
+        self.r    = np.empty((nSamp + 1, nDat))
+        return
+
+VPRG_Prior = namedtuple('VPRG_Prior', 'zeta')
+
+class VPRG_Chain(object):
+    samples = None
+
+    @property
+    def curr_zeta(self):
+        return self.samples.zeta[self.curr_iter].copy()
+    @property
+    def curr_r(self):
+        return self.samples.r[self.curr_iter].copy()
+
+    def initialize_sampler(self, ns):
+        self.samples = VPRG_Samples(ns, self.nDat, self.nCol)
+        self.curr_iter = 0
+        self.samples.zeta[0] = 1.
+        self.samples.r[0] = self.sample_r(self.curr_zeta)
+        return
+
+    def sample_zeta(self, curr_zeta, r):
+        Y = (self.data.Yl.T * r).T
+        args = zip(curr_zeta, Y.T, repeat(self.priors.zeta.a), repeat(self.priors.zeta.b))
+        res = map(update_zeta_jl_wrapper, args)
+        return np.array(list(res))
+
+    def sample_r(self, zeta):
+        shapes = zeta.sum()
+        rates  = self.data.Yl.sum(axis = 1)
+        return gamma(shape = shapes, scale = 1. / rates, size = self.nDat)
+
+    def iter_sample(self):
+        r    = self.curr_r
+        zeta = self.curr_zeta
+
+        self.curr_iter += 1
+
+        self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta, r)
+        self.samples.r[self.curr_iter]    = self.sample_r(self.curr_zeta)
+        return
+
+    def sample(self, ns):
+        self.initialize_sampler(ns)
+        print_string = '\rSampling {:.1%} Completed'
+        print(print_string.format(self.curr_iter / ns), end = '')
+        while (self.curr_iter < ns):
+            if (self.curr_iter % 10) == 0:
+                print(print_string.format(self.curr_iter / ns), end = '')
+            self.iter_sample()
+        print(print_string.format(1))
+        return
+
+    def write_to_disk(self, path, nBurn, nThin = 1):
+        nTail = self.samples.zeta.shape[0] - nBurn - 1
+        if os.path.exists(path):
+            os.remove(path)
+        conn = sql.connect(path)
+        # declare the resulting sample set
+        zetas  = self.samples.zeta[-nTail :: nThin]
+        rs     = self.samples.r[-nTail :: nThin]
+        # set up resulting data frames
+        zetas_df  = pd.DataFrame(zetas, columns = ['zeta_{}'.format(i) for i in range(self.nCol)])
+        rs_df     = pd.DataFrame(rs, columns = ['r_{}'.format(i) for i in range(self.nDat)])
+        # write to disk
+        zetas_df.to_sql('zetas', conn, index = False)
+        rs_df.to_sql('rs', conn, index = False)
+        conn.commit()
+        conn.close()
+        return
+
+    def __init__(
+            self,
+            data,
+            prior_zeta = GammaPrior(0.5, 0.5),
+            ):
+        self.data = data
+        self.nCol = self.data.nCol
+        self.nDat = self.data.nDat
+        self.priors = VPRG_Prior(prior_zeta)
+        return
+
+    pass
+
+class VPRG_Result(object):
+    def load_data(self, path):
+        conn = sql.connect(path)
+        zetas = pd.read_sql('select * from zetas;', conn).values
+        rs = pd.read_sql('select * from rs;', conn).values
+
+        self.nSamp = zetas.shape[0]
+        self.nDat = rs.shape[1]
+        self.nCol = zetas.shape[1]
+
+        self.samples = VPRG_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples.zeta = zetas
+        self.samples.r = rs
+        return
+
+    def generate_posterior_predictive_gammas(self, n_per_sample):
+        gnew = np.vstack([
+            gamma(shape = zeta, size = (n_per_sample, self.nCol))
+            for zeta in self.samples.zeta
+            ])
+        return gnew
+
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 1):
+        euc = self.generate_posterior_predictive_gammas(n_per_sample)
+        return euclidean_to_hypercube(euc)
+
+    def generate_posterior_predictive_angular(self, n_per_sample = 1):
+        hyp = self.generate_posterior_predictive_hypercube(n_per_sample)
+        return euclidean_to_angular(hyp)
+
+    def write_posterior_predictive(self, path, n_per_sample = 1):
+        thetas = pd.DataFrame(
+            self.generate_posterior_predictive_angular(n_per_sample),
+            columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
+            )
+        thetas.to_csv(path, index = False)
+        return
+
+    def __init__(self, path):
+        self.load_data(path)
+        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
+        return
+
+
 class MPRG_Samples(object):
     zeta  = None
     delta = None
