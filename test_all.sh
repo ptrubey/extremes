@@ -75,13 +75,13 @@ nohup mpiexec -np 5 python -m mpi4py test_dpprgln.py 50000 20000 30 2 1e1 > /dev
 nohup mpiexec -np 5 python -m mpi4py test_dpprgln.py 50000 20000 30 2 1e0 > /dev/null 2>&1 &
 nohup mpiexec -np 5 python -m mpi4py test_dpprgln.py 50000 20000 30 2 1e-1 > /dev/null 2>&1 &
 
-# nohup mpiexec -np 5 python -m mpi4py test_dpgdln.py 50000 20000 30 2 1e1 > /dev/null 2>&1 &
-# nohup mpiexec -np 5 python -m mpi4py test_dpgdln.py 50000 20000 30 2 1e0 > /dev/null 2>&1 &
-# nohup mpiexec -np 5 python -m mpi4py test_dpgdln.py 50000 20000 30 2 1e-1 > /dev/null 2>&1 &
-#
-# nohup mpiexec -np 5 python -m mpi4py test_dpdln.py 50000 20000 30 2 1e1 > /dev/null 2>&1 &
-# nohup mpiexec -np 5 python -m mpi4py test_dpdln.py 50000 20000 30 2 1e0 > /dev/null 2>&1 &
-# nohup mpiexec -np 5 python -m mpi4py test_dpdln.py 50000 20000 30 2 1e-1 > /dev/null 2>&1 &
+nohup mpiexec -np 5 python -m mpi4py test_dpgdln.py 50000 20000 30 2 1e1 > /dev/null 2>&1 &
+nohup mpiexec -np 5 python -m mpi4py test_dpgdln.py 50000 20000 30 2 1e0 > /dev/null 2>&1 &
+nohup mpiexec -np 5 python -m mpi4py test_dpgdln.py 50000 20000 30 2 1e-1 > /dev/null 2>&1 &
+
+nohup mpiexec -np 5 python -m mpi4py test_dpdln.py 50000 20000 30 2 1e1 > /dev/null 2>&1 &
+nohup mpiexec -np 5 python -m mpi4py test_dpdln.py 50000 20000 30 2 1e0 > /dev/null 2>&1 &
+nohup mpiexec -np 5 python -m mpi4py test_dpdln.py 50000 20000 30 2 1e-1 > /dev/null 2>&1 &
 
 
 

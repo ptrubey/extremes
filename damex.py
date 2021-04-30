@@ -18,7 +18,7 @@ class DAMEX_Vanilla(object):
     def populate_cones(self, epsilon):
         self.data.C_damex = (self.data.H_damex > (self.n / self.k * epsilon)).astype(int)
         for row in self.data.C_damex:
-            self.cones[tuple(row)] += (n * k) * 1 / self.data.nDat
+            self.cones[tuple(row)] += (self.n / self.k) / self.data.nDat
         return
 
     def scoring(self):
@@ -27,12 +27,12 @@ class DAMEX_Vanilla(object):
             self.scores[i] = self.cones[tuple(self.data.C_damex[i])] / self.V_damex[i].max()
         return
 
-    def __init__(self, data, epsilon = 0.01, kfac = 0.5):
+    def __init__(self, data, epsilon = 0.1, kfac = 0.5):
         self.data = data
         self.n = self.data.nCol
         self.k = self.n * kfac
         self.rank_transformation()
-        self.populate_cones()
+        self.populate_cones(epsilon)
         return
 
     pass
