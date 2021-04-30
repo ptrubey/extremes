@@ -9,24 +9,24 @@ import model_dppgln as dppgln
 import model_dpprg as dpprg
 
 Results = {
-    'mdln'    : md.Result,
+    'mdln'    : mdln.Result,
     'mgdln'   : mgdln.Result,
     'mpgln'   : mpgln.Result,
     'mprgln'  : mprgln.Result,
     'dpdln'   : dpdln.Result,
     'dpgdln'  : dpgdln.Result,
     'dppgln'  : dppgln.Result,
-    'dpprg' : dpprg.Result,
+    'dpprg'   : dpprg.Result,
     }
 Chains = {
-    'mdln'    : md.Chain,
+    'mdln'    : mdln.Chain,
     'mgdln'   : mgdln.Chain,
     'mpgln'   : mpgln.Chain,
     'mprgln'  : mprgln.Chain,
     'dpdln'   : dpdln.Chain,
     'dpgdln'  : dpgdln.Chain,
     'dppgln'  : dppgln.Chain,
-    'dpprg' : dpprg.Chain,
+    'dpprg'   : dpprg.Chain,
     }
 
 # EOF
