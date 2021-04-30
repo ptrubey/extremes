@@ -1,7 +1,4 @@
 #!/bin/bash
-ECHO "doing everything"
-
-
 nohup mpiexec -np 8 python -m mpi4py test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dpdln 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
 nohup mpiexec -np 8 python -m mpi4py test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dpgdln 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
 nohup mpiexec -np 8 python -m mpi4py test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dppgln 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
