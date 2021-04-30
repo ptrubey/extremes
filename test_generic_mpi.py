@@ -56,7 +56,7 @@ if rank == 0:
             comm,
             temperature_ladder = 1.05 ** np.array(range(size - 1)),
             data = data,
-            nMix = args.nMix,
+            nMix = int(args.nMix),
             )
     else:
         raise ValueError
