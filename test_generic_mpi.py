@@ -52,7 +52,7 @@ if rank == 0:
         pp_path = os.path.join(
             args.out_folder, args.model, 'results_{}.db'.format(args.nMix),
             )
-        model - pt.PTMaster(
+        model = pt.PTMaster(
             comm,
             temperature_ladder = 1.05 ** np.array(range(size - 1)),
             data = data,
