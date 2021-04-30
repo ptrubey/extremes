@@ -12,7 +12,7 @@ comm = MPI.COMM_WORLD
 rank = comm.Get_rank()
 size = comm.Get_size()
 
-pt.MPI_MESSAGE_SIZE = 2**22
+pt.MPI_MESSAGE_SIZE = 2**24
 args = argparser()
 
 Chain = models.Chains[args.model]
