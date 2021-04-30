@@ -16,8 +16,15 @@ class DAMEX_Vanilla(object):
         return
 
     def populate_cones(self, epsilon):
-        for row in (self.data.H_damex > (n / k * epsilon)).astype(int):
-            self.cones[tuple(row)] += 1 / self.data.nDat
+        self.data.C_damex = (self.data.H_damex > (self.n / self.k * epsilon)).astype(int)
+        for row in self.data.C_damex:
+            self.cones[tuple(row)] += (n * k) * 1 / self.data.nDat
+        return
+
+    def scoring(self):
+        self.scores = np.empty(self.nDat)
+        for i in range(self.nDat):
+            self.scores[i] = self.cones[tuple(self.data.C_damex[i])] / self.V_damex[i].max()
         return
 
     def __init__(self, data, epsilon = 0.01, kfac = 0.5):
