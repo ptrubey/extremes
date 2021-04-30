@@ -22,7 +22,7 @@ if __name__ == '__main__':
             p.out_folder, p.model, 'results_{}_{}.db'.format(p.eta_shape, p.eta_rate),
             )
         pp_path = os.path.join(
-            p.out_folder, p.model, 'postpred_{}_{}.db'.format(p.eta_shape, p.eta_rate),
+            p.out_folder, p.model, 'postpred_{}_{}.csv'.format(p.eta_shape, p.eta_rate),
             )
         model = Chain(data, prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)))
 
@@ -34,7 +34,7 @@ if __name__ == '__main__':
             p.out_folder, p.model, 'results_{}.db'.format(p.nMix),
             )
         pp_path = os.path.join(
-            p.out_folder, p.model, 'postpred_{}.db'.format(p.nMix),
+            p.out_folder, p.model, 'postpred_{}.csv'.format(p.nMix),
             )
         model = Chain(data, nMix = int(p.nMix))
     elif p.model.startswith('v'):
@@ -45,7 +45,7 @@ if __name__ == '__main__':
             p.out_folder, p.model, 'results.db',
             )
         pp_path = os.path.join(
-            p.out_folder, p.model, 'postpred.db',
+            p.out_folder, p.model, 'postpred.csv',
             )
         model = Chain(data)
     else:
