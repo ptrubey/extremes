@@ -74,7 +74,7 @@ class Data_From_Raw(Data_From_Raw_Base, Transformer):
 NormalPrior = namedtuple('NormalPrior', 'mu SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 
-class DPPN_Samples(object):
+class Samples(object):
     mu = None
     mu0 = None
     Sigma = None
@@ -91,9 +91,9 @@ class DPPN_Samples(object):
         self.eta = np.empty(nSamp + 1)
         return
 
-DPPN_Prior = namedtuple('DPPN_Prior', 'mu Sigma mu0 Sigma0 eta')
+Prior = namedtuple('Prior', 'mu Sigma mu0 Sigma0 eta')
 
-class DPPN_Chain(Transformer):
+class Chain(Transformer):
     samples = None
 
     @staticmethod
@@ -294,7 +294,7 @@ class DPPN_Chain(Transformer):
         return
 
     def initialize_sampler(self, ns):
-        self.samples = DPPN_Samples(ns, self.nDat, self.nCol)
+        self.samples = Samples(ns, self.nDat, self.nCol)
         self.samples.delta[0] = np.array(list(range(self.nDat)), dtype = int)
         self.samples.eta[0] = 5
         self.samples.mu0[0] = 0.
@@ -350,11 +350,11 @@ class DPPN_Chain(Transformer):
             prior_Sigma0[0],
             np.eye(self.nCol - 1) * prior_Sigma0[1],
             )
-        self.priors = DPPN_Prior(mu_actual, Sigma_actual, mu0_actual, Sigma0_actual, prior_eta)
+        self.priors = Prior(mu_actual, Sigma_actual, mu0_actual, Sigma0_actual, prior_eta)
         self.pool = mp.Pool(8)
         return
 
-class DPPN_Result(Transformer):
+class Result(Transformer):
     samples = None
     nSamp = None
     nDat = None
@@ -409,7 +409,7 @@ class DPPN_Result(Transformer):
         self.nDat = delta.shape[1]
         self.nCol = mu0.shape[1]
 
-        self.samples = DPPN_Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.mu = [
             mus[np.where(mus.T[0] == i)[0], 1:]
             for i in range(self.nSamp)
