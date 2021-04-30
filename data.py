@@ -144,7 +144,7 @@ class Data_From_Raw(Data):
         Z[Z < 0.] = 0.
         return Z, P
 
-    def __init__(self, raw, quantile = 0.95, decluster = False):
+    def __init__(self, raw, decluster = False, quantile = 0.95):
         # if input is pandas dataframe, then take numpy array representation
         try:
             self.raw = raw.values

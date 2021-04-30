@@ -10,21 +10,11 @@ from scipy.linalg import cholesky
 from random import sample
 from collections import namedtuple
 
-import model_dirichlet as d
-import model_gendirichlet as gd
-import model_projgamma as pg
-import model_projresgamma as prg
-import model_dln as dln
-import model_gdln as gdln
-import model_pgln as pgln
-import model_prgln as prgln
-import model_probit as p
-
+from models import Results
 from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
 from energy import energy_score
-# from distance import energy_score
-
 import cUtility as cu
+import model_dppn as dppn
 
 from data import Data, euclidean_to_hypercube, euclidean_to_simplex, angular_to_euclidean
 
@@ -94,6 +84,23 @@ class PostPredLoss(object):
 
 # Object defining how predictive distribution is assembled.
 # All of the gamma-based models share a basic prediction method
+class Prediction_Gamma_Vanilla_Restricted(object):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s]
+            predicted[s] = gamma(shape = zeta, size = (self.nDat, self.nCol)) + epsilon
+        return predicted
+
+class Prediction_Gamma_Vanilla(object):
+    def prediction(self):
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        for s in range(self.nSamp):
+            zeta = self.samples.zeta[s]
+            sigma = self.samples.sigma[s]
+            predicted[s] = gamma(shape = zeta, scale = 1/sigma, size = (self.nDat, self.nCol)) + epsilon
+        return predicted
+
 class Prediction_Gamma_Restricted(object):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
@@ -128,57 +135,8 @@ class Prediction_Gamma_Alter_Restricted(object):
             predicted[s] = gamma(shape = alpha) + epsilon
         return predicted
 
-# Updating the Result objects with the new methods.
-
-class DPD_Result(d.DPD_Result, PostPredLoss, Prediction_Gamma_Restricted):
-    pass
-
-class MD_Result(d.MD_Result, PostPredLoss, Prediction_Gamma_Restricted):
-    pass
-
-class DPPRG_Result(prg.DPPRG_Result, PostPredLoss, Prediction_Gamma_Restricted):
-    pass
-
-class MPRG_Result(prg.MPRG_Result, PostPredLoss, Prediction_Gamma_Restricted):
-    pass
-
-class DPGD_Result(gd.DPGD_Result, PostPredLoss, Prediction_Gamma):
-    pass
-
-class MGD_Result(gd.MGD_Result, PostPredLoss, Prediction_Gamma):
-    pass
-
-class DPPG_Result(pg.DPPG_Result, PostPredLoss, Prediction_Gamma):
-    pass
-
-class MPG_Result(pg.MPG_Result, PostPredLoss, Prediction_Gamma):
-    pass
-
-class DPPGLN_Result(pgln.DPPGLN_Result, PostPredLoss, Prediction_Gamma_Alter):
-    pass
-
-class MPGLN_Result(pgln.MPGLN_Result, PostPredLoss, Prediction_Gamma_Alter):
-    pass
-
-class DPPRGLN_Result(prgln.DPPRGLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
-    pass
-
-class MPRGLN_Result(prgln.MPRGLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
-    pass
-
-class DPGDLN_Result(gdln.DPGDLN_Result, PostPredLoss, Prediction_Gamma_Alter):
-    pass
-
-class MGDLN_Result(gdln.MGDLN_Result, PostPredLoss, Prediction_Gamma_Alter):
-    pass
-
-class DPDLN_Result(dln.DPDLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
-    pass
-
-class MDLN_Result(dln.MDLN_Result, PostPredLoss, Prediction_Gamma_Alter_Restricted):
-    pass
-
-class DPPN_Result(p.DPPN_Result, PostPredLoss):
+# Special case for Probit Normal model
+class DPPN_Result(dppn.Result, PostPredLoss):
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol + 1))
         for i in range(self.nSamp):
@@ -191,26 +149,30 @@ class DPPN_Result(p.DPPN_Result, PostPredLoss):
             predicted[i] = angular_to_euclidean(pred_temp)
         return predicted
 
-Result = {
-    'mpg'     : MPG_Result,
-    'mprg'    : MPRG_Result,
-    'md'      : MD_Result,
-    'mgd'     : MGD_Result,
-    'dppg'    : DPPG_Result,
-    'dpprg'   : DPPRG_Result,
-    'dpd'     : DPD_Result,
-    'dpgd'    : DPGD_Result,
-    'mpgln'   : MPGLN_Result,
-    'mprgln'  : MPRGLN_Result,
-    'mdln'    : MDLN_Result,
-    'mgdln'   : MGDLN_Result,
-    'dppgln'  : DPPGLN_Result,
-    'dpprgln' : DPPRGLN_Result,
-    'dpdln'   : DPDLN_Result,
-    'dpgdln'  : DPGDLN_Result,
-    'dppn'    : DPPN_Result,
-    # 'mpn'     : MPN_Result,
-    }
+Results['dppn'] = DPPN_Result
+
+# Updating the Result objects with the new methods.
+
+Prediction_Gammas = {}
+for model in ['md','dpd','mprg','dpprg']:
+    Prediction_Gammas[model] = Prediction_Gamma_Restricted
+for model in ['mgd','dpgd','mpg','dppg']:
+    Prediction_Gammas[model] = Prediction_Gamma
+for model in ['vd','vprg']:
+    Prediction_Gammas[model] = Prediction_Gamma_Vanilla_Restricted
+for model in ['vgd','vpg']:
+    Prediction_Gammas[model] = Prediction_Gamma_Vanilla
+for model in ['mdln','dpdln','mprgln', 'dpprgln']:
+    Prediction_Gammas[model] = Prediction_Gamma_Alter_Restricted
+for model in ['mgdln','dpgdln','mpgln','dppgln']:
+    Prediction_Gammas[model] = Prediction_Gamma_Alter
+for model in ['dppn']:
+    Prediction_Gammas[model] = object
+
+def ResultFactory(model, path):
+    class Result(Results[model], PostPredLoss, Prediction_Gammas[model]):
+        pass
+    return Result(path)
 
 if __name__ == '__main__':
     base_path = './output'
@@ -221,7 +183,6 @@ if __name__ == '__main__':
             # removed mgdln while it re-runs.
             'dppn',
             ]
-    # model_types = ['dppn']
 
     models = []
     for model_type in model_types:
@@ -237,7 +198,7 @@ if __name__ == '__main__':
     postpredlossresults = []
     for model in models:
         print('Processing {}-{}'.format(*model))
-        result = Result[model[0]](model[1])
+        result = ResultFactory(*model)
         postpredlossresults.append(
             PostPredLossResult(
                 model[0],

@@ -3,4 +3,5 @@
 *.html
 **build/
 output/
+output*/
 *.png

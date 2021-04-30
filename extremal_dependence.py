@@ -1,5 +1,6 @@
 from postpred_loss import Result as resultdict
 from cUtility import find_neighbors, cluster_size_summary
+from models import Results
 import os, glob
 import numpy as np, pandas as pd
 from collections import namedtuple
@@ -37,9 +38,9 @@ class Conditional_ResGamma(object):
         pass
 
 def ResultFactory(model_type, model_path):
-    class Result2(resultdict[model_type], ResultAddendum):
+    class ResultNew(Results[model_type], ResultAddendum):
         pass
-    return Result2(model_path)
+    return ResultNew(model_path)
 
 if __name__ == '__main__':
     base_path = './output'
