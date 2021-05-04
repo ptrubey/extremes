@@ -5,7 +5,6 @@ import os
 from genpareto import gpd_fit
 from numpy.linalg import norm
 
-
 epsilon = 1e-30
 
 def angular_to_hypercube(theta):

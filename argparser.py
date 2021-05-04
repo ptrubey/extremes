@@ -38,5 +38,10 @@ def argparser_generic():
     p.add_argument('--quantile', default = 0.95)
     return p.parse_args()
 
+def argparser_ppl():
+    p = argparse.ArgumentParser()
+    p.add_argument('path')
+    return p.parse_args()
+
 if __name__ == '__main__':
     p = argparser_dp()

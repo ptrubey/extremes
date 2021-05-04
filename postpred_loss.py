@@ -10,6 +10,9 @@ from scipy.linalg import cholesky
 from random import sample
 from collections import namedtuple
 
+from multiprocessing import Pool
+
+from argparser import argparser_ppl as argparser
 from models import Results
 from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
 from energy import energy_score
@@ -174,50 +177,38 @@ def ResultFactory(model, path):
         pass
     return Result(path)
 
+PPLResult = namedtuple('PPLResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf')
+
+def ppl_generation(model):
+    result = ResultFactory(*model)
+    pplr = PPLResult(
+        model[0],
+        os.path.splitext(os.path.split(model[1])[1])[0],
+        result.posterior_predictive_loss_L1(),
+        result.posterior_predictive_loss_L2(),
+        result.posterior_predictive_loss_Linf(),
+        result.energy_score_Linf(),
+        )
+    return pplr
+
 if __name__ == '__main__':
-    base_path = './output'
-    model_types = [
-            'md',   'dpd',   'mgd',   'dpgd',   'mprg',   'dpprg',   'mpg',   'dppg',
-            # 'mdln', 'dpdln', 'mgdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
-            'mdln', 'dpdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
-            # removed mgdln while it re-runs.
-            'dppn',
-            ]
+    args = argparser()
+    model_types = sorted(Prediction_Gammas.keys())
 
     models = []
     for model_type in model_types:
-        mm = glob.glob(os.path.join(base_path, model_type, 'results_*.db'))
+        mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
         for m in mm:
             models.append((model_type, m))
 
-    # model = models[0]
-    # result = Result[model[0]](model[1])
-    ppl_slots = 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf'
-    # PostPredLossResult = namedtuple('PostPredLossResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_L1 ES_L2 ES_Linf')
-    PostPredLossResult = namedtuple('PostPredLossResult', ppl_slots)
-    postpredlossresults = []
-    for model in models:
-        print('Processing {}-{}'.format(*model))
-        result = ResultFactory(*model)
-        postpredlossresults.append(
-            PostPredLossResult(
-                model[0],
-                os.path.splitext(os.path.split(model[1])[1])[0],
-                result.posterior_predictive_loss_L1(),
-                result.posterior_predictive_loss_L2(),
-                result.posterior_predictive_loss_Linf(),
-                # result.energy_score_L1(),
-                # result.energy_score_L2(),
-                result.energy_score_Linf(),
-                )
-            )
-        del(result)
+    pool = Pool(processes = 8)
+    pplrs = list(pool.map(ppl_generation, models))
+    pool.close()
 
     df = pd.DataFrame(
-        postpredlossresults,
-        # columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_L1','ES_L2','ES_Linf'),
+        pplrs,
         columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
         )
-    df.to_csv('./output/post_pred_loss_results_abbv.csv', index = False)
+    df.to_csv(os.path.join(args.path, 'post_pred_loss_results.csv'), index = False)
 
 # EOF
