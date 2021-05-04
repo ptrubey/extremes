@@ -1,10 +1,16 @@
-from postpred_loss import Result as resultdict
-from cUtility import find_neighbors, cluster_size_summary
-from models import Results
-import os, glob
-import numpy as np, pandas as pd
+import os
+import glob
+import numpy as np
+import pandas as pd
 from collections import namedtuple
+from multiprocessing import Pool
 
+import models as mvan
+import models_mpi as mmpi
+from argparser import argparser_ppl as argparser
+from cUtility import find_neighbors, cluster_size_summary
+
+Results = {**mvan.Results, **mmpi.Results}
 
 def chi_ij(Vs):
     return ((Vs / Vs.mean(axis = 0)).min(axis = 1)).mean()
@@ -42,34 +48,33 @@ def ResultFactory(model_type, model_path):
         pass
     return ResultNew(model_path)
 
+EDResult = namedtuple('EDResult', 'type name cols chis')
+
+def edr_generation(model):
+    result = ResultFactory(*model)
+    edr = EDResult(
+        model[0],
+        os.path.splitext(os.path.split(model[1])[1])[0],
+        *result.pairwise_chis(),
+        )
+    return edr
+
 if __name__ == '__main__':
-    base_path = './output'
-    model_types = [
-            'md',   'dpd',   'mgd',   'dpgd',   'mprg',   'dpprg',   'mpg',   'dppg',
-            # 'mdln', 'dpdln', 'mgdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
-            'mdln', 'dpdln', 'dpgdln', 'mprgln', 'dpprgln', 'mpgln', 'dppgln',
-            # removed mgdln while it re-runs.
-            'dppn',
-            ]
+    args = argparser()
+    model_types = sorted(Results.keys())
 
     models = []
     for model_type in model_types:
-        model_paths = glob.glob(os.path.join(base_path, model_type, 'results_*.db'))
+        model_paths = glob.glob(os.path.join(args.path, model_type, 'results_*.db'))
         for model_path in model_paths:
             models.append((model_type, model_path))
 
-    EDR = namedtuple('EDR', 'type name cols chis')
-    edrs = []
-    for model in models:
-        print('Processing {}-{}'.format(*model))
-        result = ResultFactory(*model)
-        edrs.append(EDR(
-            model[0],
-            os.path.splitext(os.path.split(model[1])[1])[0],
-            *result.pairwise_chis(),
-            ))
+    pool = Pool(processes = 8)
+    edrs = list(pool.map(edr_generation, models))
+    pool.close()
+
     df = pd.DataFrame(
         [(edr.type, edr.name, *edr.chis) for edr in edrs],
         columns = ['type','name'] + ['chi_{}_{}'.format(*cols) for cols in edrs[0].cols]
         )
-    df.to_csv('./output/pairwise_extremal_dependence_coefs.csv', index = False)
+    df.to_csv(os.path.join(args.path, 'pairwise_extremal_dependence_coefs.csv'), index = False)
