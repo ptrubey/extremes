@@ -4,6 +4,7 @@ import pandas as pd
 import os
 from genpareto import gpd_fit
 from numpy.linalg import norm
+from math import pi
 
 epsilon = 1e-30
 
