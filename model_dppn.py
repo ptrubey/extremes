@@ -325,8 +325,8 @@ class Chain(Transformer):
             data,
             prior_mu = (0., 1.), # NormalPrior(np.zeros(7), np.eye(7) * 1.),
             prior_mu0 = (0., 1.), # NormalPrior(np.zeros(7), np.eye(7) * 0.125),
-            prior_Sigma = (10, 1.), # InvWishartPrior(10, np.eye(7) * 1),
-            prior_Sigma0 = (10, 1.), #InvWishartPrior(10, np.eye(7) * 1),
+            prior_Sigma = (5, 1.), # InvWishartPrior(10, np.eye(7) * 1),
+            prior_Sigma0 = (5, 1.), #InvWishartPrior(10, np.eye(7) * 1),
             prior_eta = GammaPrior(2, 10),
             m = 20,
             ):
@@ -343,11 +343,11 @@ class Chain(Transformer):
             np.eye(self.nCol - 1) * prior_mu[1],
             )
         Sigma_actual  = InvWishartPrior(
-            prior_Sigma[0],
+            self.nCol + prior_Sigma[0],
             np.eye(self.nCol - 1) * prior_Sigma[1],
             )
         Sigma0_actual = InvWishartPrior(
-            prior_Sigma0[0],
+            self.nCol + prior_Sigma0[0],
             np.eye(self.nCol - 1) * prior_Sigma0[1],
             )
         self.priors = Prior(mu_actual, Sigma_actual, mu0_actual, Sigma0_actual, prior_eta)
