@@ -200,6 +200,7 @@ class Chain(Transformer):
         res = self.pool.map(log_density_mvnormal, args, chunksize = ceil(ljs.shape[0] / 8))
         lps = np.array(list(res))
         lps[np.where(np.isnan(lps))] = -np.inf
+        lps -= lps.max()
         unnormalized = np.exp(lps) * ljs
         normalized = unnormalized / unnormalized.sum()
         dnew = choice(range(_dmax + self.m + 1), 1, p = normalized)
