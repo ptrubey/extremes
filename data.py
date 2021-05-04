@@ -80,7 +80,7 @@ class Transformer(object):
     def invprobitlogjac(y):
         return (- 0.5 * np.log(2 * pi) - y * y / 2.).sum()
 
-class Data(object, Transformer):
+class Data(Transformer):
     def write_empirical(self, path):
         folder = os.path.split(path)[0]
         if not os.path.exists(folder):
