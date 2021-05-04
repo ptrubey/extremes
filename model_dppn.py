@@ -15,7 +15,7 @@ import os
 from math import sqrt, log, exp, pi
 
 from projgamma import GammaPrior
-from data import Data_From_Raw as Data_From_Raw_Base, Data
+from data import Data_From_Raw as Data_From_Raw_Base, Data, angular_to_hypercube
 import cUtility as cu
 
 def log_density_mvnormal(args):
@@ -367,8 +367,8 @@ class Result(Transformer):
         return hyp * pi / 2.
 
     def generate_posterior_predictive_hypercube(self, n_per_sample):
-        pp = self.generate_posterior_predictive_probit(n_per_sample)
-        return (pp.T / pp.max(axis = 1)).T
+        pp = self.generate_posterior_predictive(n_per_sample)
+        return angular_to_hypercube(pp)
 
     def generate_posterior_predictive_probit(self, n_per_sample, m = 20):
         new_pVis = []
@@ -386,7 +386,7 @@ class Result(Transformer):
             mus = self.samples.mu[i][deltas]
             Sigmas = self.samples.Sigma[i][deltas]
             for j in range(n_per_sample):
-                new_pVis.append(mus[j] + Sigmas[j] @ normal(size = self.nCol))
+                new_pVis.append(mus[j] + cholesky(Sigmas[j]) @ normal(size = self.nCol))
         return self.invprobit(np.vstack(new_pVis))
 
     def write_posterior_predictive(self, path, n_per_sample = 10):
