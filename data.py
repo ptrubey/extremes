@@ -67,7 +67,20 @@ def cluster_max_row_ids(series):
         max_ids = np.append(max_ids, cluster[np.argmax(series[cluster])])
     return max_ids
 
-class Data(object):
+class Transformer(object):
+    @staticmethod
+    def probit(x):
+        return sqrt(2.) * erfinv(2 * x - 1)
+
+    @staticmethod
+    def invprobit(y):
+        return 0.5 * (1 + erf(y / sqrt(2.)))
+
+    @staticmethod
+    def invprobitlogjac(y):
+        return (- 0.5 * np.log(2 * pi) - y * y / 2.).sum()
+
+class Data(object, Transformer):
     def write_empirical(self, path):
         folder = os.path.split(path)[0]
         if not os.path.exists(folder):
@@ -84,6 +97,13 @@ class Data(object):
     def to_euclidean(theta):
         return to_euclidean(theta)
 
+    @staticmethod
+    def cast_to_cube(A, eps = 1e-6):
+        V = A / (pi / 2.)
+        V[V > (1 - eps)] = 1 - eps
+        V[V < eps] = eps
+        return V
+
     def fill_out(self):
         self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
         self.sins  = np.vstack((np.ones(self.A.shape[0]), np.sin(self.A).T)).T
@@ -92,6 +112,8 @@ class Data(object):
         self.lsins = np.log(self.sins)
         self.lcoss = np.log(self.coss)
         self.S     = angular_to_simplex(self.A)
+        self.Vi = self.cast_to_cube(self.A)
+        self.pVi = self.probit(self.Vi)
         return
 
     def __init__(self, path):
