@@ -13,11 +13,13 @@ from collections import namedtuple
 from multiprocessing import Pool
 
 from argparser import argparser_ppl as argparser
-from models import Results
 from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
 from energy import energy_score
 import cUtility as cu
+import models, models_mpi
 import model_dppn as dppn
+
+Results = {**models.Results, **models_mpi.Results}
 
 from data import Data, euclidean_to_hypercube, euclidean_to_simplex, angular_to_euclidean
 
