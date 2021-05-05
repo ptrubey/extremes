@@ -427,8 +427,8 @@ class Chain(pt.PTChain):
         r_df     = pd.DataFrame(r, columns = ['r_{}'.format(i) for i in range(self.nDat)])
         mu_df    = pd.DataFrame(mu, columns = ['mu_{}'.format(i) for i in range(self.nCol)])
         Sigma_df = pd.DataFrame(
-                Sigma.reshape(nsamp, self.nCol * self.nCol),
-                columns = ['Sigma_{}_{}'.format(i,j) for i in range(self.nCol) for j in range(self.nCol)],
+                Sigma.reshape(nsamp * self.nCol, self.nCol),
+                columns = ['Sigma_{}'.format(i) for i in range(self.nCol)],
                 )
 
         alpha_df.to_sql('alphas', conn, index = False)

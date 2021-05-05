@@ -435,14 +435,13 @@ class Chain(pt.PTChain):
         eta    = self.samples.eta[nburn::thin]
         mu     = self.samples.mu[nburn::thin]
         Sigma  = self.samples.Sigma[nburn::thin]
+
+        nSamp  = deltas.shape[0]
         # Assemble output DataFrames
-        df_mu     = pd.DataFrame(
-            mu,
-            columns = ['mu_{}'.format(i) for i in range(self.nCol)]
-            )
+        df_mu     = pd.DataFrame(mu, columns = ['mu_{}'.format(i) for i in range(self.nCol)])
         df_Sigma  = pd.DataFrame(
-            Sigma.reshape(-1, self.nCol * self.nCol),
-            columns = ['Sigma_{}_{}'.format(i,j) for i in range(self.nCol) for j in range(self.nCol)]
+            Sigma.reshape(nSamp * self.nCol, self.nCol),
+            columns = ['Sigma_{}'.format(i) for i in range(self.nCol)]
             )
         df_alphas = pd.DataFrame(
             alphas,

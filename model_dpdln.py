@@ -427,26 +427,18 @@ class Chain(pt.PTChain):
         mu     = self.samples.mu[nburn::thin]
         Sigma  = self.samples.Sigma[nburn::thin]
         # Assemble output DataFrames
-        df_mu     = pd.DataFrame(
-            mu,
-            columns = ['mu_{}'.format(i) for i in range(self.nCol)]
-            )
+        nSamp = deltas.shape[0]
+        df_mu     = pd.DataFrame(mu, columns = ['mu_{}'.format(i) for i in range(self.nCol)])
         df_Sigma  = pd.DataFrame(
-            Sigma.reshape(-1, self.nCol * self.nCol),
-            columns = ['Sigma_{}_{}'.format(i,j) for i in range(self.nCol) for j in range(self.nCol)]
+            Sigma.reshape(nSamp, self.nCol, self.nCol),
+            columns = ['Sigma_{}'.format(i) for i in range(self.nCol)]
             )
         df_alphas = pd.DataFrame(
             alphas,
             columns = ['iter'] + ['alpha_{}'.format(i) for i in range(self.nCol)],
             )
-        df_deltas = pd.DataFrame(
-            deltas,
-            columns = ['delta_{}'.format(i) for i in range(self.nDat)]
-            )
-        df_rs     = pd.DataFrame(
-            rs,
-            columns = ['r_{}'.format(i) for i in range(self.nDat)]
-            )
+        df_deltas = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
+        df_rs     = pd.DataFrame(rs, columns = ['r_{}'.format(i) for i in range(self.nDat)])
         df_eta    = pd.DataFrame({'eta' : eta})
         # Write Dataframes to SQL Connection
         df_mu.to_sql('mu',         conn, index = False)
