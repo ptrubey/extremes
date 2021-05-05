@@ -130,38 +130,35 @@ class Chain(Transformer):
 
         conn = sql.connect(path)
 
-        mus_np    = np.vstack([
-            np.vstack((np.ones(mus.shape[0]) * i, mus.T)).T
+
+        deltas_np = self.samples.delta[nburn::thin]
+        nSamp = deltas_np.shape[0]
+
+        mus_np = np.vstack([
+            np.hstack((np.ones(mus.shape[0], 1) * i, mus))
             for i, mus in enumerate(self.samples.mu[nburn::thin])
             ])
         Sigmas_np = np.vstack([
-            np.vstack((np.ones(Sigmas.shape[0]) * i, Sigmas.reshape((Sigmas.shape[0],-1)).T)).T
+            np.hstack((np.ones(Sigmas.shape[0] * (self.nCol - 1), 1) * i,
+                Sigmas.reshape(Sigmas.shape[0] * (self.nCol - 1), self.nCol - 1)))
             for i, Sigmas in enumerate(self.samples.Sigma[nburn::thin])
             ])
         mu0_np    = self.samples.mu0[nburn::thin]
-        Sigma0_np = self.samples.Sigma0.reshape((self.samples.Sigma0.shape[0], -1))[nburn::thin]
+        Sigma0_np = self.samples.Sigma0[nburn::thin].reshape(nSamp * (self.nCol - 1), self.nCol - 1)
+        # Sigma0_np = self.samples.Sigma0.reshape((self.samples.Sigma0.shape[0], -1))[nburn::thin]
         eta_np    = self.samples.eta[nburn::thin]
-        deltas_np = self.samples.delta[nburn::thin]
 
         mu_cols   = ['iter'] + ['mu_{}'.format(i) for i in range(1, self.nCol)]
         mus_df    = pd.DataFrame(mus_np, columns = mu_cols)
-        Sigma_cols = ['iter'] + [
-            'Sigma_{}_{}'.format(i,j)
-            for i in range(1, self.nCol)
-            for j in range(1, self.nCol)
-            ]
+        Sigma_cols = ['iter'] + ['Sigma_{}'.format(i) for i in range(1, self.nCol)]
         Sigmas_df = pd.DataFrame(Sigmas_np, columns = Sigma_cols)
 
         mu0_cols = ['mu0_{}'.format(i) for i in range(1, self.nCol)]
         mu0_df   = pd.DataFrame(mu0_np, columns = mu0_cols)
-        Sigma0_cols = [
-            'Sigma0_{}_{}'.format(i,j)
-            for i in range(1, self.nCol)
-            for j in range(1, self.nCol)
-            ]
+        Sigma0_cols = ['Sigma0_{}'.format(i) for i in range(1, self.nCol)]
         Sigma0_df = pd.DataFrame(Sigma0_np, columns = Sigma0_cols)
 
-        delta_cols = ['delta_{}'.format(i) for i in range(1, self.nDat + 1)]
+        delta_cols = ['delta_{}'.format(i) for i in range(self.nDat)]
         deltas_df = pd.DataFrame(deltas_np, columns = delta_cols)
         eta_df = pd.DataFrame({'eta' : eta_np})
 
@@ -386,13 +383,13 @@ class Result(Transformer):
             mus = self.samples.mu[i][deltas]
             Sigmas = self.samples.Sigma[i][deltas]
             for j in range(n_per_sample):
-                new_pVis.append(mus[j] + cholesky(Sigmas[j]) @ normal(size = self.nCol))
+                new_pVis.append(mus[j] + cholesky(Sigmas[j]) @ normal(size = self.nCol - 1))
         return self.invprobit(np.vstack(new_pVis))
 
     def write_posterior_predictive(self, path, n_per_sample = 10):
         thetas = pd.DataFrame(
             self.generate_posterior_predictive(n_per_sample),
-            columns = ['theta_{}'.format(i) for i in range(1, self.nCol + 1)],
+            columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
             )
         thetas.to_csv(path, index = False)
         return
@@ -408,21 +405,21 @@ class Result(Transformer):
 
         self.nSamp = eta.shape[0]
         self.nDat = delta.shape[1]
-        self.nCol = mu0.shape[1]
+        self.nCol = mu0.shape[1] + 1
 
         self.samples = Samples(self.nSamp, self.nDat, self.nCol)
-        self.samples.mu = [
+        self.samples.mu     = [
             mus[np.where(mus.T[0] == i)[0], 1:]
             for i in range(self.nSamp)
             ]
-        self.samples.Sigma = [
-            Sigs.reshape((Sigs.shape[0], self.nCol, self.nCol))
+        self.samples.Sigma  = [
+            Sigs.reshape(Sigs.shape[0], self.nCol - 1, self.nCol - 1)
             for Sigs in [Sigmas[np.where(Sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
             ]
-        self.samples.mu0 = mu0
+        self.samples.mu0    = mu0
         self.samples.Sigma0 = Sigma0
-        self.samples.delta = delta
-        self.samples.eta = eta
+        self.samples.delta  = delta
+        self.samples.eta    = eta
         return
 
     def __init__(self, path):
