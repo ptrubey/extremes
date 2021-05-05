@@ -18,10 +18,12 @@ def target_pairwise_distance(args):
     return hypercube_distance((prediction, target)) / n
 
 def energy_score(predictions, targets):
-    pool = Pool(processes = 12)
-    res1 = pool.map(prediction_pairwise_distance, predictions)
-    res2 = pool.map(target_pairwise_distance, zip(predictions, targets))
-    pool.close()
+    # pool = Pool(processes = 12)
+    # res1 = pool.map(prediction_pairwise_distance, predictions)
+    # res2 = pool.map(target_pairwise_distance, zip(predictions, targets))
+    # pool.close()
+    res1 = map(prediction_pairwise_distance, predictions)
+    res2 = map(target_pairwise_distance, zip(predictions, targets))
     return np.array(list(res2)).mean() - 0.5 * np.array(list(res1)).mean()
 
 def intrinsic_energy_score(dataset):
