@@ -16,7 +16,7 @@ Results = {
     'dpdln'   : dpdln.Result,
     'dpgdln'  : dpgdln.Result,
     'dppgln'  : dppgln.Result,
-    'dpprg'   : dpprg.Result,
+    'dpprgln'   : dpprg.Result,
     }
 Chains = {
     'mdln'    : mdln.Chain,
@@ -26,7 +26,7 @@ Chains = {
     'dpdln'   : dpdln.Chain,
     'dpgdln'  : dpgdln.Chain,
     'dppgln'  : dppgln.Chain,
-    'dpprg'   : dpprg.Chain,
+    'dpprgln'   : dpprg.Chain,
     }
 
 # EOF
