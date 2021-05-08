@@ -34,7 +34,7 @@ if rank == 0:
             args.out_folder, args.model, 'results_{}_{}.db'.format(args.eta_shape, args.eta_rate),
             )
         pp_path = os.path.join(
-            args.out_folder, args.model, 'postpred_{}_{}.csv'
+            args.out_folder, args.model, 'postpred_{}_{}.csv'.format(args.eta_shape, args.eta_rate),
             )
         model = pt.PTMaster(
             comm,
