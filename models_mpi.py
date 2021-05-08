@@ -6,7 +6,7 @@ import model_mprgln as mprgln
 import model_dpdln as dpdln
 import model_dpgdln as dpgdln
 import model_dppgln as dppgln
-import model_dpprg as dpprg
+import model_dpprgln as dpprg
 
 Results = {
     'mdln'    : mdln.Result,
