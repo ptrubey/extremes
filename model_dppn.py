@@ -135,11 +135,11 @@ class Chain(Transformer):
         nSamp = deltas_np.shape[0]
 
         mus_np = np.vstack([
-            np.hstack((np.ones(mus.shape[0], 1) * i, mus))
+            np.hstack((np.ones((mus.shape[0], 1)) * i, mus))
             for i, mus in enumerate(self.samples.mu[nburn::thin])
             ])
         Sigmas_np = np.vstack([
-            np.hstack((np.ones(Sigmas.shape[0] * (self.nCol - 1), 1) * i,
+            np.hstack((np.ones((Sigmas.shape[0] * (self.nCol - 1), 1)) * i,
                 Sigmas.reshape(Sigmas.shape[0] * (self.nCol - 1), self.nCol - 1)))
             for i, Sigmas in enumerate(self.samples.Sigma[nburn::thin])
             ])
