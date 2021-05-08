@@ -430,7 +430,7 @@ class Chain(pt.PTChain):
         nSamp = deltas.shape[0]
         df_mu     = pd.DataFrame(mu, columns = ['mu_{}'.format(i) for i in range(self.nCol)])
         df_Sigma  = pd.DataFrame(
-            Sigma.reshape(nSamp, self.nCol, self.nCol),
+            Sigma.reshape(nSamp * self.nCol, self.nCol),
             columns = ['Sigma_{}'.format(i) for i in range(self.nCol)]
             )
         df_alphas = pd.DataFrame(
