@@ -413,7 +413,7 @@ class Result(Transformer):
             for i in range(self.nSamp)
             ]
         self.samples.Sigma  = [
-            Sigs.reshape(Sigs.shape[0], self.nCol - 1, self.nCol - 1)
+            Sigs.reshape(Sigs.shape[0] // (self.nCol - 1), self.nCol - 1, self.nCol - 1)
             for Sigs in [Sigmas[np.where(Sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
             ]
         self.samples.mu0    = mu0
