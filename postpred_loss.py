@@ -196,8 +196,7 @@ def ppl_generation(model):
 if __name__ == '__main__':
     args = argparser()
     model_types = sorted(Prediction_Gammas.keys())
-    model_types = [model_type for model_type in model_types if not model_type.endswith('ln')]
-
+    
     models = []
     for model_type in model_types:
         mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
