@@ -143,7 +143,7 @@ class Prediction_Gamma_Alter_Restricted(object):
 # Special case for Probit Normal model
 class DPPN_Result(dppn.Result, PostPredLoss):
     def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol + 1))
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for i in range(self.nSamp):
             pred_temp = np.empty((self.nDat, self.nCol))
             for j in range(self.nDat):
@@ -196,7 +196,7 @@ def ppl_generation(model):
 if __name__ == '__main__':
     args = argparser()
     model_types = sorted(Prediction_Gammas.keys())
-    
+
     models = []
     for model_type in model_types:
         mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
