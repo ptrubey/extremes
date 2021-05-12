@@ -50,14 +50,14 @@ class PostPredLoss(object):
     def __postpredloss(self, predicted, empirical):
         pmean = predicted.mean(axis = 0)
         pdiff = pmean - empirical
-        pplos = ((pdiff * pdiff).sum(axis = 1)).sum()
+        avg_bias = ((pdiff * pdiff).sum(axis = 1)).mean()
 
         pdevi = predicted - pmean
         pvari = np.empty(self.nDat)
         for d in range(self.nDat):
             pvari[d] = np.trace(np.cov(pdevi[:,d].T))
-        ppvar = pvari.sum()
-        return pplos + ppvar
+        avg_vari = pvari.mean()
+        return avg_bias + avg_vari
 
     def posterior_predictive_loss_L1(self):
         predicted = self.L1(self.prediction())
@@ -143,13 +143,13 @@ class Prediction_Gamma_Alter_Restricted(object):
 # Special case for Probit Normal model
 class DPPN_Result(dppn.Result, PostPredLoss):
     def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+        predicted = np.empty((self.nSamp, self.nDat, self.nCol - 1))
         for i in range(self.nSamp):
-            pred_temp = np.empty((self.nDat, self.nCol))
+            pred_temp = np.empty((self.nDat, self.nCol - 1))
             for j in range(self.nDat):
                 pred_temp[j] = 0.5 * np.pi * self.invprobit(
                     + self.samples.mu[i][self.samples.delta[i,j]]
-                    + cholesky(self.samples.Sigma[i][self.samples.delta[i,j]]) @ normal(size = self.nCol)
+                    + cholesky(self.samples.Sigma[i][self.samples.delta[i,j]]) @ normal(size = self.nCol - 1)
                     )
             predicted[i] = angular_to_euclidean(pred_temp)
         return predicted
@@ -203,9 +203,15 @@ if __name__ == '__main__':
         for m in mm:
             models.append((model_type, m))
 
-    pool = Pool(processes = 8)
-    pplrs = list(pool.map(ppl_generation, models))
-    pool.close()
+    pplrs = []
+    for model in models:
+        print('Processing model {}   '.format(model[0]), end = ' ')
+        try:
+            pplrs.append(ppl_generation(model))
+            print('Passed')
+        except pd.io.sql.DatabaseError:
+            print('Failed')
+            pass
 
     df = pd.DataFrame(
         pplrs,
