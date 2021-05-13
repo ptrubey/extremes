@@ -50,7 +50,7 @@ if rank == 0:
             args.out_folder, args.model, 'results_{}.db'.format(args.nMix),
             )
         pp_path = os.path.join(
-            args.out_folder, args.model, 'results_{}.db'.format(args.nMix),
+            args.out_folder, args.model, 'postpred_{}.csv'.format(args.nMix),
             )
         model = pt.PTMaster(
             comm,
