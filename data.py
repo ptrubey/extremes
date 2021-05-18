@@ -69,6 +69,17 @@ def cluster_max_row_ids(series):
         max_ids = np.append(max_ids, cluster[np.argmax(series[cluster])])
     return max_ids
 
+def scale_pareto(raw, P):
+    """ Do the actual Pareto scaling """
+    Z = (1 + P[2] * (raw - P[0]) / P[1])**(1/P[2])
+    Z[Z < 0.] = 0.
+    return Z
+
+def descale_pareto(Z, P):
+    """ Given Pareto scaled RV's, return original scale """
+    raw = P[0] + P[1] * (Z**P[2] - 1) / P[2]
+    return raw
+
 class Transformer(object):
     @staticmethod
     def probit(x):
@@ -163,8 +174,7 @@ class Data_From_Raw(Data):
             return np.array((b,a,xi))
 
         P = np.apply_along_axis(lambda x: compute_gp_parameters(x, q), 0, raw)
-        Z = (1 + P[2] * (raw - P[0]) / P[1])**(1/P[2])
-        Z[Z < 0.] = 0.
+        Z = scale_pareto(raw, P)
         return Z, P
 
     def __init__(self, raw, decluster = False, quantile = 0.95):

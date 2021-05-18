@@ -43,5 +43,11 @@ def argparser_ppl():
     p.add_argument('path')
     return p.parse_args()
 
+def argparser_cs():
+    p = argparse.ArgumentParser()
+    p.add_argument('path')
+    p.add_argument('raw_path')
+    return p.parse_args()
+
 if __name__ == '__main__':
     p = argparser_dp()
