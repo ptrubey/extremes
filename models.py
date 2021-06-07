@@ -18,6 +18,7 @@ import model_dppn as dppn
 # testing
 import model_dpdc as dpdc
 import model_dphpg as dphpg
+import model_dphprg as dphprg
 
 Results = {
     'vd'    : vd.Result,
@@ -34,7 +35,8 @@ Results = {
     'dpprg' : dpprg.Result,
     'dppn'  : dppn.Result,
     'dpdc'  : dpdc.Result,
-    'dphpg' : dphpb.Result,
+    'dphpg' : dphpg.Result,
+    'dphprg': dphprg.Result,
     }
 Chains = {
     'vd'    : vd.Chain,
@@ -52,6 +54,7 @@ Chains = {
     'dppn'  : dppn.Chain,
     'dpdc'  : dpdc.Chain,
     'dphpg' : dphpg.Chain,
+    'dphprg': dphprg.Chain,
     }
 
 # EOF

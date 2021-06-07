@@ -159,9 +159,9 @@ Results['dppn'] = DPPN_Result
 # Updating the Result objects with the new methods.
 
 Prediction_Gammas = {}
-for model in ['md','dpd','mprg','dpprg','dpdc']:
+for model in ['md','dpd','mprg','dpprg','dpdc','dphprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Restricted
-for model in ['mgd','dpgd','mpg','dppg']:
+for model in ['mgd','dpgd','mpg','dppg','dphpg']:
     Prediction_Gammas[model] = Prediction_Gamma
 for model in ['vd','vprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla_Restricted
