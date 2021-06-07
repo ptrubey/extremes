@@ -159,7 +159,7 @@ Results['dppn'] = DPPN_Result
 # Updating the Result objects with the new methods.
 
 Prediction_Gammas = {}
-for model in ['md','dpd','mprg','dpprg']:
+for model in ['md','dpd','mprg','dpprg','dpdc']:
     Prediction_Gammas[model] = Prediction_Gamma_Restricted
 for model in ['mgd','dpgd','mpg','dppg']:
     Prediction_Gammas[model] = Prediction_Gamma
@@ -179,15 +179,16 @@ def ResultFactory(model, path):
         pass
     return Result(path)
 
-PPLResult = namedtuple('PPLResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf')
+# PPLResult = namedtuple('PPLResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf')
+PPLResult = namedtuple('PPLResult', 'type name PPL_Linf ES_Linf')
 
 def ppl_generation(model):
     result = ResultFactory(*model)
     pplr = PPLResult(
         model[0],
         os.path.splitext(os.path.split(model[1])[1])[0],
-        result.posterior_predictive_loss_L1(),
-        result.posterior_predictive_loss_L2(),
+        # result.posterior_predictive_loss_L1(),
+        # result.posterior_predictive_loss_L2(),
         result.posterior_predictive_loss_Linf(),
         result.energy_score_Linf(),
         )
@@ -215,7 +216,8 @@ if __name__ == '__main__':
 
     df = pd.DataFrame(
         pplrs,
-        columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
+        # columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
+        columns = ('type','name','PPL_Linf','ES_Linf')
         )
     df.to_csv(os.path.join(args.path, 'post_pred_loss_results.csv'), index = False)
 

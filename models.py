@@ -15,6 +15,8 @@ import model_dpprg as dpprg
 
 import model_dppn as dppn
 
+import model_dpdc as dpdc
+
 Results = {
     'vd'    : vd.Result,
     'vgd'   : vgd.Result,
@@ -29,6 +31,7 @@ Results = {
     'dppg'  : dppg.Result,
     'dpprg' : dpprg.Result,
     'dppn'  : dppn.Result,
+    'dpdc'  : dpdc.Result,
     }
 Chains = {
     'vd'    : vd.Chain,
@@ -44,6 +47,7 @@ Chains = {
     'dppg'  : dppg.Chain,
     'dpprg' : dpprg.Chain,
     'dppn'  : dppn.Chain,
+    'dpdc'  : dpdc.Chain,
     }
 
 # EOF

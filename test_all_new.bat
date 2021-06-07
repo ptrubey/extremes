@@ -5,6 +5,8 @@ REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv 
 REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dppg 50000 20000 30 --eta_shape 2 --eta_rate 1e-1
 REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dpprg 50000 20000 30 --eta_shape 2 --eta_rate 1e-1
 
+REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dpdc 50000 20000 30 --eta_shape 2 --eta_rate 1e-1
+
 REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 md 50000 20000 30 --nMix 30
 REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 mgd 50000 20000 30 --nMix 30
 REM start /low cmd /k python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 mpg 50000 20000 30 --nMix 30

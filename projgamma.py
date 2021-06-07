@@ -16,6 +16,7 @@ from slice import univariate_slice_sample, skip_univariate_slice_sample
 
 GammaPrior     = namedtuple('GammaPrior', 'a b')
 DirichletPrior = namedtuple('DirichletPrior', 'a')
+BetaPrior      = namedtuple('BetaPrior', 'a b')
 
 def to_angular(hyp):
     """ Convert data to angular representation. """
