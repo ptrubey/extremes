@@ -8,6 +8,9 @@ import model_dpgdln as dpgdln
 import model_dppgln as dppgln
 import model_dpprgln as dpprg
 
+import model_dphpgln as dphpgln
+import model_dphprgln as dphprgln
+
 Results = {
     'mdln'    : mdln.Result,
     'mgdln'   : mgdln.Result,
@@ -16,7 +19,9 @@ Results = {
     'dpdln'   : dpdln.Result,
     'dpgdln'  : dpgdln.Result,
     'dppgln'  : dppgln.Result,
-    'dpprgln'   : dpprg.Result,
+    'dpprgln' : dpprgln.Result,
+    'dphpgln' : dphpgln.Result,
+    'dphprgln': dphprgln.Result,
     }
 Chains = {
     'mdln'    : mdln.Chain,
@@ -26,7 +31,9 @@ Chains = {
     'dpdln'   : dpdln.Chain,
     'dpgdln'  : dpgdln.Chain,
     'dppgln'  : dppgln.Chain,
-    'dpprgln'   : dpprg.Chain,
+    'dpprgln' : dpprgln.Chain,
+    'dphprgln': dphprgln.Chain,
+    'dphpgln' : dphpgln.Chain,
     }
 
 # EOF
