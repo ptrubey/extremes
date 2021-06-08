@@ -6,7 +6,7 @@ import model_mprgln as mprgln
 import model_dpdln as dpdln
 import model_dpgdln as dpgdln
 import model_dppgln as dppgln
-import model_dpprgln as dpprg
+import model_dpprgln as dpprgln
 
 import model_dphpgln as dphpgln
 import model_dphprgln as dphprgln
