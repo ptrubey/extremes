@@ -159,17 +159,17 @@ Results['dppn'] = DPPN_Result
 # Updating the Result objects with the new methods.
 
 Prediction_Gammas = {}
-for model in ['md','dpd','mprg','dpprg','dpdc','dphprg']:
+for model in ['md','dpd','mprg','dpprg','dpdc','dphprg','mhprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Restricted
-for model in ['mgd','dpgd','mpg','dppg','dphpg']:
+for model in ['mgd','dpgd','mpg','dppg','dphpg','mhpg']:
     Prediction_Gammas[model] = Prediction_Gamma
 for model in ['vd','vprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla_Restricted
 for model in ['vgd','vpg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla
-for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprg','mhprgln']:
+for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter_Restricted
-for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpg','mhpgln']:
+for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter
 for model in ['dppn']:
     Prediction_Gammas[model] = object
