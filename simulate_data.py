@@ -87,6 +87,7 @@ class Data(data.Data):
 
     def __init__(self, path):
         self.read_data(path)
+        self.nDat, self.nCol = self.V.shape
         return
 
 if __name__ == '__main__':
