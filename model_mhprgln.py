@@ -357,6 +357,8 @@ class Chain(pt.PTChain):
 
     def write_to_disk(self, path, nburn, thin = 1):
         ntail = self.samples.alpha.shape[0] - nburn - 1
+        if not os.path.exists(os.path.split(path)[0]):
+            os.mkdir(os.path.split(path)[0])
         if os.path.exists(path):
             os.remove(path)
         conn = sql.connect(path)
