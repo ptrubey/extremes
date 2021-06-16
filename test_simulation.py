@@ -43,6 +43,8 @@ if __name__ == '__main__':
 
     model.sample(int(p.nSamp))
 
+    if not os.path.exists(os.path.split(out_path)[0]):
+        os.mkdir(os.path.split(out_path)[0])
     model.write_to_disk(out_path, int(p.nKeep), int(p.nThin))
 
     res = Result(out_path)
