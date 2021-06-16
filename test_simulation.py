@@ -44,7 +44,7 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
-    data.write_to_disk(emp_path)
+    data.write_empirical(emp_path)
 
     model.sample(int(p.nSamp))
 
