@@ -1,0 +1,14 @@
+# Introduction fixes
+- add historical context of pareto distribution (mention at least all forms)
+- specify we're dealing with the generalized pareto (find the proper form)
+
+# methodology
+- Reorder deviance section according to minutes/bruno's notes
+
+# Results
+- Recompute results with Linf model--see if it actually improves anything.
+
+# Ideas
+- Add simulation section -- recovery of simulated datasets, cluster counts, etc..
+- define epsilon cones in angular space--calculate probability of cones
+- work on other
