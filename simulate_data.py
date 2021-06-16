@@ -78,10 +78,11 @@ class Data(data.Data):
     Yl = None
 
     def read_data(self, path):
-        conn = sql.connect(path)
-        self.V = pd.read_sql('select * from data;', conn).values
-        self.S = data.euclidean_to_simplex(self.V)
+        conn    = sql.connect(path)
+        self.V  = pd.read_sql('select * from data;', conn).values
+        self.S  = data.euclidean_to_simplex(self.V)
         self.Yl = data.angular_to_euclidean(data.euclidean_to_angular(self.V))
+        self.A  = data.euclidean_to_angular(self.data.Yl)
         conn.close()
         return
 
