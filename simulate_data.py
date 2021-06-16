@@ -73,7 +73,9 @@ class Result(object):
         return
 
 class Data(data.Data):
-    V = None
+    V  = None
+    S  = None
+    Yl = None
 
     def read_data(self, path):
         conn = sql.connect(path)
@@ -81,6 +83,10 @@ class Data(data.Data):
         self.S = data.euclidean_to_simplex(self.V)
         self.Yl = data.angular_to_euclidean(data.euclidean_to_angular(self.V))
         conn.close()
+        return
+
+    def __init__(self, path):
+        self.read_data(path)
         return
 
 if __name__ == '__main__':
