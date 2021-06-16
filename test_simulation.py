@@ -14,6 +14,7 @@ if __name__ == '__main__':
     data = Data(os.path.join(p.in_path, 'data.db'))
 
     if p.model.startswith('dp'):
+        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
         out_path = os.path.join(
             p.in_path, p.model, 'results_{}_{}.db'.format(p.eta_shape, p.eta_rate),
             )
@@ -23,6 +24,7 @@ if __name__ == '__main__':
         model = Chain(data, prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)))
 
     elif p.model.startswith('m'):
+        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
         out_path = os.path.join(
             p.in_path, p.model, 'results_{}.db'.format(p.nMix),
             )
@@ -31,6 +33,7 @@ if __name__ == '__main__':
             )
         model = Chain(data, nMix = int(p.nMix))
     elif p.model.startswith('v'):
+        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
         out_path = os.path.join(
             p.in_path, p.model, 'results.db',
             )
@@ -41,10 +44,10 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
+    data.write_to_disk(emp_path)
+
     model.sample(int(p.nSamp))
 
-    if not os.path.exists(os.path.split(out_path)[0]):
-        os.mkdir(os.path.split(out_path)[0])
     model.write_to_disk(out_path, int(p.nKeep), int(p.nThin))
 
     res = Result(out_path)
