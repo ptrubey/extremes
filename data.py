@@ -132,6 +132,7 @@ class Data(Transformer):
     def __init__(self, path):
         self.A = pd.read_csv(path).values
         self.V = angular_to_hypercube(self.A)
+        self.nDat, self.nCol = self.V.shape
         self.fill_out()
         return
 
