@@ -17,7 +17,7 @@ class Chain(object):
 
         gnew = gamma(anew, scale = 1/bnew, size = (nSamp, nCol))
         vnew = data.euclidean_to_hypercube(gnew)
-        return vnew, alpha, beta, delta
+        return vnew, alpha, beta, delta, p
 
     def write_to_disk(self, path):
         if not os.path.exists(os.path.split(path)[0]):
@@ -29,47 +29,68 @@ class Chain(object):
         a_df = pd.DataFrame(self.alpha, columns = ['alpha_{}'.format(i) for i in range(self.nCol)])
         b_df = pd.DataFrame(self.beta, columns = ['beta_{}'.format(i) for i in range(self.nCol)])
         d_df = pd.DataFrame(self.delta.reshape(1,-1), columns = ['delta_{}'.format(i) for i in range(self.nDat)])
+        p_df = pd.DataFrame(self.p.reshape(1,-1), columns = ['p_{}'.format(i) for i in range(self.nMix)])
 
         V_df.to_sql('data', conn, index = False)
         a_df.to_sql('alphas', conn, index = False)
         b_df.to_sql('betas', conn, index = False)
         d_df.to_sql('deltas', conn, index = False)
+        p_df.to_sql('ps', conn, index = False)
+
         conn.commit()
         conn.close()
         return
 
     def __init__(self, nCol, nMix, p, nDat, a0 = 1.8, b0 = 1.2):
         self.nCol, self.nMix, self.nDat = nCol, nMix, nDat
-        self.V, self.alpha, self.beta, self.delta = self.simulate_data(nCol, nMix, p, nDat, a0, b0)
+        self.V, self.alpha, self.beta, self.delta, self.p = self.simulate_data(nCol, nMix, p, nDat, a0, b0)
         return
 
 class Samples(object):
     alpha = None
     beta  = None
     delta = None
+    p     = None
 
-    def __init__(self, nSamp, nCol, nMix):
+    def __init__(self, nSamp, nDat, nCol, nMix):
         self.alpha = np.empty((nSamp, nMix, nCol))
         self.beta  = np.empty((nSamp, nMix, nCol))
-        self.delta = np.empty((nSamp, nMix))
+        self.delta = np.empty((nSamp, nDat), dtype = int)
+        self.p     = np.empty((nSamp, nMix))
         return
 
 class Result(object):
-    def load_data(path):
+    def load_data(self, path):
         conn = sql.connect(path)
         alpha = pd.read_sql('select * from alphas;', conn).values
         beta  = pd.read_sql('select * from betas;', conn).values
-        delta = pd.read_sql('select * from deltas;', conn).values
+        delta = pd.read_sql('select * from deltas;', conn).values.reshape(-1).astype(int)
+        p     = pd.read_sql('select * from ps;', conn).values.reshape(-1)
 
-        self.samples = Samples(self.nSamp, self.nCol, self.nMix)
+        self.nMix = p.shape[0]
+
+        self.samples = Samples(self.nSamp, self.nDat, self.nCol, self.nMix)
         self.samples.alpha[:] = alpha
         self.samples.beta[:] = beta
         self.samples.delta[:] = delta
+        self.samples.p[:] = p
         return
 
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 1):
+        postpred = np.empty((self.nSamp, n_per_sample, self.nCol))
+        for n in range(self.nSamp):
+            delta_new = choice(self.nMix, n_per_sample, p = self.samples.p[n])
+            alpha_new = self.samples.alpha[n][delta_new]
+            beta_new  = self.samples.beta[n][delta_new]
+            postpred[n] = euclidean_to_hypercube(
+                gamma(shape = alpha_new, scale = 1/beta_new, size = (n_per_sample, self.nCol))
+                )
+        return postpred.reshape(-1, self.nCol)
+
     def __init__(self, path):
-        self.load_data(path)
         self.data = Data(path)
+        self.nCol, self.nDat = self.data.nCol, self.data.nDat
+        self.load_data(path)
         return
 
 class Data(data.Data):
