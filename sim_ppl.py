@@ -63,6 +63,7 @@ if __name__ == '__main__':
         except pd.io.sql.DatabaseError:
             print('Failed')
             pass
+
     for gen in gens:
         print('Processing gen {}'.format(os.path.split(os.path.split(gen)[0])[1]), end = ' ')
         try:
