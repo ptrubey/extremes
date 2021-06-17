@@ -181,8 +181,8 @@ for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter
 for model in ['dppn']:
     Prediction_Gammas[model] = object
-for model in ['random']:
-    Prediction_Gammas[model] =
+# for model in ['random']:
+#     Prediction_Gammas[model] = object
 
 def ResultFactory(model, path):
     class Result(Results[model], PostPredLoss, Prediction_Gammas[model]):
