@@ -25,7 +25,7 @@ def ppl_generation(model):
 if __name__ == '__main__':
     args = argparser()
     paths = glob.glob(os.path.join(args.path,'sim_*'))
-    model_types = ['dphpg','dphrpg']
+    model_types = ['dphpg','dphprg']
     models = []
     for path in paths:
         for model_type in model_types:
