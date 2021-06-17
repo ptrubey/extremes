@@ -47,9 +47,9 @@ if __name__ == '__main__':
 
     for path in paths:
         for model_type in model_types:
-            # mm = glob.glob(os.path.join(path, model_type, 'results*.db'))
-            # for m in mm:
-            #     models.append((model_type, m))
+            mm = glob.glob(os.path.join(path, model_type, 'results*.db'))
+            for m in mm:
+                models.append((model_type, m))
             gg = glob.glob(os.path.join(path, 'data.db'))
             for g in gg:
                 gens.append(g)
