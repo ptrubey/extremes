@@ -140,13 +140,13 @@ class Prediction_Gamma_Alter_Restricted(object):
             predicted[s] = gamma(shape = alpha) + epsilon
         return predicted
 
-class Prediction_Gamma_Random(object):
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            temp = uniform(size = self.nDat, self.nCol - 1)
-            predicted[s] = np.insert(temp, choice(self.nCol, 1)[0], np.ones(self.nDat), axis = 1)
-        return predicted
+# class Prediction_Gamma_Random(object):
+#     def prediction(self):
+#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
+#         for s in range(self.nSamp):
+#             temp = uniform(size = self.nDat, self.nCol - 1)
+#             predicted[s] = np.insert(temp, choice(self.nCol, 1)[0], np.ones(self.nDat), axis = 1)
+#         return predicted
 
 # Special case for Probit Normal model
 class DPPN_Result(dppn.Result, PostPredLoss):
