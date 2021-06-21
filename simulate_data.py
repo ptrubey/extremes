@@ -6,9 +6,9 @@ import data
 from numpy.random import gamma, choice
 
 class Chain(object):
-    def simulate_data(self, nCol, nMix, p, nSamp, a0 = 1.8, b0 = 1.2):
-        alpha = gamma(a0, scale = 1/b0, size = (nMix, nCol))
-        beta  = gamma(a0, scale = 1/b0, size = (nMix, nCol))
+    def simulate_data(self, nCol, nMix, p, nSamp, a0 = 4., b0 = 2.):
+        alpha = uniform(0.1, a0, size = (nMix, nCol)) + gamma(1, size = (nMix, nCol))
+        beta  = uniform(0.2, b0, size = (nMix, nCol)) + gamma(1, size = (nMix, nCol))
         p /= p.sum()
         delta = choice(nMix, size = nSamp, p = p)
 
@@ -19,15 +19,15 @@ class Chain(object):
         vnew = data.euclidean_to_hypercube(gnew)
         return vnew, alpha, beta, delta, p
 
-    def write_to_disk(self, path):
+    def write_to_disk(self, path, cols):
         if not os.path.exists(os.path.split(path)[0]):
             os.mkdir(os.path.split(path)[0])
         if os.path.exists(path):
             os.remove(path)
         conn = sql.connect(path)
-        V_df = pd.DataFrame(self.V, columns = ['V_{}'.format(i) for i in range(self.nCol)])
-        a_df = pd.DataFrame(self.alpha, columns = ['alpha_{}'.format(i) for i in range(self.nCol)])
-        b_df = pd.DataFrame(self.beta, columns = ['beta_{}'.format(i) for i in range(self.nCol)])
+        V_df = pd.DataFrame(self.V.T[:cols].T, columns = ['V_{}'.format(i) for i in range(cols)])
+        a_df = pd.DataFrame(self.alpha.T[:cols].T, columns = ['alpha_{}'.format(i) for i in range(cols)])
+        b_df = pd.DataFrame(self.beta.T[:cols].T, columns = ['beta_{}'.format(i) for i in range(cols)])
         d_df = pd.DataFrame(self.delta.reshape(1,-1), columns = ['delta_{}'.format(i) for i in range(self.nDat)])
         p_df = pd.DataFrame(self.p.reshape(1,-1), columns = ['p_{}'.format(i) for i in range(self.nMix)])
 
@@ -113,14 +113,15 @@ class Data(data.Data):
         return
 
 if __name__ == '__main__':
-    nCols = [3,6,9,12]
-    nMixs = [3,6,9,12]
+    nCols = [3, 6, 12, 20]
+    nMixs = [3, 6,  9, 12]
 
-    for nCol in nCols:
-        for nMix in nMixs:
-            chain = Chain(nCol = nCol, nMix = nMix, p = np.ones(nMix) / nMix, nDat = 500)
-            print('Col {} Mix {}'.format(nCol, nMix))
-            chain.write_to_disk('./simulated/sim_c{}_m{}/data.db'.format(nCol, nMix))
+    for nMix in mMixs:
+        chain = Chain(nCol = max(nCols), nMix = nMix, p = np.ones(nMix) / nMix, nDat = 500)
+        for nCol in nCols:
+            print('mix {} col {}'.format(nMix, nCol))
+            chain.write_to_disk('./simulated/sim_c{}_m{}/data.db'.format(nCol, nMix), nCol)
             pass
         pass
+
 # EOF
