@@ -116,7 +116,7 @@ if __name__ == '__main__':
     nCols = [3, 6, 12, 20]
     nMixs = [3, 6,  9, 12]
 
-    for nMix in mMixs:
+    for nMix in nMixs:
         chain = Chain(nCol = max(nCols), nMix = nMix, p = np.ones(nMix) / nMix, nDat = 500)
         for nCol in nCols:
             print('mix {} col {}'.format(nMix, nCol))
