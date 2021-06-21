@@ -3,7 +3,7 @@ import pandas as pd
 import sqlite3 as sql
 import os
 import data
-from numpy.random import gamma, choice
+from numpy.random import gamma, choice, uniform
 
 class Chain(object):
     def simulate_data(self, nCol, nMix, p, nSamp, a0 = 4., b0 = 2.):
