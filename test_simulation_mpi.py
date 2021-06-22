@@ -23,7 +23,6 @@ if rank > 0:
     chain.watch()
 
 if rank == 0:
-    raw  = read_csv(args.in_path)
     data = Data(os.path.join(p.in_path, 'data.db'))
 
     if args.model.startswith('dp'):
