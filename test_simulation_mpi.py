@@ -23,7 +23,7 @@ if rank > 0:
     chain.watch()
 
 if rank == 0:
-    data = Data(os.path.join(p.in_path, 'data.db'))
+    data = Data(os.path.join(args.in_path, 'data.db'))
 
     if args.model.startswith('dp'):
         emp_path = os.path.join(
