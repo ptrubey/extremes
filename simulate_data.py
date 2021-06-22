@@ -16,8 +16,8 @@ class Chain(object):
         bnew = beta[delta]
 
         gnew = gamma(anew, scale = 1/bnew, size = (nSamp, nCol))
-        vnew = data.euclidean_to_hypercube(gnew)
-        return vnew, alpha, beta, delta, p
+        # vnew = data.euclidean_to_hypercube(gnew)
+        return gnew, alpha, beta, delta, p
 
     def write_to_disk(self, path, cols):
         if not os.path.exists(os.path.split(path)[0]):
@@ -25,7 +25,11 @@ class Chain(object):
         if os.path.exists(path):
             os.remove(path)
         conn = sql.connect(path)
-        V_df = pd.DataFrame(self.V.T[:cols].T, columns = ['V_{}'.format(i) for i in range(cols)])
+
+        V_df = pd.DataFrame(
+                data.euclidean_to_hypercube(self.G.T[:cols].T),
+                columns = ['V_{}'.format(i) for i in range(cols)],
+                )
         a_df = pd.DataFrame(self.alpha.T[:cols].T, columns = ['alpha_{}'.format(i) for i in range(cols)])
         b_df = pd.DataFrame(self.beta.T[:cols].T, columns = ['beta_{}'.format(i) for i in range(cols)])
         d_df = pd.DataFrame(self.delta.reshape(1,-1), columns = ['delta_{}'.format(i) for i in range(self.nDat)])
@@ -43,7 +47,7 @@ class Chain(object):
 
     def __init__(self, nCol, nMix, p, nDat, a0 = 1.8, b0 = 1.2):
         self.nCol, self.nMix, self.nDat = nCol, nMix, nDat
-        self.V, self.alpha, self.beta, self.delta, self.p = self.simulate_data(nCol, nMix, p, nDat, a0, b0)
+        self.G, self.alpha, self.beta, self.delta, self.p = self.simulate_data(nCol, nMix, p, nDat, a0, b0)
         return
 
 class Samples(object):
