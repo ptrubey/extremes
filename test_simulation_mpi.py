@@ -3,6 +3,7 @@ from simulate_data import Data
 from projgamma import GammaPrior
 from pandas import read_csv
 import models_mpi as models
+import pt_mpi as pt
 import numpy as np
 import os
 from mpi4py import MPI
