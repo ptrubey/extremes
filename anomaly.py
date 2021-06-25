@@ -25,12 +25,27 @@ class AnomalyDetector(PostPredLoss):
         pool.close()
         return np.hstack(list(res)).T
 
+    def pdr_plot(self):
+        pdr = self.pairwise_distance_to_replicates()
+        pdrms = np.sort(pdr.mean(axis = 1))
+        plt.plot(pdrms)
+        plt.show()
+        return
+
     def pairwise_distance_to_postpred(self, n_per_sample = 10):
         postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
         pool = Pool(processes = cpu_count(), initializer = limit_cpu)
         res = pool.map(hypercube_distance_unsummed, zip(repeat(postpred), self.data.V))
         pool.close()
         return np.hstack(list(res)).T
+
+    def pdp_plot(self, n_per_sample = 10):
+        pdp = self.pairwise_distance_to_postpred(n_per_sample)
+        pdpm = gmean(pdp, axis = 1)
+        pdpms = np.sort(pdpm)
+        plt.plot(pdpms)
+        plt.show()
+        return
 
     def knn_distance(self, k = 10, n_per_sample = 10):
         postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
