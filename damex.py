@@ -1,5 +1,11 @@
 import numpy as np
+from argparser import argparser_damex as argparser
 from collections import defaultdict
+from models import Results
+from models_mpi import Results as Results_mpi
+from data import Data_From_Raw
+
+ResultDict = {**Results, **Results_mpi}
 
 class DAMEX_Vanilla(object):
     """ Implements the DAMEX algorithm of Goix et al """
@@ -42,12 +48,41 @@ class DAMEX_PostPred(object):
         as the "training" set. """
     data     = None
     postpred = None
-    cones    = defaultdict(int)
+    # cones    = defaultdict(int)
 
-    def populate_cones(self):
-        pass
+    def populate_cones(self, epsilon):
+        C_damex = (self.postpred > epsilon).astype(int)
+        cones = defaultdict(float)
+        for row in C_damex:
+            cones[tuple(row)] += 1 / self.postpred.shape[0]
+        return cones
+
+    def scoring_raw(self, epsilon = 0.5):
+        cone_prob = self.populate_cones(epsilon)
+        scores = np.empty(self.data.nDat)
+        for i in range(self.nDat):
+            scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)] / self.data.R[i]
+        return scores
+
+    def scoring_angular(self, epsilon = 0.5):
+        cone_prob = self.populate_cones(epsilon)
+        scores = np.empty(self.data.nDat)
+        for i in range(self.nDat):
+            scores[i] = cone_prob[tuple(self.data.V[i]) > epsilon]
+        return scores
+
+    def instantiate_data(self, path, decluster = True):
+        """ path: raw data path """
+        raw = pd.read_csv(path)
+        self.data = Data_From_Raw(raw, decluster)
+        return
+    pass
+
+if __name__ == '__main__':
 
 
 
 
     pass
+
+# EOF

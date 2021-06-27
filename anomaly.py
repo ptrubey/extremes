@@ -9,15 +9,17 @@ from sklearn.metrics import pairwise_distances
 from multiprocessing import Pool, cpu_count
 from scipy.stats import gmean
 from itertools import repeat
+from collections import defaultdict
 
 from energy import limit_cpu, hypercube_distance_unsummed
+from data import Data_From_Raw
 from postpred_loss import PostPredLoss, Prediction_Gammas, Results
 from argparser import argparser_ad as argparser
 
-
-
 class AnomalyDetector(PostPredLoss):
     """ Implements anomaly detection algorithms; uses Linf """
+    data = None
+
     def pairwise_distance_to_replicates(self):
         predicted = self.Linf(self.prediction())
         pool = Pool(processes = cpu_count(), initializer = limit_cpu)
@@ -62,9 +64,35 @@ class AnomalyDetector(PostPredLoss):
         plt.show()
         return
 
+    def populate_cones(self, epsilon):
+        C_damex = (self.postpred > epsilon).astype(int)
+        cones = defaultdict(float)
+        for row in C_damex:
+            cones[tuple(row)] += 1 / self.postpred.shape[0]
+        return cones
+
+    def scoring_damex(self, epsilon = 0.5):
+        cone_prob = self.populate_cones(epsilon)
+        scores = np.empty(self.data.nDat)
+        for i in range(self.nDat):
+            scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)] / self.data.R[i]
+        return scores
+
+    def scoring_damex_angular(self, epsilon = 0.5):
+        cone_prob = self.populate_cones(epsilon)
+        scores = np.empty(self.data.nDat)
+        for i in range(self.nDat):
+            scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)]
+        return scores
+
+    def instantiate_data(self, path, decluster = True):
+        """ path: raw data path """
+        raw = pd.read_csv(path)
+        self.data = Data_From_Raw(raw, decluster)
+        self.postpred = self.generate_posterior_predictive_hypercube(10)
+        return
+
     pass
-
-
 
 def ResultFactory(model, path):
     class Result(Results[model], AnomalyDetector, Prediction_Gammas[model]):
