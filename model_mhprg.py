@@ -227,11 +227,14 @@ class Chain(object):
         zetas_df.to_sql('zetas', conn, index = False)
         try:
             deltas_df.to_sql('deltas', conn, index = False)
+            rs_df.to_sql('rs', conn, index = False)
         except sql.OperationalError:
             deltas_dft = pd.DataFrame({'delta' : deltas.reshape(-1)})
             deltas_dft.to_sql('deltas', conn, index = False)
+            rs_dft = pd.DataFrame({'r' : rs.reshape(-1))
+            rs_dft.to_sql('rs', conn, index = False)
+
         pis_df.to_sql('pis', conn, index = False)
-        rs_df.to_sql('rs', conn, index = False)
         alphas_df.to_sql('alphas', conn, index = False)
         betas_df.to_sql('betas', conn, index = False)
         conn.commit()
