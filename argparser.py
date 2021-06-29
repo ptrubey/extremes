@@ -64,7 +64,8 @@ def argparser_cs():
 
 def argparser_ad():
     p = argparse.ArgumentParser()
-    p.add_argument('path')
+    p.add_argument('model_path')
+    p.add_argument('data_path')
     return p.parse_args()
 
 if __name__ == '__main__':

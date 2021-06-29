@@ -66,23 +66,49 @@ class AnomalyDetector(PostPredLoss):
 
     def populate_cones(self, epsilon):
         C_damex = (self.postpred > epsilon).astype(int)
-        cones = defaultdict(float)
+        cones = defaultdict(lambda: 1e-10)
         for row in C_damex:
             cones[tuple(row)] += 1 / self.postpred.shape[0]
         return cones
 
-    def scoring_damex(self, epsilon = 0.5):
+    def scoring_cones(self, epsilon = 0.5):
         cone_prob = self.populate_cones(epsilon)
         scores = np.empty(self.data.nDat)
         for i in range(self.nDat):
             scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)] / self.data.R[i]
         return scores
 
-    def scoring_damex_angular(self, epsilon = 0.5):
+    def scoring_cones_angular(self, epsilon = 0.5):
         cone_prob = self.populate_cones(epsilon)
         scores = np.empty(self.data.nDat)
         for i in range(self.nDat):
             scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)]
+        return scores
+
+    def scoring_pdr(self, scalar = 1., base = np.e):
+        pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
+        scores = (base ** (-scalar * pdrm).T / self.data.R).T
+        return scores
+
+    def scoring_pdr_angular(self, scalar = 1., base = np.e):
+        pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
+        scores = base ** (-scalar * pdrm)
+        return scores
+
+    def scoring_pdp(self, scalar = 1., base = np.e, n_per_sample = 10):
+        pdp = self.pairwise_distance_to_postpred(n_per_sample)
+        pdpm = gmean(pdp, axis = 1)
+        scores = base ** (-scalar * pdpm)
+        return scores
+
+    def scoring_knn(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
+        knn = self.knn_distance(k, n_per_sample)
+        scores = (base**(- scalar * knn).T / self.data.R).T
+        return scores
+
+    def scoring_knn_angular(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
+        knn = self.knn_distance(k, n_per_sample)
+        scores = base**(- scalar * knn)
         return scores
 
     def instantiate_data(self, path, decluster = True):
@@ -99,12 +125,29 @@ def ResultFactory(model, path):
         pass
     return Result(path)
 
+def plot_log_inverse_scores(scores):
+    plt.plot(np.sort(np.log(1/scores)))
+    plt.show()
+    return
+def plot_log_inverse_scores_knn(scores):
+    ord = np.argsort(scores.mean(axis = 1))
+    plt.plot(np.log(1/scores[ord[::-1]]))
+    plt.show()
+    return
+
 if __name__ == '__main__':
     args = argparser()
-    model = os.path.split(os.path.split(args.path)[0])[1]
-    # path = path to result
-    # --> load result
-    result = ResultFactory(model, args.path)
+    model = os.path.split(os.path.split(args.model_path)[0])[1]
+    result = ResultFactory(model, args.model_path)
+    result.instantiate_data(args.data_path, decluster=True)
+
+    scores_c = result.scoring_cones()
+    scores_r = result.scoring_pdr()
+    scores_p = result.scoring_pdp()
+    scores_k = result.scoring_knn()
+
+
+
     pass
 
 # EOF

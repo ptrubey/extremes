@@ -16,6 +16,7 @@ from math import sqrt, log, exp, pi
 
 from projgamma import GammaPrior
 from data import Data_From_Raw as Data_From_Raw_Base, Data, angular_to_hypercube
+from energy import limit_cpu
 import cUtility as cu
 
 def log_density_mvnormal(args):
@@ -349,7 +350,7 @@ class Chain(Transformer):
             np.eye(self.nCol - 1) * prior_Sigma0[1],
             )
         self.priors = Prior(mu_actual, Sigma_actual, mu0_actual, Sigma0_actual, prior_eta)
-        self.pool = mp.Pool(8)
+        self.pool = mp.Pool(processes = 4, initializer = limit_cpu)
         return
 
 class Result(Transformer):
