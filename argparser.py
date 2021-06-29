@@ -36,6 +36,7 @@ def argparser_generic():
     p.add_argument('--eta_shape')
     p.add_argument('--eta_rate')
     p.add_argument('--quantile', default = 0.95)
+    p.add_argument('--decluster', default = True)
     return p.parse_args()
 
 def argparser_simulation():
