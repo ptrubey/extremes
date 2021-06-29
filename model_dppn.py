@@ -350,7 +350,7 @@ class Chain(Transformer):
             np.eye(self.nCol - 1) * prior_Sigma0[1],
             )
         self.priors = Prior(mu_actual, Sigma_actual, mu0_actual, Sigma0_actual, prior_eta)
-        self.pool = mp.Pool(processes = 4, initializer = limit_cpu)
+        self.pool = mp.Pool(processes = 8, initializer = limit_cpu)
         return
 
 class Result(Transformer):
