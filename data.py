@@ -125,8 +125,8 @@ class Data(Transformer):
         self.lsins = np.log(self.sins)
         self.lcoss = np.log(self.coss)
         self.S     = angular_to_simplex(self.A)
-        self.Vi = self.cast_to_cube(self.A)
-        self.pVi = self.probit(self.Vi)
+        self.Vi    = self.cast_to_cube(self.A)
+        self.pVi   = self.probit(self.Vi)
         return
 
     def __init__(self, path):
