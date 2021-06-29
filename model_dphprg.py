@@ -129,8 +129,14 @@ class Result(object):
         rs     = pd.read_sql('select * from rs', conn).values
         etas   = pd.read_sql('select * from etas', conn).values.reshape(-1)
 
-        self.nDat  = deltas.shape[1]
-        self.nSamp = deltas.shape[0]
+        if len(deltas.shape) > 1:
+            self.nDat  = deltas.shape[1]
+            self.nSamp = deltas.shape[0]
+        else:
+            self.nSamp = etas.shape[0]
+            deltas = deltas.reshape(self.nSamp, -1)
+            self.nDat = deltas.shape[1]
+
         self.nCol  = alphas.shape[1]
 
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
@@ -334,7 +340,11 @@ class Chain(object):
         df_beta.to_sql('betas', conn, index = False)
         df_eta.to_sql('etas', conn, index = False)
         df_r.to_sql('rs', conn, index = False)
-        df_delta.to_sql('deltas', conn, index = False)
+        try:
+            df_delta.to_sql('deltas', conn, index = False)
+        except sql.OperationalError:
+            deltas_dft = pd.DataFrame({'delta' : deltas.reshape(-1)})
+            deltas_dft.to_sql('deltas', conn, index = False)
         # Commit and Close
         conn.commit()
         conn.close()

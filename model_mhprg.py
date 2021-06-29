@@ -225,7 +225,11 @@ class Chain(object):
         betas_df  = pd.DataFrame(betas, columns = ['beta_{}'.format(i) for i in range(self.nCol)])
         # write to disk
         zetas_df.to_sql('zetas', conn, index = False)
-        deltas_df.to_sql('deltas', conn, index = False)
+        try:
+            deltas_df.to_sql('deltas', conn, index = False)
+        except sql.OperationalError:
+            deltas_dft = pd.DataFrame({'delta' : deltas.reshape(-1)})
+            deltas_dft.to_sql('deltas', conn, index = False)
         pis_df.to_sql('pis', conn, index = False)
         rs_df.to_sql('rs', conn, index = False)
         alphas_df.to_sql('alphas', conn, index = False)
@@ -283,14 +287,20 @@ class Result(object):
     def load_data(self, path):
         conn = sql.connect(path)
 
-        deltas = pd.read_sql('select * from deltas;', conn).values
+        deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
         pis    = pd.read_sql('select * from pis;', conn).values
         zetas  = pd.read_sql('select * from zetas;', conn).values
         alphas = pd.read_sql('select * from alphas;', conn).values
         betas  = pd.read_sql('select * from betas;', conn).values
 
-        self.nSamp = deltas.shape[0]
-        self.nDat = deltas.shape[1]
+        if len(deltas.shape) > 1:
+            self.nSamp = deltas.shape[0]
+            self.nDat = deltas.shape[1]
+        else:
+            self.nSamp = pis.shape[0]
+            deltas = deltas.reshape(self.nSamp, -1)
+            self.nDat = deltas.shape[1]
+
         self.nMix = pis.shape[1]
         self.nCol = zetas.shape[1]
 
