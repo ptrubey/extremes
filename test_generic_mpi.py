@@ -24,7 +24,7 @@ if rank > 0:
 
 if rank == 0:
     raw  = read_csv(args.in_path)
-    data = Data_From_Raw(raw, decluster = args.decluster, quantile = args.quantile)
+    data = Data_From_Raw(raw, decluster = eval(args.decluster), quantile = float(args.quantile))
 
     if args.model.startswith('dp'):
         emp_path = os.path.join(

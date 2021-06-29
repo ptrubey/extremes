@@ -12,7 +12,11 @@ if __name__ == '__main__':
     Result = models.Results[p.model]
 
     raw  = read_csv(p.in_path)
-    data = Data_From_Raw(raw, decluster = p.decluster, quantile = p.quantile)
+    # so nice, I tried it twice.
+    try:
+        data = Data_From_Raw(raw, decluster = eval(p.decluster), quantile = float(p.quantile))
+    except:
+        data = Data_From_Raw(raw, decluster = eval(p.decluster), quantile = float(p.quantile))
 
     if p.model.startswith('dp'):
         emp_path = os.path.join(

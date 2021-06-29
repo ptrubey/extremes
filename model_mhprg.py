@@ -6,7 +6,8 @@ import pandas as pd
 import os
 import sqlite3 as sql
 from math import ceil, log
-# from multiprocessing import Pool
+from multiprocessing import Pool
+from energy import limit_cpu
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
@@ -113,15 +114,15 @@ class Chain(object):
             repeat(self.priors.beta.a),
             repeat(self.priors.beta.b),
             )
-        res = map(update_alpha_l_wrapper, args)
-        # res = self.pool.map(update_alpha_l_wrapper, args)
+        # res = map(update_alpha_l_wrapper, args)
+        res = self.pool.map(update_alpha_l_wrapper, args)
         return np.array(list(res))
 
     def sample_beta(self, zeta, alpha):
         # args = zip(alpha, zeta.T, repeat(self.priors.beta))
         args = zip(alpha, zeta.T, repeat(self.priors.beta.a), repeat(self.priors.beta.b))
-        res = map(update_beta_l_wrapper, args)
-        # res = self.pool.map(update_beta_l_wrapper, args)
+        # res = map(update_beta_l_wrapper, args)
+        res = self.pool.map(update_beta_l_wrapper, args)
         return np.array(list(res))
 
     def sample_pi(self, delta):
@@ -144,15 +145,15 @@ class Chain(object):
             repeat(alpha),
             repeat(beta),
             )
-        res = map(update_zeta_j_wrapper, args)
-        # res = self.pool.map(update_zeta_j_wrapper, args)
+        # res = map(update_zeta_j_wrapper, args)
+        res = self.pool.map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
     def sample_delta(self, r, zeta, pi):
         Y = (self.data.V.T * r).T
         args = zip(Y, repeat(zeta), repeat(pi))
-        res = map(sample_delta_i, args)
-        # res = self.pool.map(sample_delta_i, args)
+        # res = map(sample_delta_i, args)
+        res = self.pool.map(sample_delta_i, args)
         return np.array(list(res)).reshape(-1)
 
     def initialize_sampler(self, ns):
@@ -246,7 +247,7 @@ class Chain(object):
         self.nDat = self.data.nDat
         self.nMix = nMix
         self.priors = Prior(prior_alpha, prior_beta, prior_pi)
-        # self.pool = Pool(processes = 8)
+        self.pool = Pool(processes = 16, initializer = limit_cpu)
         return
 
 class Result(object):
