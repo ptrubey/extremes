@@ -296,7 +296,7 @@ class Result(object):
         alphas = pd.read_sql('select * from alphas;', conn).values
         betas  = pd.read_sql('select * from betas;', conn).values
 
-        if len(deltas.shape) > 1:
+        if deltas.shape[1] > 1:
             self.nSamp = deltas.shape[0]
             self.nDat = deltas.shape[1]
         else:

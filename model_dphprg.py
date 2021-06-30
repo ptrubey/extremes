@@ -129,7 +129,7 @@ class Result(object):
         rs     = pd.read_sql('select * from rs', conn).values
         etas   = pd.read_sql('select * from etas', conn).values.reshape(-1)
 
-        if len(deltas.shape) > 1:
+        if deltas.shape[1] > 1:
             self.nDat  = deltas.shape[1]
             self.nSamp = deltas.shape[0]
         else:
