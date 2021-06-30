@@ -57,9 +57,9 @@ if __name__ == '__main__':
 
     data.write_empirical(emp_path)
 
-    model.sample(int(p.nSamp))
+    # model.sample(int(p.nSamp))
 
-    model.write_to_disk(out_path, int(p.nKeep), int(p.nThin))
+    # model.write_to_disk(out_path, int(p.nKeep), int(p.nThin))
 
     res = Result(out_path)
 
