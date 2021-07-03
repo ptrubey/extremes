@@ -129,6 +129,7 @@ def plot_log_inverse_scores(scores):
     plt.plot(np.sort(np.log(1/scores)))
     plt.show()
     return
+
 def plot_log_inverse_scores_knn(scores):
     ord = np.argsort(scores.mean(axis = 1))
     plt.plot(np.log(1/scores[ord[::-1]]))
