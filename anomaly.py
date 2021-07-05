@@ -112,10 +112,10 @@ class AnomalyDetector(PostPredLoss):
         scores = base**(- scalar * knn)
         return scores
 
-    def instantiate_data(self, path, decluster = True):
+    def instantiate_data(self, path, quantile = 0.95, decluster = True):
         """ path: raw data path """
         raw = pd.read_csv(path)
-        self.data = Data_From_Raw(raw, decluster)
+        self.data = Data_From_Raw(raw, decluster = decluster, quantile = quantile)
         self.postpred = self.generate_posterior_predictive_hypercube(10)
         return
 
@@ -127,10 +127,6 @@ def ResultFactory(model, path):
 
         def instantiate_raw_anomaly(self, path_x, path_y):
             self.anomaly = Anomaly(path_x, path_y)
-            return
-
-        def instantiate_raw_data(self, path):
-            self.data = Data_From_Raw(path)
             return
 
         pass
@@ -148,10 +144,10 @@ def plot_log_inverse_scores_knn(scores):
     plt.show()
     return
 
-def make_result(model, result_path, path_x, path_y):
+def make_result(model, result_path, path_x, path_y, quantile, decluster):
     result = ResultFactory(model, result_path)
     result.instantiate_raw_anomaly(path_x, path_y)
-    result.instantiate_data(path_x)
+    result.instantiate_data(path_x, quantile, decluster)
     return result
 
 if __name__ == '__main__':
@@ -164,7 +160,6 @@ if __name__ == '__main__':
     # scores_r = result.scoring_pdr()
     # scores_p = result.scoring_pdp()
     # scores_k = result.scoring_knn()
-
     models = ['dphprg','mhprg','dphprg','dphprg','dphprg']
     model_paths = [
         './ad/cardio/dphprg/results_2_1e-1.db',
@@ -187,7 +182,8 @@ if __name__ == '__main__':
         './datasets/ad_pima_y.csv',
         './datasets/ad_satellite_y.csv',
         ]
-
+    quantiles = [0.95, 0.95, 0.95, 0.95, 0.97]
+    decluster = [False] * 5
     results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y)]
 
 # EOF
