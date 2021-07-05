@@ -11,19 +11,62 @@ from scipy.integrate import trapezoid
 import matplotlib.pyplot as plt
 from itertools import repeat
 
+class ClassificationMetric(object):
+    @property
+    def tpr(self):
+        return self.tp / (self.tp + self.fn)
+    @property
+    def fpr(self):
+        return self.fp / (self.fp + self.tn)
+    @property
+    def ppv(self):
+        return self.tp / (self.tp + self.fp)
+
+    def roc(self):
+        return np.array((self.tpr, self.fpr))
+
+    def prc(self):
+        return np.array((self.ppv, self.tpr))
+
+    def __init__(self, prediction, actual):
+        self.tp = (prediction * actual).sum()
+        self.tn = ((1 - prediction) * (1 - actual)).sum()
+        self.fp = (prediction * (1 - actual)).sum()
+        self.fn = ((1 - prediction) * actual).sum()
+        return
+
 def roc(cutoff, scores, y):
     """ Compute True Positive Rate, False Positive Rate for a given threshold """
-    preds = (scores > cutoff).astype(int)
-    tpr = sum(preds * y) / sum(y)
-    fpr = sum(preds * (1 - y)) / sum(1 - y)
-    return np.array((tpr,fpr))
+    preds = (scores >= cutoff).astype(int)
+    return ClassificationMetric(preds, y).roc()
+
+def roc_curve(scores, y, logrange = True):
+    """ Compute ROC Curve by varying threshold """
+    if logrange:
+        lbub = np.quantile(np.log(scores), (0.01, 0.99))
+        space = np.exp(np.linspace(*lbub))
+    else:
+        lbub = np.quantile(scores, (0.01, 0.99))
+        space = np.linspace(*lbub)
+    res = np.array(list(map(roc, space, repeat(scores), repeat(y))))
+    out = np.vstack((np.array((1.,1.)).reshape(1,2), res, np.array((0.,0.)).reshape(1,2)))
+    return out[np.argsort(out.T[1])]
 
 def prc(cutoff, scores, y):
     """ Compute Precision, Recall for a given Threshold """
-    preds = (scores > cutoff).astype(int)
-    pre = sum(preds * y) / sum(preds)
-    rec = sum(preds * y) / sum(y)
-    return np.array((pre, rec))
+    preds = (scores >= cutoff).astype(int)
+    return ClassificationMetric(preds, y).prc()
+
+def prc_curve(scores, y, logrange = True):
+    if logrange:
+        lbub = np.quantile(np.log(scores), (0.01, 0.99))
+        space = np.exp(np.linspace(*lbub))
+    else:
+        lbub = np.quantile(scores, (0.01, 0.99))
+        space = np.linspace(*lbub)
+    res = np.array(list(map(prc, space, repeat(scores), repeat(y))))
+    out = np.vstack((np.array((0.,1.)).reshape(1,2), res, np.array((1.,0.)).reshape(1,2)))
+    return out[np.argsort(out.T[1])]
 
 class Anomaly(object):
     def isolation_forest(self):
@@ -49,39 +92,15 @@ class Anomaly(object):
 
     def get_auroc(self):
         scores = self.get_scores()
-        res = np.array(list(map(self.generate_roc, scores.T))) # this should be nExp * 50 * 2..
+        res = np.array(list(map(roc_curve, scores.T, repeat(self.y))))
         auc = np.array(list(map(lambda x: trapezoid(*x.T), res)))
         return auc
 
     def get_auprc(self):
         scores = self.get_scores()
-        res = np.array(list(map(self.generate_prc, scores.T))) # this should be nExp * 50 * 2..
+        res = np.array(list(map(prc_curve, scores.T, repeat(self.y))))
         auc = np.array(list(map(lambda x: trapezoid(*x.T), res)))
         return auc
-
-    def generate_roc(self, scores, logrange = True):
-        if logrange:
-            lbub = np.quantile(np.log(scores), (0.25, 0.99))
-            space = np.exp(np.linspace(*lbub))
-        else:
-            lbub = np.quantile(scores, (0.25, 0.98))
-            space = np.linspace(*lbub)
-
-        res = np.array(list(map(roc, space, repeat(scores), repeat(self.y))))
-        out = np.vstack((np.array((1.,1.)).reshape(1,2), res, np.array((0.,0.)).reshape(1,2)))
-        return np.flip(out, axis = 0)
-
-    def generate_prc(self, scores, logrange = True):
-        if logrange:
-            lbub = np.quantile(np.log(scores), (0.25, 0.99))
-            space = np.exp(np.linspace(*lbub))
-        else:
-            lbub = np.quantile(scores, (0.25, 0.98))
-            space = np.linspace(*lbub)
-
-        res = np.array(list(map(prc, space, repeat(scores), repeat(self.y))))
-        out = np.vstack((np.array((0.,1.)).reshape(1,2), res, np.array((1.,0.)).reshape(1,2)))
-        return np.flip(out, axis = 0)
 
     def __init__(self, path_x, path_y): #, path_results):
         self.X = pd.read_csv(path_x).values
@@ -98,5 +117,11 @@ if __name__ == '__main__':
         Path('./datasets/ad_pima_x.csv', './datasets/ad_pima_y.csv'),
         Path('./datasets/ad_satellite_x.csv', './datasets/ad_satellite_y.csv'),
         ]
+    auroc = np.array([Anomaly(*path).get_auroc() for path in paths])
+    auprc = np.array([Anomaly(*path).get_auprc() for path in paths])
+    print('AuROC')
+    print(auroc)
+    print('AuPRC')
+    print(auprc)
 
 # EOF

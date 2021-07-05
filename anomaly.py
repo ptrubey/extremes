@@ -14,7 +14,8 @@ from collections import defaultdict
 from energy import limit_cpu, hypercube_distance_unsummed
 from data import Data_From_Raw
 from postpred_loss import PostPredLoss, Prediction_Gammas, Results
-from argparser import argparser_ad as argparser
+from raw_anomaly import Anomaly
+# from argparser import argparser_ad as argparser
 
 class AnomalyDetector(PostPredLoss):
     """ Implements anomaly detection algorithms; uses Linf """
@@ -122,7 +123,18 @@ class AnomalyDetector(PostPredLoss):
 
 def ResultFactory(model, path):
     class Result(Results[model], AnomalyDetector, Prediction_Gammas[model]):
+        anomaly = None
+
+        def instantiate_raw_anomaly(self, path_x, path_y):
+            self.anomaly = Anomaly(path_x, path_y)
+            return
+
+        def instantiate_raw_data(self, path):
+            self.data = Data_From_Raw(path)
+            return
+
         pass
+
     return Result(path)
 
 def plot_log_inverse_scores(scores):
@@ -136,19 +148,46 @@ def plot_log_inverse_scores_knn(scores):
     plt.show()
     return
 
+def make_result(model, result_path, path_x, path_y):
+    result = ResultFactory(model, result_path)
+    result.instantiate_raw_anomaly(path_x, path_y)
+    result.instantiate_data(path_x)
+    return result
+
 if __name__ == '__main__':
-    args = argparser()
-    model = os.path.split(os.path.split(args.model_path)[0])[1]
-    result = ResultFactory(model, args.model_path)
-    result.instantiate_data(args.data_path, decluster=True)
+    # args = argparser()
+    # model = os.path.split(os.path.split(args.model_path)[0])[1]
+    # result = ResultFactory(model, args.model_path)
+    # result.instantiate_data(args.data_path, decluster=True)
+    #
+    # scores_c = result.scoring_cones()
+    # scores_r = result.scoring_pdr()
+    # scores_p = result.scoring_pdp()
+    # scores_k = result.scoring_knn()
 
-    scores_c = result.scoring_cones()
-    scores_r = result.scoring_pdr()
-    scores_p = result.scoring_pdp()
-    scores_k = result.scoring_knn()
+    models = ['dphprg','mhprg','dphprg','dphprg','dphprg']
+    model_paths = [
+        './ad/cardio/dphprg/results_2_1e-1.db',
+        './ad/cover/mhprg/results_50.db',
+        './ad/mammography/dphprg/results_2_1e-1.db',
+        './ad/pima/dphprg/results_2_1e-1.db',
+        './ad/satellite/dphprg/results_2_1e-1.db',
+        ]
+    paths_x = [
+        './datasets/ad_cardio_x.csv',
+        './datasets/ad_cover_x.csv',
+        './datasets/ad_mammography_x.csv',
+        './datasets/ad_pima_x.csv',
+        './datasets/ad_satellite_x.csv',
+        ]
+    paths_y = [
+        './datasets/ad_cardio_y.csv',
+        './datasets/ad_cover_y.csv',
+        './datasets/ad_mammography_y.csv',
+        './datasets/ad_pima_y.csv',
+        './datasets/ad_satellite_y.csv',
+        ]
 
-
-
-    pass
+    results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y)]
 
 # EOF
