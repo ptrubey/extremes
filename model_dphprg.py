@@ -339,13 +339,15 @@ class Chain(object):
         df_alpha.to_sql('alphas', conn, index = False)
         df_beta.to_sql('betas', conn, index = False)
         df_eta.to_sql('etas', conn, index = False)
-        df_r.to_sql('rs', conn, index = False)
         try:
             df_delta.to_sql('deltas', conn, index = False)
+            df_r.to_sql('rs', conn, index = False)
         except sql.OperationalError:
             deltas_dft = pd.DataFrame({'delta' : deltas.reshape(-1)})
+            rs_dft = pd.DataFrame({'r' : rs.reshape(-1)})
             deltas_dft.to_sql('deltas', conn, index = False)
-        # Commit and Close
+            rs_dft.to_sql('rs', conn, index = False)
+
         conn.commit()
         conn.close()
         pass
