@@ -55,7 +55,7 @@ class ChainAD(object):
         alpha = uniform(0.1, a0, size = (self.nMix, self.nCol)) + gamma(1, size = (self.nMix, self.nCol))
         beta  = uniform(0.2, b0, size = (self.nMix, self.nCol)) + gamma(1, size = (self.nMix, self.nCol))
 
-        a_alpha = np.roll(alpha, 1, axis = 1) * 1.5 # anomalies are bigger...
+        a_alpha = np.roll(alpha, 1, axis = 1)
         a_beta  = np.roll(beta, 1, axis = 1)
 
         delta = choice(self.nMix, size = int(self.nSamp * (1 - pa)), p = p)
@@ -66,14 +66,18 @@ class ChainAD(object):
 
         Gnew = np.vstack((gnew, a_gnew))
         Ynew = np.array([0] * gnew.shape[0] + [1] * a_gnew.shape[0], dtype = int)
-        return Gnew, Ynew
+
+        o = np.choice(self.nSamp, self.nSamp, replace = False)
+        return Gnew[o], Ynew[o]
 
     def write_to_disk(self, path, nCol):
         if not os.path.exists(path):
             os.mkdir(path)
 
         V = data.euclidean_to_hypercube(self.G.T[:nCol].T)
-        Z = (V.T * pareto(1, size = self.nSamp)).T
+        R = pareto(1, size = self.nSamp) * (np.ones(self.nSamp) + 0.3 * self.y)
+
+        Z = (V.T * R).T
 
         Z_df = pd.DataFrame(Z, columns = ['Z_{}'.format(i) for i in range(nCol)])
         y_df = pd.DataFrame({'y' : self.y})
