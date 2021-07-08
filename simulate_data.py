@@ -67,7 +67,7 @@ class ChainAD(object):
         Gnew = np.vstack((gnew, a_gnew))
         Ynew = np.array([0] * gnew.shape[0] + [1] * a_gnew.shape[0], dtype = int)
 
-        o = np.choice(self.nSamp, self.nSamp, replace = False)
+        o = choice(self.nSamp, self.nSamp, replace = False)
         return Gnew[o], Ynew[o]
 
     def write_to_disk(self, path, nCol):
