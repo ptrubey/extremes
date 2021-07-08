@@ -158,6 +158,23 @@ class Data(data.Data):
         self.nDat, self.nCol = self.V.shape
         return
 
+class DataAD(data.Data):
+    def read_data(self, path):
+        self.Z = pd.read_csv(path).values
+        self.R = self.Z.max(axis = 1)
+        self.V = (self.Z.T / self.R).T
+        self.S = data.euclidean_to_simplex(self.V)
+        self.A = data.euclidean_to_angular(self.V)
+        self.Yl = data.angular_to_euclidean(self.A)
+        self.Vi = self.cast_to_cube(self.A)
+        self.pVi = self.probit(self.Vi)
+        return
+
+    def __init__(self, path):
+        self.read_data(path)
+        self.nDat, self.nCol = self.V.shape
+        return
+
 if __name__ == '__main__':
     # nCols = [3, 6, 12, 20]
     # nMixs = [3, 6,  9, 12]
@@ -170,13 +187,14 @@ if __name__ == '__main__':
     #         pass
     #     pass
 
-    nCols = [5,10]
-    nMixs = [5,10]
-
-    for nMix in nMixs:
-        chain = ChainAD(max(nCols), nMix, np.ones(nMix) / nMix, 0.05, 800)
-        for nCol in nCols:
-            chain.write_to_disk('./simulated_ad', nCol)
+    # nCols = [5,10]
+    # nMixs = [5,10]
+    #
+    # for nMix in nMixs:
+    #     chain = ChainAD(max(nCols), nMix, np.ones(nMix) / nMix, 0.05, 800)
+    #     for nCol in nCols:
+    #         chain.write_to_disk('./simulated_ad', nCol)
+    pass
 
 
 
