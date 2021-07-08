@@ -1,4 +1,4 @@
-from argparser import argparser_generic_ad as argparser
+from argparser import argparser_generic as argparser
 from simulate_data import DataAD
 from projgamma import GammaPrior
 from pandas import read_csv
