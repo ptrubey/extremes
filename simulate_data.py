@@ -191,13 +191,13 @@ if __name__ == '__main__':
     #         pass
     #     pass
 
-    # nCols = [5,10]
-    # nMixs = [5,10]
-    #
-    # for nMix in nMixs:
-    #     chain = ChainAD(max(nCols), nMix, np.ones(nMix) / nMix, 0.05, 800)
-    #     for nCol in nCols:
-    #         chain.write_to_disk('./simulated_ad', nCol)
+    nCols = [5,10]
+    nMixs = [5,10]
+
+    for nMix in nMixs:
+        chain = ChainAD(max(nCols), nMix, np.ones(nMix) / nMix, 0.05, 800)
+        for nCol in nCols:
+            chain.write_to_disk('./simulated_ad', nCol)
     pass
 
 
