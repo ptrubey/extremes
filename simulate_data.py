@@ -3,7 +3,7 @@ import pandas as pd
 import sqlite3 as sql
 import os
 import data
-from numpy.random import gamma, choice, uniform
+from numpy.random import gamma, choice, uniform, pareto
 
 class Chain(object):
     def simulate_data(self, nCol, nMix, p, nSamp, a0 = 4., b0 = 2.):
@@ -48,6 +48,46 @@ class Chain(object):
     def __init__(self, nCol, nMix, p, nDat, a0 = 1.8, b0 = 1.2):
         self.nCol, self.nMix, self.nDat = nCol, nMix, nDat
         self.G, self.alpha, self.beta, self.delta, self.p = self.simulate_data(nCol, nMix, p, nDat, a0, b0)
+        return
+
+class ChainAD(object):
+    def simulate_data(self, p, pa, a0 = 4., b0 = 2.):
+        alpha = uniform(0.1, a0, size = (self.nMix, self.nCol)) + gamma(1, size = (self.nMix, self.nCol))
+        beta  = uniform(0.2, b0, size = (self.nMix, self.nCol)) + gamma(1, size = (self.nMix, self.nCol))
+
+        a_alpha = np.roll(alpha, 1, axis = 1) * 1.5 # anomalies are bigger...
+        a_beta  = np.roll(beta, 1, axis = 1)
+
+        delta = choice(self.nMix, size = int(self.nSamp * (1 - pa)), p = p)
+        a_delta = choice(self.nMix, size = int(self.nSamp * pa), p = p)
+
+        gnew = gamma(alpha[delta], scale = 1 / beta[delta], size = (delta.shape[0], self.nCol))
+        a_gnew = gamma(a_alpha[a_delta], scale = 1 / a_beta[a_delta], size = (a_delta.shape[0], self.nCol))
+
+        Gnew = np.vstack((gnew, a_gnew))
+        Ynew = np.array([0] * gnew.shape[0] + [1] * a_gnew.shape[0], dtype = int)
+        return Gnew, Ynew
+
+    def write_to_disk(self, path, nCol):
+        if not os.path.exists(path):
+            os.mkdir(path)
+
+        V = data.euclidean_to_hypercube(self.G.T[:nCol].T)
+        Z = (V.T * pareto(1, size = self.nSamp)).T
+
+        Z_df = pd.DataFrame(Z, columns = ['Z_{}'.format(i) for i in range(nCol)])
+        y_df = pd.DataFrame({'y' : self.y})
+
+        z_path = os.path.join(path, 'ad_sim_m{}_c{}_x.csv'.format(self.nMix, nCol))
+        y_path = os.path.join(path, 'ad_sim_m{}_c{}_y.csv'.format(self.nMix, nCol))
+
+        Z_df.to_csv(z_path, index = False)
+        y_df.to_csv(y_path, index = False)
+        return
+
+    def __init__(self, nCol, nMix, p, pa, nDat, a0 = 1.8, b0 = 1.2):
+        self.nCol, self.nMix, self.nSamp = nCol, nMix, nDat
+        self.G, self.y = self.simulate_data(p, pa, a0, b0)
         return
 
 class Samples(object):
@@ -119,15 +159,25 @@ class Data(data.Data):
         return
 
 if __name__ == '__main__':
-    nCols = [3, 6, 12, 20]
-    nMixs = [3, 6,  9, 12]
+    # nCols = [3, 6, 12, 20]
+    # nMixs = [3, 6,  9, 12]
+    #
+    # for nMix in nMixs:
+    #     chain = Chain(nCol = max(nCols), nMix = nMix, p = np.ones(nMix) / nMix, nDat = 500)
+    #     for nCol in nCols:
+    #         print('mix {} col {}'.format(nMix, nCol))
+    #         chain.write_to_disk('./simulated/sim_c{}_m{}/data.db'.format(nCol, nMix), nCol)
+    #         pass
+    #     pass
+
+    nCols = [5,10]
+    nMixs = [5,10]
 
     for nMix in nMixs:
-        chain = Chain(nCol = max(nCols), nMix = nMix, p = np.ones(nMix) / nMix, nDat = 500)
+        chain = ChainAD(max(nCols), nMix, np.ones(nMix) / nMix, 0.05, 800)
         for nCol in nCols:
-            print('mix {} col {}'.format(nMix, nCol))
-            chain.write_to_disk('./simulated/sim_c{}_m{}/data.db'.format(nCol, nMix), nCol)
-            pass
-        pass
+            chain.write_to_disk('./simulated_ad', nCol)
+
+
 
 # EOF

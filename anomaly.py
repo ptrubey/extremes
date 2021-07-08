@@ -8,13 +8,14 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import pairwise_distances
 from multiprocessing import Pool, cpu_count
 from scipy.stats import gmean
+from scipy.integrate import trapezoid
 from itertools import repeat
 from collections import defaultdict
 
 from energy import limit_cpu, hypercube_distance_unsummed
 from data import Data_From_Raw
 from postpred_loss import PostPredLoss, Prediction_Gammas, Results
-from raw_anomaly import Anomaly
+from raw_anomaly import Anomaly, roc_curve, prc_curve
 # from argparser import argparser_ad as argparser
 
 class AnomalyDetector(PostPredLoss):
@@ -88,29 +89,35 @@ class AnomalyDetector(PostPredLoss):
 
     def scoring_pdr(self, scalar = 1., base = np.e):
         pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
-        scores = (base ** (-scalar * pdrm).T / self.data.R).T
-        return scores
+        inv_scores = (base ** (-scalar * pdrm).T / self.data.R).T
+        return 1 / inv_scores
 
     def scoring_pdr_angular(self, scalar = 1., base = np.e):
         pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
-        scores = base ** (-scalar * pdrm)
-        return scores
+        inv_scores = base ** (-scalar * pdrm)
+        return 1 / inv_scores
 
     def scoring_pdp(self, scalar = 1., base = np.e, n_per_sample = 10):
         pdp = self.pairwise_distance_to_postpred(n_per_sample)
         pdpm = gmean(pdp, axis = 1)
-        scores = base ** (-scalar * pdpm)
-        return scores
+        inv_scores = (base ** (-scalar * pdpm).T / self.data.R).T
+        return 1 / inv_scores
+
+    def scoring_pdp_angular(self, scalar = 1., base = np.e, n_per_sample = 10):
+        pdp = self.pairwise_distance_to_postpred(n_per_sample)
+        pdpm = gmean(pdp, axis = 1)
+        inv_scores = base ** (-scalar * pdpm)
+        return 1 / inv_scores
 
     def scoring_knn(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
         knn = self.knn_distance(k, n_per_sample)
-        scores = (base**(- scalar * knn).T / self.data.R).T
-        return scores
+        inv_scores = (base**(- scalar * knn).T / self.data.R).T
+        return 1 / inv_scores
 
     def scoring_knn_angular(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
         knn = self.knn_distance(k, n_per_sample)
-        scores = base**(- scalar * knn)
-        return scores
+        inv_scores = base**(- scalar * knn)
+        return 1 / inv_scores
 
     def instantiate_data(self, path, quantile = 0.95, decluster = True):
         """ path: raw data path """
@@ -118,6 +125,37 @@ class AnomalyDetector(PostPredLoss):
         self.data = Data_From_Raw(raw, decluster = decluster, quantile = quantile)
         self.postpred = self.generate_posterior_predictive_hypercube(10)
         return
+
+    def get_scores(self, scalar = 1., base = np.e, epsilon = 0.5):
+        pdr = self.scoring_pdr(scalar, base)
+        pdra = self.scoring_pdr_angular(scalar, base)
+        pdp = self.scoring_pdp(scalar, base)
+        pdpa = self.scoring_pdp_angular(scalar, base)
+        knn = self.scoring_knn(scalar, base).T[-1]
+        knna = self.scoring_knn_angular(scalar, base).T[-1]
+        cone = self.scoring_cones(epsilon)
+        conea = self.scoring_cones_angular(epsilon)
+        return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea))
+
+    def get_auroc(self, scores):
+        res = roc_curve(scores, self.anomaly.y[self.data.I[0]])
+        _res = pd.DataFrame(
+            res, columns = ('tpr','fpr'),
+            ).groupby('fpr').max().reset_index()[['tpr','fpr']].values
+        return trapezoid(*_res.T)
+
+    def get_auprc(self, scores):
+        res = prc_curve(scores, self.anomaly.y[self.data.I[0]])
+        _res = pd.DataFrame(
+            res, columns = ('ppv','tpr'),
+            ).groupby('tpr').max().reset_index()[['ppv','tpr']].values
+        return trapezoid(*_res.T)
+
+    def get_metrics(self, scalar = 1., base = np.e, epsilon = 0.5):
+        scores = self.get_scores(scalar, base, epsilon)
+        auroc = np.array(list(map(self.get_auroc, scores)))
+        auprc = np.array(list(map(self.get_auprc, scores)))
+        return np.array((auroc, auprc))
 
     pass
 
@@ -184,6 +222,6 @@ if __name__ == '__main__':
         ]
     quantiles = [0.95, 0.95, 0.95, 0.95, 0.97]
     decluster = [False] * 5
-    results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y)]
+    results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y, quantiles, decluster)]
 
 # EOF

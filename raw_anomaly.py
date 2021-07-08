@@ -14,13 +14,13 @@ from itertools import repeat
 class ClassificationMetric(object):
     @property
     def tpr(self):
-        return self.tp / (self.tp + self.fn)
+        return self.tp / (self.tp + self.fn + 1e-10)
     @property
     def fpr(self):
-        return self.fp / (self.fp + self.tn)
+        return self.fp / (self.fp + self.tn + 1e-10)
     @property
     def ppv(self):
-        return self.tp / (self.tp + self.fp)
+        return self.tp / (self.tp + self.fp + 1e-10)
 
     def roc(self):
         return np.array((self.tpr, self.fpr))
@@ -123,5 +123,15 @@ if __name__ == '__main__':
     print(auroc)
     print('AuPRC')
     print(auprc)
+    colnames = ['SVM','LOF','IF']
+    rownames = ['cardio','cover','mammography','pima','satellite']
+
+    auroc_df = pd.DataFrame(auroc, columns = colnames)
+    auroc_df['data'] = rownames
+    auprc_df = pd.DataFrame(auprc, columns = colnames)
+    auroc_df['data'] = rownames
+
+    auroc_df.to_csv('./ad/auroc.csv')
+    auprc_Df.to_csv('./ad/auprc.csv')
 
 # EOF
