@@ -172,7 +172,7 @@ class DataAD(data.Data):
         self.Yl = data.angular_to_euclidean(self.A)
         self.Vi = self.cast_to_cube(self.A)
         self.pVi = self.probit(self.Vi)
-        self.I = (np.ones(self.V.shape[0], dtype = bool),)
+        self.I = (np.arange(Z.shape[0]),)
         return
 
     def __init__(self, path):
