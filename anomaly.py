@@ -236,7 +236,7 @@ if __name__ == '__main__':
     # decluster = [False] * 5
     # results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y, quantiles, decluster)]
 
-    models = ['dphprg']
+    models = repeat('dphprg')
     model_paths = [
         './simulated_ad/m5_c5/dphprg/results_2_1e-1.db',
         './simulated_ad/m5_c10/dphprg/results_2_1e-1.db',
