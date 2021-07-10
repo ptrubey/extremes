@@ -16,6 +16,7 @@ from energy import limit_cpu, hypercube_distance_unsummed
 from data import Data_From_Raw
 from postpred_loss import PostPredLoss, Prediction_Gammas, Results
 from raw_anomaly import Anomaly, roc_curve, prc_curve
+from simulate_data import DataAD
 # from argparser import argparser_ad as argparser
 
 class AnomalyDetector(PostPredLoss):
@@ -126,6 +127,11 @@ class AnomalyDetector(PostPredLoss):
         self.postpred = self.generate_posterior_predictive_hypercube(10)
         return
 
+    def instantiate_data_ad(self, path):
+        self.data = DataAD(path)
+        self.postpred = self.generate_posterior_predictive_hypercube(10)
+        return
+
     def get_scores(self, scalar = 1., base = np.e, epsilon = 0.5):
         pdr = self.scoring_pdr(scalar, base)
         pdra = self.scoring_pdr_angular(scalar, base)
@@ -188,6 +194,12 @@ def make_result(model, result_path, path_x, path_y, quantile, decluster):
     result.instantiate_data(path_x, quantile, decluster)
     return result
 
+def make_result_ad(model, result_path, path_x, path_y):
+    result = ResultFactory(model, result_path)
+    result.instantiate_raw_anomaly(path_x, path_y)
+    result.instantiate_data_ad(path_x)
+    return result
+
 if __name__ == '__main__':
     # args = argparser()
     # model = os.path.split(os.path.split(args.model_path)[0])[1]
@@ -198,30 +210,52 @@ if __name__ == '__main__':
     # scores_r = result.scoring_pdr()
     # scores_p = result.scoring_pdp()
     # scores_k = result.scoring_knn()
-    models = ['dphprg','mhprg','dphprg','dphprg','dphprg']
+    # models = ['dphprg','mhprg','dphprg','dphprg','dphprg']
+    # model_paths = [
+    #     './ad/cardio/dphprg/results_2_1e-1.db',
+    #     './ad/cover/mhprg/results_50.db',
+    #     './ad/mammography/dphprg/results_2_1e-1.db',
+    #     './ad/pima/dphprg/results_2_1e-1.db',
+    #     './ad/satellite/dphprg/results_2_1e-1.db',
+    #     ]
+    # paths_x = [
+    #     './datasets/ad_cardio_x.csv',
+    #     './datasets/ad_cover_x.csv',
+    #     './datasets/ad_mammography_x.csv',
+    #     './datasets/ad_pima_x.csv',
+    #     './datasets/ad_satellite_x.csv',
+    #     ]
+    # paths_y = [
+    #     './datasets/ad_cardio_y.csv',
+    #     './datasets/ad_cover_y.csv',
+    #     './datasets/ad_mammography_y.csv',
+    #     './datasets/ad_pima_y.csv',
+    #     './datasets/ad_satellite_y.csv',
+    #     ]
+    # quantiles = [0.95, 0.95, 0.95, 0.95, 0.97]
+    # decluster = [False] * 5
+    # results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y, quantiles, decluster)]
+
+    models = ['dphprg']
     model_paths = [
-        './ad/cardio/dphprg/results_2_1e-1.db',
-        './ad/cover/mhprg/results_50.db',
-        './ad/mammography/dphprg/results_2_1e-1.db',
-        './ad/pima/dphprg/results_2_1e-1.db',
-        './ad/satellite/dphprg/results_2_1e-1.db',
+        './simulated_ad/m5_c5/dphprg/results_2_1e-1.db',
+        './simulated_ad/m5_c10/dphprg/results_2_1e-1.db',
+        './simulated_ad/m10_c5/dphprg/results_2_1e-1.db',
+        './simulated_ad/m10_c10/dphprg/results_2_1e-1.db',
         ]
     paths_x = [
-        './datasets/ad_cardio_x.csv',
-        './datasets/ad_cover_x.csv',
-        './datasets/ad_mammography_x.csv',
-        './datasets/ad_pima_x.csv',
-        './datasets/ad_satellite_x.csv',
+        './simulated_ad/ad_sim_m5_c5_x.csv',
+        './simulated_ad/ad_sim_m5_c10_x.csv',
+        './simulated_ad/ad_sim_m10_c5_x.csv',
+        './simulated_ad/ad_sim_m10_c10_x.csv',
         ]
     paths_y = [
-        './datasets/ad_cardio_y.csv',
-        './datasets/ad_cover_y.csv',
-        './datasets/ad_mammography_y.csv',
-        './datasets/ad_pima_y.csv',
-        './datasets/ad_satellite_y.csv',
+        './simulated_ad/ad_sim_m5_c5_y.csv',
+        './simulated_ad/ad_sim_m5_c10_y.csv',
+        './simulated_ad/ad_sim_m10_c5_y.csv',
+        './simulated_ad/ad_sim_m10_c10_y.csv',
         ]
-    quantiles = [0.95, 0.95, 0.95, 0.95, 0.97]
-    decluster = [False] * 5
-    results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y, quantiles, decluster)]
+    results = [make_result_ad(*x) for x in zip(models, model_paths, paths_x, paths_y)]
+
 
 # EOF
