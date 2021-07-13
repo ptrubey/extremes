@@ -89,13 +89,19 @@ class AnomalyDetector(PostPredLoss):
         return scores
 
     def scoring_pdr(self, scalar = 1., base = np.e):
+        """ Inverse of average density of posterior predictive distribution * probability of seeing
+        observation as far out as that."""
         pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
-        inv_scores = (base ** (-scalar * pdrm).T / self.data.R).T
+        n, p = self.data.V.shape
+        # inv_scores = (base ** (-scalar * pdrm).T / self.data.R).T
+        inv_scores = 1 / (pdrm ** (p-1)) / self.data.R
         return 1 / inv_scores
 
     def scoring_pdr_angular(self, scalar = 1., base = np.e):
         pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
-        inv_scores = base ** (-scalar * pdrm)
+        n, p = self.data.V.shape
+        # inv_scores = base ** (-scalar * pdrm)
+        inv_scores = 1 / (pdrm ** (p-1))
         return 1 / inv_scores
 
     def scoring_pdp(self, scalar = 1., base = np.e, n_per_sample = 10):
@@ -111,8 +117,10 @@ class AnomalyDetector(PostPredLoss):
         return 1 / inv_scores
 
     def scoring_knn(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
-        knn = self.knn_distance(k, n_per_sample)
-        inv_scores = (base**(- scalar * knn).T / self.data.R).T
+        knn = self.knn_distance(k, n_per_sample).T[-1]
+        n, p = self.data.V.shape
+        # inv_scores = (base**(- scalar * knn).T / self.data.R).T
+        inv_scores =  (k / n) / (np.pi**((p-1)/2)/np.euler_gamma((p-1)/2 + 1) * knn**(p-1)) / self.data.R
         return 1 / inv_scores
 
     def scoring_knn_angular(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
