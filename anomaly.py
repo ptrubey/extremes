@@ -125,8 +125,9 @@ class AnomalyDetector(PostPredLoss):
         return 1 / inv_scores
 
     def scoring_knn_angular(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
-        knn = self.knn_distance(k, n_per_sample)
-        inv_scores = base**(- scalar * knn)
+        knn = self.knn_distance(k, n_per_sample).T[-1]
+        n, p = self.data.V.shape
+        inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
 
     def instantiate_data(self, path, quantile = 0.95, decluster = True):
@@ -146,7 +147,7 @@ class AnomalyDetector(PostPredLoss):
         pdra = self.scoring_pdr_angular(scalar, base)
         pdp = self.scoring_pdp(scalar, base)
         pdpa = self.scoring_pdp_angular(scalar, base)
-        knn = self.scoring_knn(scalar, base).T[-1]
+        knn = self.scoring_knn(scalar, base)
         knna = self.scoring_knn_angular(scalar, base).T[-1]
         cone = self.scoring_cones(epsilon)
         conea = self.scoring_cones_angular(epsilon)
