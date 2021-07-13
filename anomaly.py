@@ -148,7 +148,7 @@ class AnomalyDetector(PostPredLoss):
         pdp = self.scoring_pdp(scalar, base)
         pdpa = self.scoring_pdp_angular(scalar, base)
         knn = self.scoring_knn(scalar, base)
-        knna = self.scoring_knn_angular(scalar, base).T[-1]
+        knna = self.scoring_knn_angular(scalar, base)
         cone = self.scoring_cones(epsilon)
         conea = self.scoring_cones_angular(epsilon)
         return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea))
