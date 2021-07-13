@@ -9,6 +9,7 @@ from sklearn.metrics import pairwise_distances
 from multiprocessing import Pool, cpu_count
 from scipy.stats import gmean
 from scipy.integrate import trapezoid
+from scipy.special import gamma as gamma_func
 from itertools import repeat
 from collections import defaultdict
 
@@ -120,7 +121,7 @@ class AnomalyDetector(PostPredLoss):
         knn = self.knn_distance(k, n_per_sample).T[-1]
         n, p = self.data.V.shape
         # inv_scores = (base**(- scalar * knn).T / self.data.R).T
-        inv_scores =  (k / n) / (np.pi**((p-1)/2)/np.euler_gamma((p-1)/2 + 1) * knn**(p-1)) / self.data.R
+        inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1)) / self.data.R
         return 1 / inv_scores
 
     def scoring_knn_angular(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
