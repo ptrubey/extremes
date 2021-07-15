@@ -41,7 +41,7 @@ def gen_ppl_generation(data_path):
 if __name__ == '__main__':
     args = argparser()
     paths = glob.glob(os.path.join(args.path,'sim_*'))
-    model_types = ['dphpg','dphprg','dphprgln','dppn']
+    model_types = ['dphpg','dphprg','dphprgln','dppn','vhpg']
     models = []
     gens   = []
 
