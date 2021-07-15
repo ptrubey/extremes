@@ -2,6 +2,7 @@ import model_vd as vd
 import model_vgd as vgd
 import model_vpg as vpg
 import model_vprg as vprg
+import model_vhpg as vhpg
 
 import model_md as md
 import model_mgd as mgd
@@ -27,6 +28,7 @@ Results = {
     'vgd'   : vgd.Result,
     'vpg'   : vpg.Result,
     'vprg'  : vprg.Result,
+    'vhpg'  : vhpg.Result,
     'md'    : md.Result,
     'mgd'   : mgd.Result,
     'mpg'   : mpg.Result,
@@ -47,6 +49,7 @@ Chains = {
     'vgd'   : vgd.Chain,
     'vpg'   : vpg.Chain,
     'vprg'  : vprg.Chain,
+    'vhpg'  : vhpg.Chain,
     'md'    : md.Chain,
     'mgd'   : mgd.Chain,
     'mpg'   : mpg.Chain,

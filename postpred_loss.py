@@ -173,7 +173,7 @@ for model in ['mgd','dpgd','mpg','dppg','dphpg','mhpg']:
     Prediction_Gammas[model] = Prediction_Gamma
 for model in ['vd','vprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla_Restricted
-for model in ['vgd','vpg']:
+for model in ['vgd','vpg','vhpg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla
 for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter_Restricted
