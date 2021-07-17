@@ -32,12 +32,15 @@ def limit_cpu():
         pass
     return
 
-def energy_score(predictions, targets):
+def energy_score_inner(predictions, targets):
     pool = Pool(processes = cpu_count(), initializer = limit_cpu)
     res1 = pool.map(prediction_pairwise_distance, predictions)
     res2 = pool.map(target_pairwise_distance, zip(predictions, targets))
     pool.close()
-    return np.array(list(res2)).mean() - 0.5 * np.array(list(res1)).mean()
+    return np.array(list(res2)) - 0.5 * np.array(list(res1))
+
+def energy_score(predictions, targets):
+    return energy_score_inner(predictions, targets).mean()
 
 def intrinsic_energy_score(dataset):
     res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
@@ -71,6 +74,20 @@ def knn_kl_divergence(empirical, postpred, k = 10, metric = hcdev):
 
     kld = np.log(m/n) + p * (np.log(d2).mean(axis = 0) - np.log(d1).mean(axis = 0))
     return kld
+
+def postpred_loss_single(predicted, empirical):
+    """
+    predicted:  (nSamp x nDat x nCol)
+    empirical:  (nDat x nCol)
+    """
+    pmean = predicted.mean(axis = 0)
+    pdiff = pmean - empirical
+    bias  = (pdiff * pdiff).sum(axis = 1)
+    pdevi = predicted - pmean
+    pvari = np.empty(self.nDat)
+    for d in range(self.nDat):
+        pvari[d] = np.trace(np.cov(pdevi[:,d].T))
+    return bias + pvari
 
 if __name__ == '__main__':
     pass

@@ -13,7 +13,7 @@ from scipy.special import gamma as gamma_func
 from itertools import repeat
 from collections import defaultdict
 
-from energy import limit_cpu, hypercube_distance_unsummed
+from energy import limit_cpu, hypercube_distance_unsummed, postpred_loss_single, energy_score_inner
 from data import Data_From_Raw
 from postpred_loss import PostPredLoss, Prediction_Gammas, Results
 from raw_anomaly import Anomaly, roc_curve, prc_curve
@@ -130,6 +130,26 @@ class AnomalyDetector(PostPredLoss):
         inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
 
+    def scoring_ppl(self):
+        predicted = self.Linf(self.prediction())
+        ppl = postpred_loss_single(predicted, self.data.V)
+        return ppl * self.data.R
+
+    def scoring_ppl_angular(self):
+        predicted = self.Linf(self.prediction())
+        ppl = postpred_loss_single(predicted, self.data.V)
+        return ppl
+
+    def scoring_es(self):
+        predicted = self.Linf(self.prediction())
+        es = energy_score_inner(np.moveaxis(predicted, 0, 1), self.data.V)
+        return es * self.data.R
+
+    def scoring_es_angular(self):
+        predicted = self.Linf(self.prediction())
+        es = energy_score_inner(np.moveaxis(predicted, 0, 1), self.data.V)
+        return es
+
     def instantiate_data(self, path, quantile = 0.95, decluster = True):
         """ path: raw data path """
         raw = pd.read_csv(path)
@@ -151,7 +171,11 @@ class AnomalyDetector(PostPredLoss):
         knna = self.scoring_knn_angular(scalar, base)
         cone = self.scoring_cones(epsilon)
         conea = self.scoring_cones_angular(epsilon)
-        return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea))
+        ppl = self.scoring_ppl()
+        ppla = self.scoring_ppl_angular()
+        es  = self.scoring_es()
+        esa = self.scoring_es_angular()
+        return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea, ppl, ppla, es, esa))
 
     def get_auroc(self, scores):
         res = roc_curve(scores, self.anomaly.y[self.data.I[0]])
