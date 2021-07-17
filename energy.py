@@ -84,8 +84,8 @@ def postpred_loss_single(predicted, empirical):
     pdiff = pmean - empirical
     bias  = (pdiff * pdiff).sum(axis = 1)
     pdevi = predicted - pmean
-    pvari = np.empty(self.nDat)
-    for d in range(self.nDat):
+    pvari = np.empty(empirical.shape[0])
+    for d in range(empirical.shape[0]):
         pvari[d] = np.trace(np.cov(pdevi[:,d].T))
     return bias + pvari
 
