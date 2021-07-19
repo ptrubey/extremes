@@ -5,7 +5,7 @@ from collections import defaultdict
 from itertools import repeat
 from energy import limit_cpu
 from data import Data_From_Raw, scale_pareto, descale_pareto
-from argparser import argparser_cs as argparser
+# from argparser import argparser_cs as argparser
 import models, models_mpi
 
 def condsurv_at_w(args):
@@ -103,26 +103,56 @@ class Conditional_Survival(object):
 
 Results = {**models.Results, **models_mpi.Results}
 
-def ResultFactory(model, raw_path):
-    class Result(Results[model[0]], Conditional_Survival):
+def ResultFactory(model_type, fitted_path, raw_path):
+    class Result(Results[model_type], Conditional_Survival):
         pass
 
-    result = Result(model[1])
+    result = Result(fitted_path)
     result.load_raw(raw_path)
     return result
 
 if __name__ == '__main__':
-    args = argparser()
-    model_types = sorted(Results.keys())
-    models = []
-    for model_type in model_types:
-        mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
-        for m in mm:
-            models.append((model_type, m))
+    # args = argparser()
+    # model_types = sorted(Results.keys())
+    # models = []
+    # for model_type in model_types:
+    #     mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
+    #     for m in mm:
+    #           models.append((model_type, m))
 
-    for model in models:
-        pass
+    # for model in models:
+    #     pass
+    fitted_path = "./output/dphprg/results_2_1e-1.db"
+    raw_path    = "./datasets/ivt_nov_mar.csv"
+    model_type  = "dphprg"
 
-    r = ResultFactory(models[0], args.raw_path)
+    r = ResultFactory(model_type, fitted_path, raw_path)
+
+    if not os.path.exists('./condsurv'):
+        os.mkdir('./condsurv')
+
+    rd1 = [
+        r.condsurv_1d_at_quantile(np.setdiff1d(np.arange(8), np.array(i, dtype = int)), 0.9)
+        for i in range(8)
+        ]
+    rd1_df = [pd.DataFrame(rd1i) for rd1i in rd1]
+    for i, df in enumerate(rd1_df):
+        df['column'] = i
+
+    d2s = [np.array((i,j), dtype = int) for i in range(8) for j in range(8) if j > i]
+    rd2 = [r.condsurv_2d_at_quantile(np.setdiff1d(np.arange(8), cs), 0.9) for cs in d2s]
+    rd2_df = [pd.DataFrame(rd2i) for rd2i in rd2]
+    for cols, df in zip(d2s, rd2_df):
+        df['Column1'] = cols[0]
+        df['Column2'] = cols[1]
+
+    rd1_df_ = pd.concat(rd1_df)
+    rd2_df_ = pd.concat(rd2_df)
+
+    out_path_1d = './condsurv/condsurv_ivt8_1d.csv'
+    out_path_2d = './condsurv/condsurv_ivt8_2d.csv'
+
+    rd1_df_.to_csv(out_path_1d, index = False)
+    rd2_df_.to_csv(out_path_2d, index = False)
 
 # EOF
