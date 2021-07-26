@@ -177,6 +177,10 @@ class AnomalyDetector(PostPredLoss):
         esa = self.scoring_es_angular()
         return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea, ppl, ppla, es, esa))
 
+    @property
+    def metric_names(self):
+        return ['pdr','pdra','pdp','pdpa','knn','knna','cone','conea','ppl','ppla','es','esa']
+
     def get_auroc(self, scores):
         res = roc_curve(scores, self.anomaly.y[self.data.I[0]])
         _res = pd.DataFrame(
@@ -196,6 +200,16 @@ class AnomalyDetector(PostPredLoss):
         auroc = np.array(list(map(self.get_auroc, scores)))
         auprc = np.array(list(map(self.get_auprc, scores)))
         return np.array((auroc, auprc))
+
+    def get_raw_metrics(self):
+        scores = self.anomaly.get_scores()
+        auroc = np.array(list(map(self.get_auroc, scores.T)))
+        auprc = np.array(list(map(self.get_auprc, scores.T)))
+        return np.array((auroc, auprc))
+
+    @property
+    def raw_metric_names(self):
+        return ['svm','lof','forest']
 
     pass
 
@@ -289,7 +303,26 @@ if __name__ == '__main__':
         './simulated_ad/ad_sim_m10_c5_y.csv',
         './simulated_ad/ad_sim_m10_c10_y.csv',
         ]
-    results = [make_result_ad(*x) for x in zip(models, model_paths, paths_x, paths_y)]
+    mixes = ['5','5','10','10']
+    cols  = ['5','10','5','10']
 
+    results = [make_result_ad(*x) for x in zip(models, model_paths, paths_x, paths_y)]
+    metrics = [result.get_metrics() for result in results]
+    metrics_raw = [result.get_raw_metrics() for result in results]
+
+    dfs = [pd.DataFrame(metric, columns = results[0].metric_names) for metric in metrics]
+    dfs_raw = [pd.DataFrame(metric_raw, columns = results[0].raw_metric_names) for metric_raw in metrics_raw]
+
+    for df, df_raw, nmix, ncol in zip(dfs,dfs_raw, mixes, cols):
+        df['nMix'] = nmix
+        df['nCol'] = ncol
+        df_raw['nMix'] = nmix
+        df_raw['nCol'] = ncol
+
+    df = pd.concat(dfs)
+    df_raw = pd.concat(dfs_raw)
+
+    df.to_csv('./simulated_ad/metrics.csv', index = False)
+    df_raw.to_csv('./simulated_ad/metrics_raw.csv', index = False)
 
 # EOF
