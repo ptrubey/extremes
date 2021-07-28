@@ -21,7 +21,7 @@ class ResultAddendum(object):
         H = self.generate_posterior_predictive_hypercube(n_per_sample)
         colsets = [(i,j) for i in range(self.nCol) for j in range(i)]
         Hsep = [
-            H.T[np.array(colset, dtype = np.int)].T
+            H.T[np.array(colset, dtype = np.int32)].T
             for colset in colsets
             ]
         res = list(map(chi_ij, Hsep))
@@ -60,21 +60,40 @@ def edr_generation(model):
     return edr
 
 if __name__ == '__main__':
-    args = argparser()
-    model_types = sorted(Results.keys())
+    # pass
+    # args = argparser()
+    # model_types = sorted(Results.keys())
 
-    models = []
-    for model_type in model_types:
-        model_paths = glob.glob(os.path.join(args.path, model_type, 'results_*.db'))
-        for model_path in model_paths:
-            models.append((model_type, model_path))
+    # models = []
+    # for model_type in model_types:
+    #     model_paths = glob.glob(os.path.join(args.path, model_type, 'results_*.db'))
+    #     for model_path in model_paths:
+        #     models.append((model_type, model_path))
 
-    pool = Pool(processes = 8)
-    edrs = list(pool.map(edr_generation, models))
-    pool.close()
+    # pool = Pool(processes = 8)
+    # edrs = list(pool.map(edr_generation, models))
+    # pool.close()
 
-    df = pd.DataFrame(
-        [(edr.type, edr.name, *edr.chis) for edr in edrs],
-        columns = ['type','name'] + ['chi_{}_{}'.format(*cols) for cols in edrs[0].cols]
-        )
-    df.to_csv(os.path.join(args.path, 'pairwise_extremal_dependence_coefs.csv'), index = False)
+    # df = pd.DataFrame(
+    #     [(edr.type, edr.name, *edr.chis) for edr in edrs],
+    #     columns = ['type','name'] + ['chi_{}_{}'.format(*cols) for cols in edrs[0].cols]
+    #     )
+    # df.to_csv(os.path.join(args.path, 'pairwise_extremal_dependence_coefs.csv'), index = False)
+
+    results_path_1 = './output/dphprg/results_2_1e-1.db'
+    result_1 = ResultFactory('dphprg', results_path_1)
+    cols_1, chis_1 = result_1.pairwise_chis()
+    df_1 = pd.DataFrame(cols_1, columns = ('Column1','Column2'))
+    df_1['chi'] = chis_1
+
+    results_path_2 = './output2/dphprg/results_2_1e-1.db'
+    result_2 = ResultFactory('dphprg', results_path_2)
+    cols_2, chis_2 = result_2.pairwise_chis()
+    df_2 = pd.DataFrame(cols_2, columns = ('Column1','Column2'))
+    df_2['chi'] = chis_2
+
+    df_1.to_csv('./output/extremal_dependence_coefs.csv', index = False)
+    df_2.to_csv('./output2/extremal_dependence_coefs.csv', index = False)
+
+
+# EOF
