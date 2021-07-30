@@ -4,6 +4,7 @@ import sqlite3 as sql
 import os
 import data
 from numpy.random import gamma, choice, uniform, pareto
+from data import euclidean_to_hypercube
 
 class Chain(object):
     def simulate_data(self, nCol, nMix, p, nSamp, a0 = 4., b0 = 2.):
