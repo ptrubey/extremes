@@ -24,27 +24,22 @@ def ResultFactory(model, path):
 
     return Result(path)
 
-KLDResult = namedtuple('KLDResult', 'type name kld')
+KLDResult = namedtuple('KLDResult', 'type name kld kldm')
 
 def kl_generation(model):
     try:
         result = ResultFactory(*model)
-        kldr = KLDResult(
-            model[0],
-            os.path.splitext(os.path.split(model[1])[1])[0],
-            result.kl_divergence(),
-            )
+        kld = result.kl_divergence()
+        name = os.path.splitext(os.path.split(model[1])[1])[0]
+        kldr = KLDResult(model[0], name, kld, kld.mean())
     except pd.io.sql.DatabaseError:
-        kldr = KLDResult(
-            model[0],
-            'Null',
-            np.zeros(10),
-            )
+        kldr = KLDResult(model[0], 'Null', np.zeros(10), 0.)
     return kldr
 
 if __name__ == '__main__':
     args = argparser()
-    model_types = sorted(Results.keys())
+    # model_types = sorted(Results.keys())
+    model_types = ['dphprg','dphprgln','dphpg','dppn']
 
     models = []
     for model_type in model_types:
@@ -56,8 +51,8 @@ if __name__ == '__main__':
     kldrs = pool.map(kl_generation, models)
     pool.close()
     df = pd.DataFrame(
-        [(x[0],x[1],*x[2]) for x in kldrs],
-        columns = ['type','name'] + ['k_{}'.format(i) for i in range(len(kldrs[0][2]))]
+        [(x[0],x[1],x[3],*x[2]) for x in kldrs],
+        columns = ['type','name','kldm'] + ['k_{}'.format(i) for i in range(len(kldrs[0][2]))]
         )
     df.to_csv(os.path.join(args.path, 'kl_divergence_curves.csv'), index = False)
 
