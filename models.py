@@ -23,6 +23,10 @@ import model_dphprg as dphprg
 import model_mhpg as mhpg
 import model_mhprg as mhprg
 
+import model_dpppg as dpppg
+import model_dppprg as dppprg
+import model_vppg as vppg
+
 Results = {
     'vd'    : vd.Result,
     'vgd'   : vgd.Result,
@@ -43,6 +47,8 @@ Results = {
     'dphprg': dphprg.Result,
     'mhprg' : mhprg.Result,
     'mhpg'  : mhpg.Result,
+    'dpppg' : dpppg.Result,
+    'dppprg': dppprg.Result,
     }
 Chains = {
     'vd'    : vd.Chain,
@@ -64,6 +70,8 @@ Chains = {
     'dphprg': dphprg.Chain,
     'mhprg' : mhprg.Chain,
     'mhpg'  : mhpg.Chain,
+    'dpppg' : dpppg.Chain,
+    'dppprg': dppprg.Chain,
     }
 
 # EOF
