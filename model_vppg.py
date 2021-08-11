@@ -174,6 +174,7 @@ class Chain(object):
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
         self.priors = Prior(prior_zeta, prior_sigma)
+        self.p = p
         self.set_projection()
         return
 
