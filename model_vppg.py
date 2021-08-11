@@ -168,7 +168,7 @@ class Chain(object):
             data,
             prior_zeta  = GammaPrior(0.5, 0.5),
             prior_sigma = GammaPrior(2., 2.),
-            p = 5,
+            p = 10,
             ):
         self.data = data
         self.nCol = self.data.nCol

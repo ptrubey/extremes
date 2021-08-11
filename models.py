@@ -49,6 +49,7 @@ Results = {
     'mhpg'  : mhpg.Result,
     'dpppg' : dpppg.Result,
     'dppprg': dppprg.Result,
+    'vppg'  : vppg.Results
     }
 Chains = {
     'vd'    : vd.Chain,
@@ -72,6 +73,7 @@ Chains = {
     'mhpg'  : mhpg.Chain,
     'dpppg' : dpppg.Chain,
     'dppprg': dppprg.Chain,
+    'vppg'  : vppg.Chain,
     }
 
 # EOF

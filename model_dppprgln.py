@@ -483,7 +483,7 @@ class Chain(pt.PTChain):
             r0          = 0.5,
             psi0        = 1e-2,
             nu          = 20,
-            p           = 5,
+            p           = 10,
             ):
         self.m = m
         self.data = data
