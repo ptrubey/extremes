@@ -49,7 +49,7 @@ Results = {
     'mhpg'  : mhpg.Result,
     'dpppg' : dpppg.Result,
     'dppprg': dppprg.Result,
-    'vppg'  : vppg.Results
+    'vppg'  : vppg.Result,
     }
 Chains = {
     'vd'    : vd.Chain,
