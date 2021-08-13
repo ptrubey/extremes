@@ -306,8 +306,7 @@ class Chain(pt.PTChain):
 
     def sample_alpha_j(self, curr_alpha_j, Yj, Sigma_cho, Sigma_inv, mu):
         curr_log_alpha_j = np.log(curr_alpha_j)
-        # curr_cov      = self.localcov(curr_log_alpha_j)
-        curr_cov =
+        curr_cov      = self.localcov(curr_log_alpha_j)
         curr_cov_chol = cho_factor(curr_cov)
         curr_cov_inv  = cho_solve(curr_cov_chol, np.eye(self.nCol))
 
