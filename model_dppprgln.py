@@ -210,9 +210,10 @@ class Chain(pt.PTChain):
         return self.samples.log_alpha
 
     def update_log_alpha_stack(self):
-        self.samples.log_alpha = np.append(
-                self.samples.log_alpha, np.log(self.curr_alphas), axis = 0,
-                )
+        # self.samples.log_alpha = np.append(
+        #         self.samples.log_alpha, np.log(self.curr_alphas), axis = 0,
+        #         )
+        pass
         return
 
     def get_state(self):
@@ -305,7 +306,8 @@ class Chain(pt.PTChain):
 
     def sample_alpha_j(self, curr_alpha_j, Yj, Sigma_cho, Sigma_inv, mu):
         curr_log_alpha_j = np.log(curr_alpha_j)
-        curr_cov      = self.localcov(curr_log_alpha_j)
+        # curr_cov      = self.localcov(curr_log_alpha_j)
+        curr_cov =
         curr_cov_chol = cho_factor(curr_cov)
         curr_cov_inv  = cho_solve(curr_cov_chol, np.eye(self.nCol))
 
@@ -407,7 +409,8 @@ class Chain(pt.PTChain):
         return
 
     def localcov(self, target):
-        return localcov(self.curr_log_alpha_stack, target, self.radius, self.nu, self.psi0)
+        # return localcov(self.curr_log_alpha_stack, target, self.radius, self.nu, self.psi0)
+        return np.eye(self.ncol) * (0.1 / self.inv_temper_temp)**2
 
     def set_temperature(self, temperature):
         self.temper_temp = temperature
