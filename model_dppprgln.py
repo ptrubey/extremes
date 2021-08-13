@@ -409,7 +409,7 @@ class Chain(pt.PTChain):
 
     def localcov(self, target):
         # return localcov(self.curr_log_alpha_stack, target, self.radius, self.nu, self.psi0)
-        return np.eye(self.ncol) * (0.1 / self.inv_temper_temp)**2
+        return np.eye(self.nCol) * (0.1 / self.inv_temper_temp)**2
 
     def set_temperature(self, temperature):
         self.temper_temp = temperature
