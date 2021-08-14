@@ -39,7 +39,8 @@ def kl_generation(model):
 if __name__ == '__main__':
     args = argparser()
     # model_types = sorted(Results.keys())
-    model_types = ['dphprg','dphprgln','dphpg','dppn']
+    # model_types = ['dphprg','dphprgln','dphpg','dppn']
+    model_types = ['dppprg','dppprgln','dpppg','dppn']
 
     models = []
     for model_type in model_types:

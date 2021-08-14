@@ -167,15 +167,15 @@ Results['dppn'] = DPPN_Result
 # Updating the Result objects with the new methods.
 
 Prediction_Gammas = {}
-for model in ['md','dpd','mprg','dpprg','dpdc','dphprg','mhprg']:
+for model in ['md','dpd','mprg','dpprg','dpdc','dphprg','mhprg','dppprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Restricted
-for model in ['mgd','dpgd','mpg','dppg','dphpg','mhpg']:
+for model in ['mgd','dpgd','mpg','dppg','dphpg','mhpg','dpppg']:
     Prediction_Gammas[model] = Prediction_Gamma
 for model in ['vd','vprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla_Restricted
-for model in ['vgd','vpg','vhpg']:
+for model in ['vgd','vpg','vhpg','vppg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla
-for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprgln']:
+for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprgln','dppprgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter_Restricted
 for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter
@@ -207,7 +207,8 @@ def ppl_generation(model):
 if __name__ == '__main__':
     args = argparser()
     # model_types = sorted(Prediction_Gammas.keys())
-    model_types = ['dphprg','dphprgln','dphpg','dppn']
+    # model_types = ['dphprg','dphprgln','dphpg','dppn']
+    model_types = ['dppprg','dppprgln','dpppg','dppn']
 
     models = []
     for model_type in model_types:

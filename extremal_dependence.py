@@ -80,14 +80,18 @@ if __name__ == '__main__':
     #     )
     # df.to_csv(os.path.join(args.path, 'pairwise_extremal_dependence_coefs.csv'), index = False)
 
-    results_path_1 = './output/dphprg/results_2_1e-1.db'
-    result_1 = ResultFactory('dphprg', results_path_1)
+    # results_path_1 = './output/dphprg/results_2_1e-1.db'
+    # result_1 = ResultFactory('dphprg', results_path_1)
+    results_path_1 = './output/dppprg/results_2_1e-1.db'
+    result_1 = ResultFactory('dppprg', results_path_1)
     cols_1, chis_1 = result_1.pairwise_chis()
     df_1 = pd.DataFrame(cols_1, columns = ('Column1','Column2'))
     df_1['chi'] = chis_1
 
-    results_path_2 = './output2/dphprg/results_2_1e-1.db'
-    result_2 = ResultFactory('dphprg', results_path_2)
+    # results_path_2 = './output2/dphprg/results_2_1e-1.db'
+    # result_2 = ResultFactory('dphprg', results_path_2)
+    results_path_2 = './output2/dppprg/results_2_1e-1.db'
+    result_2 = ResultFactory('dppprg', results_path_2)
     cols_2, chis_2 = result_2.pairwise_chis()
     df_2 = pd.DataFrame(cols_2, columns = ('Column1','Column2'))
     df_2['chi'] = chis_2

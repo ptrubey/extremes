@@ -126,9 +126,11 @@ if __name__ == '__main__':
 
     # for model in models:
     #     pass
-    fitted_path = "./output/dphprg/results_2_1e-1.db"
+    # fitted_path = "./output/dphprg/results_2_1e-1.db"
+    fitted_path = "./output/dppprg/results_2_1e-1.db"
     raw_path    = "./datasets/ivt_nov_mar.csv"
-    model_type  = "dphprg"
+    # model_type  = "dphprg"
+    model_type = 'dppprg'
 
     r = ResultFactory(model_type, fitted_path, raw_path)
 
