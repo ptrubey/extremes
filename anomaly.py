@@ -286,10 +286,10 @@ if __name__ == '__main__':
 
     models = repeat('dphprg')
     model_paths = [
-        './simulated_ad/m5_c5/dphprg/results_2_1e-1.db',
-        './simulated_ad/m5_c10/dphprg/results_2_1e-1.db',
-        './simulated_ad/m10_c5/dphprg/results_2_1e-1.db',
-        './simulated_ad/m10_c10/dphprg/results_2_1e-1.db',
+        './simulated_ad/m5_c5/dppprg/results_2_1e-1.db',
+        './simulated_ad/m5_c10/dppprg/results_2_1e-1.db',
+        './simulated_ad/m10_c5/dppprg/results_2_1e-1.db',
+        './simulated_ad/m10_c10/dppprg/results_2_1e-1.db',
         ]
     paths_x = [
         './simulated_ad/ad_sim_m5_c5_x.csv',
