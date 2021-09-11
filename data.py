@@ -201,14 +201,6 @@ class Data_From_Raw(Data):
         return
 
 if __name__ == '__main__':
-    paths = [
-        './datasets/ad_cardio_x.csv',
-        './datasets/ad_cover_x.csv',
-        './datasets/ad_mammography_x.csv',
-        './datasets/ad_pima_x.csv',
-        './datasets/ad_satellite_x.csv',
-        ]
-    raws = [pd.read_csv(path) for path in paths]
     pass
 
 
