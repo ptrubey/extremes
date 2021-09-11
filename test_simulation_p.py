@@ -16,32 +16,14 @@ if __name__ == '__main__':
     if p.model.startswith('dp'):
         emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
         out_path = os.path.join(
-            p.in_path, p.model, 'results_{}_{}.db'.format(p.eta_shape, p.eta_rate),
+            p.in_path, p.model, 'results_{}.db'.format(p.p),
             )
         pp_path = os.path.join(
-            p.in_path, p.model, 'postpred_{}_{}.csv'.format(p.eta_shape, p.eta_rate),
+            p.in_path, p.model, 'postpred_{}.csv'.format(p.p),
             )
         model = Chain(
             data, p = float(p.p), prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)),
             )
-    elif p.model.startswith('m'):
-        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
-        out_path = os.path.join(
-            p.in_path, p.model, 'results_{}.db'.format(p.nMix),
-            )
-        pp_path = os.path.join(
-            p.in_path, p.model, 'postpred_{}.csv'.format(p.nMix),
-            )
-        model = Chain(data, nMix = int(p.nMix))
-    elif p.model.startswith('v'):
-        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
-        out_path = os.path.join(
-            p.in_path, p.model, 'results.db',
-            )
-        pp_path = os.path.join(
-            p.in_path, p.model, 'postpred.csv',
-            )
-        model = Chain(data)
     else:
         raise ValueError
 
