@@ -10,14 +10,14 @@ from collections import namedtuple
 from postpred_loss import ResultFactory, PostPredLoss, Prediction_Gamma_Alter
 from simulate_data import Data, Result
 
-PPLResult = namedtuple('PPLResult', 'Type Scenario PPL_Linf ES_Linf')
+PPLResult = namedtuple('PPLResult', 'Type Norm PPL_Linf ES_Linf')
 
 def ppl_generation(model):
     result = ResultFactory(*model)
-    scenario = os.path.split(os.path.split(os.path.split(model[1])[0])[0])[1]
+    norm = os.path.splitext(os.path.split(model[1])[1])[0]
     pplr = PPLResult(
             model[0],
-            scenario,
+            norm,
             result.posterior_predictive_loss_Linf(),
             result.energy_score_Linf(),
             )
