@@ -60,7 +60,7 @@ class Conditional_Survival(object):
         pool.close()
         return np.hstack((unscaled.reshape(-1,1), np.array(list(res)).reshape(-1,1)))
 
-    def condsurv_1d_at_quantile(
+    def condsurv_1d_at_quantile_std(
             self,
             given_dims,
             given_vec_quantile,
@@ -69,15 +69,18 @@ class Conditional_Survival(object):
             ):
         postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
         new_dim  = np.setdiff1d(np.arange(self.nCol), given_dims)
-        # w_new    = postpred.T[new_dim].mean() / (1 - np.linspace(*prediction_bounds, 100, False))
         w_new    = np.linspace(1,200,1000)
         w_given  = postpred.T[given_dims].mean(axis = 1) / (1 - given_vec_quantile)
         min_thus_far = (postpred.T[given_dims].T / w_given).min(axis = 1)
-        args = zip(w_new.reshape(-1,1), repeat(postpred.T[new_dim].reshape(-1,1)), repeat(min_thus_far))
+        args = zip(
+            w_new.reshape(-1,1),
+            repeat(postpred.T[new_dim].reshape(-1,1)),
+            repeat(min_thus_far),
+            )
         out  = np.array(list(map(condsurv_at_w_precomp, args)))
         return np.hstack((w_new.reshape(-1,1), out.reshape(-1,1) / min_thus_far.mean()))
 
-    def condsurv_2d_at_quantile(
+    def condsurv_2d_at_quantile_std(
             self,
             given_dims,
             given_vec_quantile,
@@ -87,9 +90,6 @@ class Conditional_Survival(object):
         postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
         new_dims = np.setdiff1d(np.arange(self.nCol), given_dims)
         w_given = postpred.T[given_dims].mean(axis = 1) / (1 - given_vec_quantile)
-        # f = lambda x: x / (1 - np.linspace(*prediction_bounds, 100, False))
-        # w_new = np.array(list(map(f, postpred.T[new_dims].mean(axis = 1)))).reshape(-1,2)
-        # w_new_grid = np.array([(a,b) for a in w_new.T[0] for b in w_new.T[1]])
         w_new   = np.linspace(1,200,500)
         xx, yy  = np.meshgrid(w_new, w_new)
         w_new_grid = np.array((xx.ravel(),yy.ravel())).T
@@ -97,6 +97,34 @@ class Conditional_Survival(object):
         args = zip(w_new_grid, repeat(postpred.T[new_dims].T), repeat(min_thus_far))
         out = np.array(list(map(condsurv_at_w_precomp, args)))
         return np.hstack((w_new_grid, out.reshape(-1,1) / min_thus_far.mean()))
+
+    def condsurv_1d_at_quantile_real(
+            self,
+            given_dims, given_vec_quantile, prediction_bounds = (0.8, 1.),
+            n_per_sample = 10,
+            ):
+        """ Returns conditional survival curve with real valued margins in 1d """
+        # descale_pareto(Z,P):  raw = P[0] + P[1] * (Z**P[2] - 1) / P[2]
+        new_dim = np.setdiff1d(np.arange(self.nCol), given_dims)[0]
+        surv = self.condsurv_1d_at_quantile_std(
+                given_dims, given_vec_quantile, prediction_bounds, n_per_sample
+                )
+        surv.T[0] = descale_pareto(surv.T[0], self.data.P.T[new_dim])
+        return surv
+
+    def condsurv_2d_at_quantile_real(
+            self,
+            given_dims, given_vec_quantile, prediction_bounds = (0.8, 1.),
+            n_per_sample = 10,
+            ):
+        """ Returns conditional survival curve with real valued margins in 2d """
+        new_dims = setdiff1d(np.arange(self.nCol), given_dims)
+        surv = self.condsurv_2d_at_quantile_std(
+                given_dims, given_vec_quantile, prediction_bounds, n_per_sample
+                )
+        surv.T[0] = descale_pareto(surv.T[0], self.data.P.T[new_dims[0]])
+        surv.T[1] = descale_pareto(surv.T[1], self.data.P.T[new_dims[1]])
+        return surv
 
     def load_raw(self, path):
         raw = pd.read_csv(path)
@@ -138,7 +166,7 @@ if __name__ == '__main__':
         os.mkdir('./condsurv')
 
     rd1 = [
-        r.condsurv_1d_at_quantile(np.setdiff1d(np.arange(8), np.array(i, dtype = int)), 0.9)
+        r.condsurv_1d_at_quantile_real(np.setdiff1d(np.arange(8), np.array(i, dtype = int)), 0.9)
         for i in range(8)
         ]
     rd1_df = [pd.DataFrame(rd1i) for rd1i in rd1]
@@ -146,7 +174,7 @@ if __name__ == '__main__':
         df['column'] = i
 
     d2s = [np.array((i,j), dtype = int) for i in range(8) for j in range(8) if j > i]
-    rd2 = [r.condsurv_2d_at_quantile(np.setdiff1d(np.arange(8), cs), 0.9) for cs in d2s]
+    rd2 = [r.condsurv_2d_at_quantile_real(np.setdiff1d(np.arange(8), cs), 0.9) for cs in d2s]
     rd2_df = [pd.DataFrame(rd2i) for rd2i in rd2]
     for cols, df in zip(d2s, rd2_df):
         df['Column1'] = cols[0]
