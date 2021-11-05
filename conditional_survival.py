@@ -118,7 +118,7 @@ class Conditional_Survival(object):
             n_per_sample = 10,
             ):
         """ Returns conditional survival curve with real valued margins in 2d """
-        new_dims = setdiff1d(np.arange(self.nCol), given_dims)
+        new_dims = np.setdiff1d(np.arange(self.nCol), given_dims)
         surv = self.condsurv_2d_at_quantile_std(
                 given_dims, given_vec_quantile, prediction_bounds, n_per_sample
                 )
