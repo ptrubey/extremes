@@ -165,28 +165,46 @@ if __name__ == '__main__':
     if not os.path.exists('./condsurv'):
         os.mkdir('./condsurv')
 
-    rd1 = [
+    rd1_r = [
         r.condsurv_1d_at_quantile_real(np.setdiff1d(np.arange(8), np.array(i, dtype = int)), 0.9)
         for i in range(8)
         ]
-    rd1_df = [pd.DataFrame(rd1i) for rd1i in rd1]
-    for i, df in enumerate(rd1_df):
+    rd1_df_r = [pd.DataFrame(rd1i) for rd1i in rd1_r]
+    for i, df in enumerate(rd1_df_r):
+        df['column'] = i
+    rd1_s = [
+        r.condsurv_1d_at_quantile_std(np.setdiff1d(np.arange(8), np.array(i, dtype = int)), 0.9)
+        for i in range(8)
+        ]
+    rd1_df_s = [pd.DataFrame(rd1i) for rd1i in rd1_s]
+    for i, df in enumerate(rd1_df_s):
         df['column'] = i
 
     d2s = [np.array((i,j), dtype = int) for i in range(8) for j in range(8) if j > i]
-    rd2 = [r.condsurv_2d_at_quantile_real(np.setdiff1d(np.arange(8), cs), 0.9) for cs in d2s]
-    rd2_df = [pd.DataFrame(rd2i) for rd2i in rd2]
-    for cols, df in zip(d2s, rd2_df):
+    rd2_r = [r.condsurv_2d_at_quantile_real(np.setdiff1d(np.arange(8), cs), 0.9) for cs in d2s]
+    rd2_df_r = [pd.DataFrame(rd2i) for rd2i in rd2_r]
+    for cols, df in zip(d2s, rd2_df_r):
+        df['Column1'] = cols[0]
+        df['Column2'] = cols[1]
+    rd2_s = [r.condsurv_2d_at_quantile_std(np.setdiff1d(np.arange(8), cs), 0.9) for cs in d2s]
+    rd2_df_s = [pd.DataFrame(rd2i) for rd2i in rd2_s]
+    for cols, df in zip(d2s, rd2_df_s):
         df['Column1'] = cols[0]
         df['Column2'] = cols[1]
 
-    rd1_df_ = pd.concat(rd1_df)
-    rd2_df_ = pd.concat(rd2_df)
+    rd1_df_r_ = pd.concat(rd1_df_r)
+    rd1_df_s_ = pd.concat(rd1_df_s)
+    rd2_df_r_ = pd.concat(rd2_df_r)
+    rd2_df_s_ = pd.concat(rd2_df_s)
 
-    out_path_1d = './condsurv/condsurv_ivt8_1d.csv'
-    out_path_2d = './condsurv/condsurv_ivt8_2d.csv'
+    out_path_1d_r = './condsurv/condsurv_ivt8_1d_r.csv'
+    out_path_1d_s = './condsurv/condsurv_ivt8_1d_s.csv'
+    out_path_2d_r = './condsurv/condsurv_ivt8_2d_r.csv'
+    out_path_2d_s = './condsurv/condsurv_ivt8_2d_s.csv'
 
-    rd1_df_.to_csv(out_path_1d, index = False)
-    rd2_df_.to_csv(out_path_2d, index = False)
+    rd1_df_r_.to_csv(out_path_1d_r, index = False)
+    rd1_df_s_.to_csv(out_path_1d_s, index = False)
+    rd2_df_r_.to_csv(out_path_2d_r, index = False)
+    rd2_df_s_.to_csv(out_path_2d_s, index = False)
 
 # EOF
