@@ -71,5 +71,17 @@ def argparser_ad():
     p.add_argument('data_path')
     return p.parse_args()
 
+def argparser_varying_p():
+    p = argparse.ArgumentParser()
+    p.add_argument('in_path')
+    p.add_argument('model')
+    p.add_argument('p')
+    p.add_argument('--nSamp', default = '50000')
+    p.add_argument('--nKeep', default = '20000')
+    p.add_argument('--nThin', default = '30')
+    p.add_argument('--eta_shape', default = '2')
+    p.add_argument('--eta_rate', default = '0.1')
+    return p.parse_args()
+
 if __name__ == '__main__':
     p = argparser_dp()

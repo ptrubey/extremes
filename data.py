@@ -200,10 +200,20 @@ class Data_From_Raw(Data):
         self.fill_out()
         return
 
+class Data_From_Sphere(Data):
+    def fill_out(self):
+        self.A = euclidean_to_angular(self.data.V)
+        self.S = euclidean_to_simplex(self.data.V)
+        return
+
+    def __init__(self, path):
+        pV = pd.read_csv(path).values
+        self.V = euclidean_to_hypercube(pV)
+        self.nDat, self.nCol = pV.shape
+        self.fill_out()
+        return
+
 if __name__ == '__main__':
     pass
-
-
-
 
 # EOF
