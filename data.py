@@ -202,8 +202,8 @@ class Data_From_Raw(Data):
 
 class Data_From_Sphere(Data):
     def fill_out(self):
-        self.A = euclidean_to_angular(self.data.V)
-        self.S = euclidean_to_simplex(self.data.V)
+        self.A = euclidean_to_angular(self.V)
+        self.S = euclidean_to_simplex(self.V)
         return
 
     def __init__(self, path):

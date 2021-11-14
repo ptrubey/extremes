@@ -1,5 +1,5 @@
 from argparser import argparser_varying_p as argparser
-from simulate_data import Data
+from data import Data_From_Sphere as Data
 from projgamma import GammaPrior
 from pandas import read_csv
 import models
