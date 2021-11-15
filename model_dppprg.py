@@ -312,6 +312,9 @@ class Chain(object):
         return
 
     def write_to_disk(self, path, nburn, thin = 1):
+        folder = os.path.split(path)[0]
+        if not os.path.exists(folder):
+            os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
         conn = sql.connect(path)

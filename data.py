@@ -108,7 +108,7 @@ class Data(Transformer):
 
     @staticmethod
     def to_euclidean(theta):
-        return to_euclidean(theta)
+        return angular_to_euclidean(theta)
 
     @staticmethod
     def cast_to_cube(A, eps = 1e-6):
