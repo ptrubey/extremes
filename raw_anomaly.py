@@ -132,6 +132,6 @@ if __name__ == '__main__':
     auroc_df['data'] = rownames
 
     auroc_df.to_csv('./ad/auroc.csv')
-    auprc_Df.to_csv('./ad/auprc.csv')
+    auprc_df.to_csv('./ad/auprc.csv')
 
 # EOF

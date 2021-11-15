@@ -39,6 +39,7 @@ def logdprojgamma(coss, sins, sinp, alpha, beta):
     beta  = vector of rate parameters for underlying gamma distributions
     """
     Yl = coss * sinp
+    k = Yl.shape[0]
     A = alpha.sum()
     B = (beta * Yl).sum(axis = 1)
     asinv = np.cumsum(alpha[1:][::-1])[::-1]
