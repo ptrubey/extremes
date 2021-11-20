@@ -51,9 +51,9 @@ if __name__ == '__main__':
             mm = glob.glob(os.path.join(path, model_type, 'results*.db'))
             for m in mm:
                 models.append((model_type, m))
-            gg = glob.glob(os.path.join(path, 'data.db'))
-            for g in gg:
-                gens.append(g)
+        gg = glob.glob(os.path.join(path, 'data.db'))
+        for g in gg:
+            gens.append(g)
 
     pplrs = []
     for model in models:

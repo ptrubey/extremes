@@ -12,6 +12,7 @@ if __name__ == '__main__':
     Result = models.Results[p.model]
     data   = Data(os.path.join(p.in_path, 'data.csv'))
     if p.model.startswith('dp'):
+        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
         out_path = os.path.join(
             p.in_path, p.model, 'results_{}.db'.format(p.p),
             )
@@ -23,6 +24,7 @@ if __name__ == '__main__':
     else:
         raise ValueError
 
+    data.write_empirical(emp_path)
     model.sample(int(p.nSamp))
     model.write_to_disk(out_path, int(p.nKeep), int(p.nThin))
 

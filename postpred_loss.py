@@ -42,12 +42,13 @@ class PostPredLoss(object):
         return data2
 
     def Linf(self, data):
-        data2 = np.empty(data.shape)
-        for n in range(data.shape[0]):
-            data2[n] = (data[n].T / data[n].max(axis = 1)).T
-        return data2
+        return euclidean_to_hypercube(data)
+        # data2 = np.empty(data.shape)
+        # for n in range(data.shape[0]):
+        #     data2[n] = (data[n].T / data[n].max(axis = 1)).T
+        # return data2
 
-    def __postpredloss(self, predicted, empirical):
+    def __postpredloss_old(self, predicted, empirical):
         pmean = predicted.mean(axis = 0)
         pdiff = pmean - empirical
         avg_bias = ((pdiff * pdiff).sum(axis = 1)).mean()
@@ -59,37 +60,50 @@ class PostPredLoss(object):
         avg_vari = pvari.mean()
         return avg_bias + avg_vari
 
+    def __postpredloss(self, predicted, empirical):
+        pmean = predicted.mean(axis = 0)
+        pdiff = pmean - empirical
+        avg_bias = (pdiff * pdiff).sum(axis = 1).mean()
+        # pdevi = predicted - pmean
+        pvari = np.trace(np.cov(predicted.T))
+        return pvari + avg_bias
+
     def posterior_predictive_loss_L1(self):
-        predicted = self.L1(self.prediction())
+        predicted = self.L1(self.prediction_new())
         return self.__postpredloss(predicted, euclidean_to_simplex(self.data.Yl))
 
     def posterior_predictive_loss_L2(self):
-        predicted = self.L2(self.prediction())
+        predicted = self.L2(self.prediction_new())
         return self.__postpredloss(predicted, self.data.Yl)
 
     def posterior_predictive_loss_Linf(self):
-        predicted = self.Linf(self.prediction())
-        return self.__postpredloss(predicted, euclidean_to_hypercube(self.data.Yl))
+        predicted = self.Linf(self.prediction_new())
+        return self.__postpredloss(predicted, self.data.V)
 
     def energy_score_L1(self):
-        predicted = self.L1(self.prediction())
+        predicted = self.L1(self.prediction_new())
         return energy_score_euclidean(predicted, euclidean_to_simplex(self.data.Yl))
 
     def energy_score_L2(self):
-        predicted = self.L2(self.prediction())
+        predicted = self.L2(self.prediction_new())
         res = energy_score_euclidean(
-                np.moveaxis(predicted, 0, 1),
+                predicted, # np.moveaxis(predicted, 0, 1),
                 self.data.Yl
                 )
         return res
 
     def energy_score_Linf(self):
-        predicted = self.Linf(self.prediction())
-        return energy_score(np.moveaxis(predicted, 0, 1), euclidean_to_hypercube(self.data.Yl))
+        predicted = self.Linf(self.prediction_new())
+        res = energy_score(predicted, self.data.V)
+        # np.moveaxis(predicted, 0, 1),
+        return res
 
 # Object defining how predictive distribution is assembled.
 # All of the gamma-based models share a basic prediction method
 class Prediction_Gamma_Vanilla_Restricted(object):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -98,6 +112,9 @@ class Prediction_Gamma_Vanilla_Restricted(object):
         return predicted
 
 class Prediction_Gamma_Vanilla(object):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -107,6 +124,9 @@ class Prediction_Gamma_Vanilla(object):
         return predicted
 
 class Prediction_Gamma_Restricted(object):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -115,6 +135,9 @@ class Prediction_Gamma_Restricted(object):
         return predicted
 
 class Prediction_Gamma(object):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -124,6 +147,9 @@ class Prediction_Gamma(object):
         return predicted
 
 class Prediction_Gamma_Alter(object):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -133,6 +159,9 @@ class Prediction_Gamma_Alter(object):
         return predicted
 
 class Prediction_Gamma_Alter_Restricted(object):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for s in range(self.nSamp):
@@ -150,6 +179,9 @@ class Prediction_Gamma_Alter_Restricted(object):
 
 # Special case for Probit Normal model
 class DPPN_Result(dppn.Result, PostPredLoss):
+    def prediction_new(self):
+        return self.generate_posterior_predictive_hypercube()
+
     def prediction(self):
         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
         for i in range(self.nSamp):
