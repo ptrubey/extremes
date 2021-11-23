@@ -44,7 +44,7 @@ def energy_score_inner_new(predictions, targets):
     res1 = prediction_pairwise_distance(predictions)
     res2 = pool.map(target_pairwise_distance, zip(repeat(predictions), targets))
     pool.close()
-    return np.array(list(res2)) - 0.5 * res1
+    return np.array(list(res2)).mean() - 0.5 * res1
 
 def energy_score(predictions, targets):
     # return energy_score_inner(predictions, targets).mean()
