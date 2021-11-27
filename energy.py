@@ -47,8 +47,8 @@ def energy_score_inner_new(predictions, targets):
     return np.array(list(res2)).mean() - 0.5 * res1
 
 def energy_score(predictions, targets):
-    # return energy_score_inner(predictions, targets).mean()
-    return energy_score_inner_new(predictions, targets)
+    return energy_score_inner(predictions, targets).mean()
+    # return energy_score_inner_new(predictions, targets)
 
 def intrinsic_energy_score(dataset):
     res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
