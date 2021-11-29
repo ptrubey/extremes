@@ -364,7 +364,7 @@ class Result(Transformer):
         hyp = self.generate_posterior_predictive_probit(n_per_sample)
         return hyp * pi / 2.
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample):
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 10):
         pp = self.generate_posterior_predictive(n_per_sample)
         return angular_to_hypercube(pp)
 

@@ -42,13 +42,13 @@ class PostPredLoss(object):
         return data2
 
     def Linf(self, data):
-        return euclidean_to_hypercube(data)
-        # data2 = np.empty(data.shape)
-        # for n in range(data.shape[0]):
-        #     data2[n] = (data[n].T / data[n].max(axis = 1)).T
-        # return data2
+        # return euclidean_to_hypercube(data)
+        data2 = np.empty(data.shape)
+        for n in range(data.shape[0]):
+            data2[n] = (data[n].T / data[n].max(axis = 1)).T
+        return data2
 
-    def __postpredloss_old(self, predicted, empirical):
+    def __postpredloss(self, predicted, empirical):
         pmean = predicted.mean(axis = 0)
         pdiff = pmean - empirical
         avg_bias = ((pdiff * pdiff).sum(axis = 1)).mean()
@@ -60,7 +60,7 @@ class PostPredLoss(object):
         avg_vari = pvari.mean()
         return avg_bias + avg_vari
 
-    def __postpredloss(self, predicted, empirical):
+    def __postpredloss_new(self, predicted, empirical):
         pmean = predicted.mean(axis = 0)
         pdiff = pmean - empirical
         avg_bias = (pdiff * pdiff).sum(axis = 1).mean()
@@ -69,33 +69,34 @@ class PostPredLoss(object):
         return pvari + avg_bias
 
     def posterior_predictive_loss_L1(self):
-        predicted = self.L1(self.prediction_new())
+        predicted = self.L1(self.prediction())
         return self.__postpredloss(predicted, euclidean_to_simplex(self.data.Yl))
 
     def posterior_predictive_loss_L2(self):
-        predicted = self.L2(self.prediction_new())
+        predicted = self.L2(self.prediction())
         return self.__postpredloss(predicted, self.data.Yl)
 
     def posterior_predictive_loss_Linf(self):
-        predicted = self.Linf(self.prediction_new())
+        predicted = self.Linf(self.prediction())
         return self.__postpredloss(predicted, self.data.V)
 
     def energy_score_L1(self):
-        predicted = self.L1(self.prediction_new())
+        predicted = self.L1(self.prediction())
         return energy_score_euclidean(predicted, euclidean_to_simplex(self.data.Yl))
 
     def energy_score_L2(self):
-        predicted = self.L2(self.prediction_new())
+        predicted = self.L2(self.prediction())
         res = energy_score_euclidean(
-                predicted, # np.moveaxis(predicted, 0, 1),
+                # predicted, 
+                np.moveaxis(predicted, 0, 1),
                 self.data.Yl
                 )
         return res
 
     def energy_score_Linf(self):
-        predicted = self.Linf(self.prediction_new())
-        res = energy_score(predicted, self.data.V)
-        # np.moveaxis(predicted, 0, 1),
+        predicted = self.Linf(self.prediction())
+        # res = energy_score(predicted, self.data.V)
+        res = energy_score(np.moveaxis(predicted, 0, 1), self.data.V)
         return res
 
 # Object defining how predictive distribution is assembled.
@@ -209,7 +210,7 @@ for model in ['vgd','vpg','vhpg','vppg']:
     Prediction_Gammas[model] = Prediction_Gamma_Vanilla
 for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprgln','dppprgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter_Restricted
-for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpgln']:
+for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpgln','dpppgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Alter
 for model in ['dppn']:
     Prediction_Gammas[model] = object

@@ -14,6 +14,7 @@ import model_mhprgln as mhprgln
 import model_mhpgln as mhpgln
 
 import model_dppprgln as dppprgln
+import model_dpppgln as dpppgln
 
 Results = {
     'mdln'    : mdln.Result,
@@ -29,6 +30,7 @@ Results = {
     'mhprgln' : mhprgln.Result,
     'mhpgln'  : mhpgln.Result,
     'dppprgln': dppprgln.Result,
+    'dpppgln' : dpppgln.Result,
     }
 Chains = {
     'mdln'    : mdln.Chain,
@@ -44,6 +46,7 @@ Chains = {
     'mhprgln' : mhprgln.Chain,
     'mhpgln'  : mhpgln.Chain,
     'dppprgln': dppprgln.Chain,
+    'dpppgln' : dpppgln.Chain,
     }
 
 # EOF
