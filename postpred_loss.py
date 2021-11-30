@@ -241,7 +241,7 @@ if __name__ == '__main__':
     args = argparser()
     # model_types = sorted(Prediction_Gammas.keys())
     # model_types = ['dphprg','dphprgln','dphpg','dppn']
-    model_types = ['dppprg','dppprgln','dpppg','dppn']
+    model_types = ['dppprg','dppprgln','dpppg','dpppgln','dppn']
 
     models = []
     for model_type in model_types:
