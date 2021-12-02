@@ -1,4 +1,4 @@
-from cProjgamma import sample_beta_fc, logdgamma_restricted
+from cProjgamma import sample_beta_fc, logdgamma, logdgamma_restricted
 from scipy.stats import invwishart
 from numpy.random import gamma, uniform, normal, beta
 from scipy.linalg import cho_factor, cho_solve, cholesky
