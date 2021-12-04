@@ -37,7 +37,6 @@ def d_projgamma_p(Y, alpha, beta, p, logd = True):
         - gammaln(alpha).sum()
         + ((alpha - 1) * log(Y)).sum(axis = 1)
         + log(Y.T[-1] + Y.T[-1]**((1-p)/p) * (Y.T[:-1].T**p).sum(axis = 1))
-        # + (1 - p) / p * log(1 - (Y.T[:-1]**p).sum(axis = 0))
         + gammaln(alpha.sum())
         - alpha.sum() * log(np.einsum('ik,k->i', Y, beta))
         )

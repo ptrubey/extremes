@@ -1,179 +1,87 @@
 #!/bin/bash
 
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data1 dpppg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 01 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 02 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 03 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 04 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 05 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 06 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 07 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 08 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 09 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 11 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 12 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 13 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 14 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 15 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 16 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 17 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 18 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 19 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dppprg 20 > /dev/null 2>&1 &
 
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dpppg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 01 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 02 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 03 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 04 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 05 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 06 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 07 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 08 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 09 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 11 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 12 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 13 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 14 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 15 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 16 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 17 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 18 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 19 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_nov_mar.csv ./varying_p/erai dpppg 20 > /dev/null 2>&1 &
 
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dpppg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 01 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 02 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 03 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 04 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 05 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 06 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 07 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 08 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 09 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 11 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 12 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 13 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 14 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 15 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 16 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 17 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 18 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 19 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dppprg 20 > /dev/null 2>&1 &
 
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dpppg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dpppg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dpppg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dpppg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dpppg 10 > /dev/null 2>&1 &
-
-nohup python test_varying_p.py ./varying_p/data1 dppprg 1 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 2 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 3 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 4 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 5 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 6 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 7 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 8 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 9 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data1 dppprg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data2 dppprg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data3 dppprg 10 > /dev/null 2>&1 &
-
-nohup python test_varying_p.py ./varying_p/data4 dppprg 1 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 2 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 3 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data4 dppprg 5 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 6 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 7 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 8 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 9 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data4 dppprg 10 > /dev/null 2>&1 &
-
-nohup python test_varying_p.py ./varying_p/data5 dppprg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data5 dppprg 2 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 3 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 4 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 5 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 6 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 7 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 8 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 9 > /dev/null 2>&1 &
-nohup python test_varying_p.py ./varying_p/data5 dppprg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data6 dppprg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data7 dppprg 10 > /dev/null 2>&1 &
-
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 1 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 2 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 3 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 4 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 5 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 6 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 7 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 8 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 9 > /dev/null 2>&1 &
-# nohup python test_varying_p.py ./varying_p/data8 dppprg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 01 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 02 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 03 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 04 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 05 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 06 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 07 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 08 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 09 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 10 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 11 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 12 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 13 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 14 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 15 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 16 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 17 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 18 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 19 > /dev/null 2>&1 &
+nohup python test_varying_p.py ./datasets/ivt_updated_nov_mar.csv ./varying_p/era5 dpppg 20 > /dev/null 2>&1 &
 
 # EOF

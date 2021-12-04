@@ -1,5 +1,5 @@
 from argparser import argparser_varying_p as argparser
-from data import Data_From_Sphere as Data
+from data import Data_From_Raw as Data
 from projgamma import GammaPrior
 from pandas import read_csv
 import models
@@ -10,11 +10,12 @@ if __name__ == '__main__':
 
     Chain  = models.Chains[p.model]
     Result = models.Results[p.model]
-    data   = Data(os.path.join(p.in_path, 'data.csv'))
+    raw  = read_csv(p.in_path).values
+    data = Data(raw, decluster = True, quantile = 0.95)
     if p.model.startswith('dp'):
-        emp_path = os.path.join(p.in_path, p.model, 'empirical.csv')
+        emp_path = os.path.join(p.out_path, p.model, 'empirical.csv')
         out_path = os.path.join(
-            p.in_path, p.model, 'results_{}.db'.format(p.p),
+            p.out_path, p.model, 'results_{}.db'.format(p.p),
             )
         model = Chain(
             data,

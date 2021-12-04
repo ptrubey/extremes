@@ -74,6 +74,7 @@ def argparser_ad():
 def argparser_varying_p():
     p = argparse.ArgumentParser()
     p.add_argument('in_path')
+    p.add_argument('out_path')
     p.add_argument('model')
     p.add_argument('p')
     p.add_argument('--nSamp', default = '50000')
