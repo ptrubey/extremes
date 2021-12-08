@@ -8,4 +8,6 @@ output*/
 simulated/
 ad/
 condsurv/
+.vscode/
+*.code-workspace
 *.png
