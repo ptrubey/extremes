@@ -121,7 +121,7 @@ class Result(object):
         hyp = self.generate_posterior_predictive_hypercube(n_per_sample)
         return dm.euclidean_to_angular(hyp)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample):
+    def generate_posterior_predictive_hypercube(self, n_per_sample= 10):
         """ Generates a posterior prediction, and projects it to the hypercube """
         gnew = self.generate_posterior_predictive_gammas(n_per_sample)
         return (gnew.T / gnew.max(axis = 1)).T
