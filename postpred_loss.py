@@ -231,7 +231,7 @@ def ResultFactory(model, path):
     return Result(path)
 
 # PPLResult = namedtuple('PPLResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf')
-PPLResult = namedtuple('PPLResult', 'type name PPL_Linf ES_Linf')
+PPLResult = namedtuple('PPLResult', 'type name PPL_Linf ES_Linf PPL_Linf_F ES_Linf_F')
 
 def ppl_generation(model):
     result = ResultFactory(*model)
