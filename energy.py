@@ -50,6 +50,18 @@ def energy_score(predictions, targets):
     return energy_score_inner(predictions, targets).mean()
     # return energy_score_inner_new(predictions, targets)
 
+def energy_score_full(predictions, targets):
+    res1 = prediction_pairwise_distance(predictions) # same for all elements.  do once.
+    pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+    res2 = pool.map(target_pairwise_distance, zip(repeat(predictions), targets))
+    pool.close()
+    return np.array(list(res2)).mean() - 0.5 * res1
+
+def postpred_loss_full(predictions, targets):
+    pvari = np.cov(predictions.T).trace()
+    pdev2 = ((targets - predictions.mean(axis = 0))**2).sum(axis = 1).mean()
+    return pvari + pdev2
+
 def intrinsic_energy_score(dataset):
     res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
     pool = Pool(processes = cpu_count(), initializer = limit_cpu)

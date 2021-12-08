@@ -14,7 +14,7 @@ from multiprocessing import Pool
 
 from argparser import argparser_ppl as argparser
 from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
-from energy import energy_score
+from energy import energy_score, energy_score_full, postpred_loss_full
 import cUtility as cu
 import models, models_mpi
 import model_dppn as dppn
@@ -67,7 +67,7 @@ class PostPredLoss(object):
         # pdevi = predicted - pmean
         pvari = np.trace(np.cov(predicted.T))
         return pvari + avg_bias
-
+    
     def posterior_predictive_loss_L1(self):
         predicted = self.L1(self.prediction())
         return self.__postpredloss(predicted, euclidean_to_simplex(self.data.Yl))
@@ -98,6 +98,14 @@ class PostPredLoss(object):
         # res = energy_score(predicted, self.data.V)
         res = energy_score(np.moveaxis(predicted, 0, 1), self.data.V)
         return res
+    
+    def energy_score_Linf_full(self):
+        predicted = self.prediction_new()
+        return energy_score_full(predicted, self.data.V)
+    
+    def postpred_loss_Linf_full(self):
+        predicted = self.prediction_new()
+        return postpred_loss_full(predicted, self.data.V)
 
 # Object defining how predictive distribution is assembled.
 # All of the gamma-based models share a basic prediction method
@@ -234,6 +242,8 @@ def ppl_generation(model):
         # result.posterior_predictive_loss_L2(),
         result.posterior_predictive_loss_Linf(),
         result.energy_score_Linf(),
+        result.postpred_loss_Linf_full(),
+        result.energy_score_Linf_full(),
         )
     return pplr
 
@@ -262,7 +272,7 @@ if __name__ == '__main__':
     df = pd.DataFrame(
         pplrs,
         # columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
-        columns = ('type','name','PPL_Linf','ES_Linf')
+        columns = ('type','name','PPL_Linf','ES_Linf','PPL_Linf_F','ES_Linf_F'),
         )
     df.to_csv(os.path.join(args.path, 'post_pred_loss_results.csv'), index = False)
 
