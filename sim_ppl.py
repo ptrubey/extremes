@@ -10,7 +10,7 @@ from collections import namedtuple
 from postpred_loss import ResultFactory, PostPredLoss, Prediction_Gamma_Alter
 from simulate_data import Data, Result
 
-PPLResult = namedtuple('PPLResult', 'Type Scenario PPL_Linf ES_Linf')
+PPLResult = namedtuple('PPLResult', 'Type Scenario PPL_Linf ES_Linf PPL_Linf_F ES_Linf_F')
 
 def ppl_generation(model):
     result = ResultFactory(*model)
@@ -20,6 +20,8 @@ def ppl_generation(model):
             scenario,
             result.posterior_predictive_loss_Linf(),
             result.energy_score_Linf(),
+            result.postpred_loss_Linf_full(),
+            result.energy_score_Linf_full(),
             )
     return pplr
 
@@ -35,6 +37,8 @@ def gen_ppl_generation(data_path):
         scenario,
         gen.posterior_predictive_loss_Linf(),
         gen.energy_score_Linf(),
+        gen.postpred_loss_Linf_full(),
+        gen.energy_score_Linf_full(),
         )
     return pplr
 
@@ -74,7 +78,7 @@ if __name__ == '__main__':
             print('Failed')
             pass
 
-    df = pd.DataFrame(pplrs, columns = ('Type', 'Scenario', 'PPL_Linf','ES_Linf'))
+    df = pd.DataFrame(pplrs, columns = ('Type', 'Scenario', 'PPL_Linf','ES_Linf','PPL_Linf_F','ES_Linf_F'))
     df.to_csv(os.path.join(args.path, 'post_pred_loss_results.csv'), index = False)
 
 # EOF
