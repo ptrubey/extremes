@@ -371,7 +371,7 @@ class Chain(object):
             prior_beta  = GammaPrior(2., 2.),
             prior_xi    = GammaPrior(0.5, 0.5),
             prior_tau   = GammaPrior(2., 2.),
-            m = 20,
+            m = 200,
             p = 10,
             ):
         self.data = data

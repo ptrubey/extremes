@@ -547,7 +547,7 @@ class Chain(pt.PTChain):
             prior_eta = GammaPrior(2., 0.5),
             prior_mu = (0., 4), # mean, sd
             prior_Sigma = (10, 0.5), # extra df, psi
-            m = 20,
+            m = 200,
             temperature = 1.,
             r0   = 0.5,
             psi0 = 1e-2,
