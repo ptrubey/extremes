@@ -7,6 +7,10 @@ import os
 import sqlite3 as sql
 from math import ceil, log
 # from multiprocessing import Pool
+from energy import limit_cpu
+
+from scipy.special import gammaln
+
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
@@ -15,58 +19,75 @@ from data import euclidean_to_angular, euclidean_to_simplex, euclidean_to_hyperc
 from projgamma import GammaPrior, DirichletPrior
 
 
-def dprodgamma_log_multi_y(aY, vAlpha, vBeta):
+def dprodgamma_log_multi_y(aY, vAlpha, vBeta, logConstant):
     """ log density -- product of gammas -- multiple y's (array) against single theta (vector) """
     ld = (
-        + (vAlpha * np.log(vBeta)).sum()
-        - lgamma(vAlpha).sum()
+        + logConstant
+        # + (vAlpha * np.log(vBeta)).sum()
+        # - gammaln(vAlpha).sum()
         + ((vAlpha - 1) * np.log(aY)).sum(axis = 1)
         - (vBeta * aY).sum(axis = 1)
         )
     return ld
 
-def dprodgamma_log_multi_theta(vY, aAlpha, aBeta):
+def dprodgamma_log_multi_theta(vY, aAlpha, aBeta, vlogConstant):
     """ log density -- product of gammas -- single y (vector) against multiple thetas (matrix) """
     ld = (
-        + (aAlpha * np.log(aBeta)).sum(axis = 1)
-        - lgamma(aAlpha).sum(axis = 1)
-        + (np.log(vY) * (aAlpha - 1)).sum(axis = 1)
-        - (vY * aBeta).sum(axis = 1)
+        + vlogConstant 
+        # + (aAlpha * np.log(aBeta)).sum(axis = 1)
+        # - gammaln(aAlpha).sum(axis = 1)
+        + np.dot(np.log(vY), (aAlpha - 1).T)
+        - np.dot(vY, aBeta.T)
+        # + (np.log(vY) * (aAlpha - 1)).sum(axis = 1)
+        # - (vY * aBeta).sum(axis = 1)
         )
     return ld
 
-def dgamma_log_multi_y(vY, alpha, beta):
+def dgamma_log_multi_y(vY, alpha, beta, logConstant):
     """ log density -- gamma -- multiple y's (vector) against single theta (singlular) """
     ld = (
-        + (alpha * log(beta))
-        - lgamma(alpha)
+        + logConstant
+        # + (alpha * log(beta))
+        # - gammaln(alpha)
         + ((alpha - 1) * np.log(vY)).sum()
         - (beta * vY).sum()
         )
     return ld
 
-def dgamma_log_multi_theta(y, vAlpha, vBeta):
+def dgamma_log_multi_theta(y, vAlpha, vBeta, vlogConstant):
     """ log density -- gamma -- single y (singular) against multiple theta (vector) """
     ld = (
-        + vAlpha * log(beta)
-        - lgamma(vAlpha)
+        + vlogConstant
+        # + vAlpha * log(beta)
+        # - gammaln(vAlpha)
         + (vAlpha - 1) * log(y)
         - (vBeta * y)
         )
     return ld
 
-def sample_delta_i(curr_delta, i, p, zeta, sigma):
-    pass
-
-def sample_delta_i(args):
-    y, zeta, sigma, pi = args
-    args = zip(repeat(y), zeta, sigma)
-    lps = np.array(list(map(logdgamma_wrapper, args)))
-    lps[np.isnan(lps)] = - np.inf
-    lps = lps - lps.max()
-    unnormalized = np.exp(lps) * pi
-    normalized = unnormalized / unnormalized.sum()
-    return choice(pi.shape[0], 1, p = normalized)
+def sample_delta_i(curr_cluster_state, cand_cluster_state, eta, delta_i, p, y, zeta, sigma, logConstant):
+    """ 
+    curr_cluster_state : vector of current cluster counts (np.bincount, integer)
+    cand_cluster_state : vector of bools whether a given cluster is candidate
+    eta   : candidate cluster weighting factor
+    p     : random uniform (scalar between 0 and 1)
+    y     : observation i (vector of length d)
+    zeta  : shape matrix for gamma distribution (J x d)
+    sigma : weight matrix for gamma distribution (J x d)
+    """
+    curr_cluster_state[delta_i] -= 1
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        temp = (
+            + np.log(curr_cluster_state + (cand_cluster_state * eta / cand_cluster_state.sum()))
+            + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
+            )
+    temp -= temp.max()
+    temp[:] = np.exp(temp).cumsum()
+    temp /= temp[-1]
+    delta_i = (temp < p).sum()
+    curr_cluster_state[delta_i] += 1
+    cand_cluster_state[delta_i] = False
+    return delta_i
 
 def update_zeta_j_wrapper(args):
     # parse arguments
@@ -127,42 +148,72 @@ class Samples(object):
 class Chain(object):
     @property
     def curr_zeta(self):
-        return self.samples.zeta[self.curr_iter].copy()
+        return self.samples.zeta[self.curr_iter]
     @property
     def curr_sigma(self):
-        return self.samples.sigma[self.curr_iter].copy()
+        return self.samples.sigma[self.curr_iter]
     @property
     def curr_alpha(self):
-        return self.samples.alpha[self.curr_iter].copy()
+        return self.samples.alpha[self.curr_iter]
     @property
     def curr_beta(self):
-        return self.samples.beta[self.curr_iter].copy()
+        return self.samples.beta[self.curr_iter]
     @property
     def curr_xi(self):
-        return self.samples.xi[self.curr_iter].copy()
+        return self.samples.xi[self.curr_iter]
     @property
     def curr_tau(self):
-        return self.samples.tau[self.curr_iter].copy()
+        return self.samples.tau[self.curr_iter]
     @property
     def curr_r(self):
-        return self.samples.r[self.curr_iter].copy()
+        return self.samples.r[self.curr_iter]
     @property
     def curr_delta(self):
-        return self.samples.delta[self.curr_iter].copy()
+        return self.samples.delta[self.curr_iter]
     @property
     def curr_eta(self):
-        return self.samples.eta[self.curr_iter].copy()
+        return self.samples.eta[self.curr_iter]
 
-    def clean_delta(self, delta, zeta, sigma, i):
-        assert (delta.max() + 1 == zeta.shape[0])
-        _delta = np.delete(delta, i)
-        nj = cu.counter(_delta, _delta.max() + 2)
-        fz = cu.first_zero(nj)
-        _zeta = zeta[np.where(nj > 0)[0]]
-        _sigma = sigma[np.where(nj > 0)[0]]
-        if (fz == delta[i]) and (fz <= _delta.max()):
-            _delta[_delta > fz] = _delta[_delta > fz] - 1
-        return _delta, _zeta, _sigma
+    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
+                        eta, delta_i, p, y, zeta, sigma, logConstant, temp):
+        """ 
+        curr_cluster_state : vector of current cluster counts (np.bincount, integer)
+        cand_cluster_state : vector of bools whether a given cluster is candidate
+        eta   : candidate cluster weighting factor
+        p     : random uniform (scalar between 0 and 1)
+        y     : observation i (vector of length d)
+        zeta  : shape matrix for gamma distribution (J x d)
+        sigma : weight matrix for gamma distribution (J x d)
+        """
+        curr_cluster_state[delta_i] -= 1
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            temp[:] = (
+                + np.log(curr_cluster_state + 
+                    (cand_cluster_state * eta / cand_cluster_state.sum()))
+                + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
+                )
+        temp -= temp.max()
+        np.exp(temp, out = temp)
+        np.cumsum(temp, out = temp)
+        # temp[:] = np.exp(temp).cumsum()
+        # temp /= temp[-1]
+        delta_i = np.searchsorted(temp, p * temp[-1])
+        curr_cluster_state[delta_i] += 1
+        cand_cluster_state[delta_i] = False
+        return delta_i
+    
+    def clean_delta_zeta_sigma(self, curr_cluster_state, delta, zeta, sigma):
+        """
+        delta : cluster indicator vector (n)
+        zeta  : cluster parameter matrix (J* x d)
+        sigma : cluster parameter matrix (J* x d)
+        """
+        # which clusters are populated
+        # keep = np.bincounts(delta) > 0 
+        # reindex those clusters
+        keep, delta[:] = np.unique(delta, return_inverse = True)
+        # return new indices, cluster parameters associated with populated clusters
+        return delta, zeta[keep], sigma[keep]
 
     def sample_zeta_sigma_new(self, alpha, beta, xi, tau, m):
         zeta = gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
@@ -172,36 +223,14 @@ class Chain(object):
                 ))
         return zeta, sigma
 
-    def sample_delta_i(self, delta, r, zeta, sigma, alpha, beta, xi, tau, eta, i):
-        _delta, _zeta, _sigma = self.clean_delta(delta, zeta, sigma, i)
-        _dmax = _delta.max()
-        njs = cu.counter(_delta, _dmax + 1 + self.m)
-        ljs = njs + (njs == 0) * eta / self.m
-        _zeta_new, _sigma_new = self.sample_zeta_sigma_new(alpha, beta, xi, tau, self.m)
-        zeta_stack = np.vstack((_zeta, _zeta_new))
-        sigma_stack = np.vstack((_sigma, _sigma_new))
-        assert (zeta_stack.shape[0] == ljs.shape[0])
-        args = zip(
-            repeat(r[i] * self.data.Yp[i]),
-            zeta_stack,
-            sigma_stack,
-            )
-        res = map(logdgamma_wrapper, args)
-        lps = np.array(list(res))
-        lps[np.where(np.isnan(lps))[0]] = - np.inf
-        lps -= lps.max()
-        unnormalized = np.exp(lps) * ljs
-        normalized = unnormalized / unnormalized.sum()
-        dnew = choice(range(zeta_stack.shape[0]), 1, p = normalized)
-        if dnew > _dmax:
-            zeta = np.vstack((_zeta, zeta_stack[dnew]))
-            sigma = np.vstack((_sigma, sigma_stack[dnew]))
-            delta = np.insert(_delta, i, _dmax + 1)
-        else:
-            delta = np.insert(_delta, i, dnew)
-            zeta = _zeta.copy()
-            sigma = _sigma.copy()
-        return delta, zeta, sigma
+    def sample_zeta_new(self, alpha, beta, m):
+        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
+
+    def sample_sigma_new(self, xi, tau, m):
+        return np.hstack((
+                    np.ones((m, 1)), 
+                    gamma(shape = xi, scale = 1/tau, size = (m, self.nCol - 1))
+                    ))
 
     def sample_alpha(self, zeta, curr_alpha):
         args = zip(
@@ -265,7 +294,7 @@ class Chain(object):
         return gamma(shape = aaa, scale = 1 / bb)
 
     def sample_zeta(self, curr_zeta, r, delta, alpha, beta, xi, tau):
-        Y = (self.data.Yp.T * r).T
+        Y = r.reshape(-1, 1) * self.data.Yp
         args = zip(
             curr_zeta,
             [Y[np.where(delta == j)[0]] for j in range(curr_zeta.shape[0])],
@@ -275,11 +304,11 @@ class Chain(object):
             repeat(tau),
             )
         res = map(update_zeta_j_wrapper, args)
-        # res = self.pool.map(update_zeta_j_wrapper)
+        # res = self.pool.map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
     def sample_sigma(self, zeta, r, delta, xi, tau):
-        Y = (self.data.Yp.T * r).T
+        Y = r.reshape(-1, 1) * self.data.Yp
         args = zip(
             zeta,
             [Y[np.where(delta == j)[0]] for j in range(zeta.shape[0])],
@@ -296,10 +325,10 @@ class Chain(object):
         self.samples.beta[0] = 1.
         self.samples.xi[0] = 1.
         self.samples.tau[0] = 1.
-        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.nDat, self.nCol))
-        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.nDat, self.nCol))
+        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 5, self.nCol))
+        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 5, self.nCol))
         self.samples.eta[0] = 40.
-        self.samples.delta[0] = np.array(list(range(self.nDat)))
+        self.samples.delta[0] = choice(self.max_clust_count - 5, size = self.nDat)
         self.samples.r[0] = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
                 )
@@ -307,35 +336,45 @@ class Chain(object):
         return
 
     def iter_sample(self):
-        eta   = self.curr_eta
-        delta = self.curr_delta
-        r     = self.curr_r
-        zeta  = self.curr_zeta
-        sigma = self.curr_sigma
+        # current cluster assignments; number of new candidate clusters
+        delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
+        curr_cluster_state = np.bincount(delta, minlength = self.max_clust_count)
+        cand_cluster_state = np.hstack((np.zeros(delta.max() + 1, dtype = bool), np.ones(m, dtype = bool)))
         alpha = self.curr_alpha
         beta  = self.curr_beta
         xi    = self.curr_xi
         tau   = self.curr_tau
+        zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
+        sigma = np.vstack((self.curr_sigma, self.sample_sigma_new(xi, tau, m)))
+        eta   = self.curr_eta
+        r     = self.curr_r
 
         self.curr_iter += 1
-
+        # normalizing constant for product of Gammas
+        logConstant = (zeta * np.log(sigma)).sum(axis = 1) - gammaln(zeta).sum(axis = 1)
+        # pre-generate uniforms to inverse-cdf sample cluster indices
+        unifs   = uniform(size = self.nDat)
+        # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
+        scratch = np.empty(self.max_clust_count)
         for i in range(self.nDat):
-            delta, zeta, sigma = self.sample_delta_i(
-                    delta, r, zeta, sigma, alpha, beta, xi, tau, eta, i,
-                    )
+            # Sample new cluster indices
+            delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
+                            delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, sigma, logConstant, scratch)
+        # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
+        delta, zeta, sigma = self.clean_delta_zeta_sigma(curr_cluster_state, delta, zeta, sigma)
         self.samples.delta[self.curr_iter] = delta
-        self.samples.r[self.curr_iter] = self.sample_r(self.curr_delta, zeta, sigma)
-        self.samples.zeta[self.curr_iter] = self.sample_zeta(
+        self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta, sigma)
+        self.samples.zeta[self.curr_iter]  = self.sample_zeta(
                 zeta, self.curr_r, self.curr_delta, alpha, beta, xi, tau,
                 )
         self.samples.sigma[self.curr_iter] = self.sample_sigma(
                 zeta, self.curr_r, self.curr_delta, xi, tau,
                 )
         self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
-        self.samples.beta[self.curr_iter] = self.sample_beta(self.curr_zeta, self.curr_alpha)
-        self.samples.xi[self.curr_iter] = self.sample_xi(self.curr_sigma, xi)
-        self.samples.tau[self.curr_iter] = self.sample_tau(self.curr_sigma, self.curr_xi)
-        self.samples.eta[self.curr_iter] = self.sample_eta(eta, self.curr_delta)
+        self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
+        self.samples.xi[self.curr_iter]    = self.sample_xi(self.curr_sigma, xi)
+        self.samples.tau[self.curr_iter]   = self.sample_tau(self.curr_sigma, self.curr_xi)
+        self.samples.eta[self.curr_iter]   = self.sample_eta(eta, self.curr_delta)
         return
 
     def sample(self, ns):
@@ -412,16 +451,17 @@ class Chain(object):
             prior_beta  = GammaPrior(2., 2.),
             prior_xi    = GammaPrior(0.5, 0.5),
             prior_tau   = GammaPrior(2., 2.),
-            m = 20,
-            p = 10,
+            p           = 10,
+            max_clust_count = 300,
             ):
         self.data = data
-        self.m = m
+        self.max_clust_count = max_clust_count
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
         self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
         self.set_projection()
+        # self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
 
 class Result(object):
@@ -502,3 +542,24 @@ class Result(object):
         return
 
 # EOF
+
+
+if __name__ == '__main__':
+    from data import Data_From_Raw
+    from projgamma import GammaPrior
+    from pandas import read_csv
+    import os
+
+    raw = read_csv('./datasets/ivt_nov_mar.csv')
+    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    data.write_empirical('./test/empirical.csv')
+    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    model.sample(50000)
+    model.write_to_disk('./test/results.db', 20000, 30)
+    res = Result('./test/results.db')
+    res.write_posterior_predictive('./test/postpred.csv')
+    # EOL
+
+
+
+# EOF 2
