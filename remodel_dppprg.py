@@ -18,6 +18,22 @@ from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
 from data import euclidean_to_angular, euclidean_to_simplex, euclidean_to_hypercube, Data
 from projgamma import GammaPrior, DirichletPrior
 
+def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
+    """
+    Product of Gammas log-density for multiple Y, multiple theta (not paired)
+    ----
+    aY     : array of Y     (n x d)
+    aAlpha : array of alpha (J x d)
+    aBeta  : array of beta  (J x d)
+    ----
+    return : array of ld    (n x J)
+    """
+    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
+    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
+    out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
+    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
+    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
+    return out
 
 def dprodgamma_log_multi_y(aY, vAlpha, vBeta, logConstant):
     """ log density -- product of gammas -- multiple y's (array) against single theta (vector) """
@@ -121,33 +137,51 @@ class Chain(object):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
 
-    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
-                        eta, delta_i, p, y, zeta, logConstant, temp):
-        """ 
-        curr_cluster_state : vector of current cluster counts (np.bincount, integer)
-        cand_cluster_state : vector of bools whether a given cluster is candidate
-        eta   : candidate cluster weighting factor
-        p     : random uniform (scalar between 0 and 1)
-        y     : observation i (vector of length d)
-        zeta  : shape matrix for gamma distribution (J x d)
-        sigma : weight matrix for gamma distribution (J x d)
-        """
+    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, eta, 
+                                        log_likelihood_i, delta_i, p, scratch):
+        scratch *= 0        
         curr_cluster_state[delta_i] -= 1
+        scratch += curr_cluster_state
+        scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            temp[:] = (
-                + np.log(curr_cluster_state + 
-                    (cand_cluster_state * eta / cand_cluster_state.sum()))
-                + dprodgamma_log_multi_theta(y, zeta, np.ones(self.nCol), logConstant)
-                )
-        temp -= temp.max()
-        np.exp(temp, out = temp)
-        np.cumsum(temp, out = temp)
-        # temp[:] = np.exp(temp).cumsum()
-        # temp /= temp[-1]
-        delta_i = np.searchsorted(temp, p * temp[-1])
+            np.log(scratch, out = scratch)
+        # scratch += np.log(curr_cluster_state + cand_cluster_state * eta / cand_cluster_state.sum())
+        scratch += log_likelihood_i
+        scratch -= scratch.max()
+        np.exp(scratch, out = scratch)
+        np.cumsum(scratch, out = scratch)
+        delta_i = np.searchsorted(scratch, p * scratch[-1])
         curr_cluster_state[delta_i] += 1
         cand_cluster_state[delta_i] = False
         return delta_i
+
+    # def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
+    #                     eta, delta_i, p, y, zeta, logConstant, temp):
+    #     """ 
+    #     curr_cluster_state : vector of current cluster counts (np.bincount, integer)
+    #     cand_cluster_state : vector of bools whether a given cluster is candidate
+    #     eta   : candidate cluster weighting factor
+    #     p     : random uniform (scalar between 0 and 1)
+    #     y     : observation i (vector of length d)
+    #     zeta  : shape matrix for gamma distribution (J x d)
+    #     sigma : weight matrix for gamma distribution (J x d)
+    #     """
+    #     curr_cluster_state[delta_i] -= 1
+    #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
+    #         temp[:] = (
+    #             + np.log(curr_cluster_state + 
+    #                 (cand_cluster_state * eta / cand_cluster_state.sum()))
+    #             + dprodgamma_log_multi_theta(y, zeta, np.ones(self.nCol), logConstant)
+    #             )
+    #     temp -= temp.max()
+    #     np.exp(temp, out = temp)
+    #     np.cumsum(temp, out = temp)
+    #     # temp[:] = np.exp(temp).cumsum()
+    #     # temp /= temp[-1]
+    #     delta_i = np.searchsorted(temp, p * temp[-1])
+    #     curr_cluster_state[delta_i] += 1
+    #     cand_cluster_state[delta_i] = False
+    #     return delta_i
     
     def clean_delta_zeta(self, delta, zeta):
         """
@@ -239,15 +273,20 @@ class Chain(object):
 
         self.curr_iter += 1
         # normalizing constant for product of Gammas
-        logConstant = - gammaln(zeta).sum(axis = 1)
+        # logConstant = - gammaln(zeta).sum(axis = 1)
+        log_likelihood = dprodgamma_log_my_mt(r.reshape(-1,1) * self.data.Yp, zeta, np.ones(zeta.shape))
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
         scratch = np.empty(self.max_clust_count)
         for i in range(self.nDat):
+            delta[i] = self.sample_delta_i(
+                    curr_cluster_state, cand_cluster_state, eta,
+                    log_likelihood[i], delta[i], unifs[i], scratch,
+                    )
             # Sample new cluster indices
-            delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
-                            delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, logConstant, scratch)
+            # delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
+            #                 delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, logConstant, scratch)
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
         delta, zeta = self.clean_delta_zeta(delta, zeta)
         self.samples.delta[self.curr_iter] = delta

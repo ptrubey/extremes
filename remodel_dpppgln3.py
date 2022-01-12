@@ -1,149 +1,104 @@
 from numpy.random import choice, gamma, beta, normal, uniform
+from scipy.stats import invwishart
+from scipy.special import gammaln
+from scipy.linalg import cho_factor, cho_solve, cholesky
 from collections import namedtuple
-from itertools import repeat, chain
+from itertools import repeat
 import numpy as np
 import pandas as pd
 import os
 import sqlite3 as sql
 from math import ceil, log
-# from multiprocessing import Pool
-from energy import limit_cpu
 
-from scipy.special import gammaln
-
-
+# import pt
+from data import Data
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
                         logddirichlet, logdgamma, logdgamma_restricted
 from data import euclidean_to_angular, euclidean_to_simplex, euclidean_to_hypercube, Data
-from projgamma import GammaPrior, DirichletPrior
+from projgamma import GammaPrior
+from remodel_dpppgln2 import InvWishartPrior, log_density_log_alpha_j
+from energy import limit_cpu
 
+NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
+InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
+Prior = namedtuple('Prior', 'mu Sigma xi tau')
+
+def dprodgamma_log_mt_(vY, aAlpha, aBeta, vlogConstant, out):
+    """ 
+    log density -- product of gammas -- single y (vector) against multiple thetas (array)
+    modifies out vector in-place
+
+    vY     : vector of Y    (t x d)
+    aAlpha : array of alpha (t x J x d)
+    aBeta  : array of beta  (t x J x d)
+    vlogC  : array of logC  (t x J) (normalizing constant for product of betas)
+    out    : output vector  (t x J)
+    """
+    out *= 0
+    out += vlogConstant
+    out += np.dot(np.log(vY), (aAlpha - 1).T)
+    out -= np.dot(vY, aBeta.T)
+    return
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
-    Product of Gammas log-density for multiple Y, multiple theta (not paired)
+    product of gammas log-density for paired y, theta
     ----
-    aY     : array of Y     (n x d)
-    aAlpha : array of alpha (J x d)
-    aBeta  : array of beta  (J x d)
+    aY     : array of Y     (t x n x d) [Y in R^d]
+    aAlpha : array of alpha (t x n x d)
+    aBeta  : array of beta  (t x n x d)
     ----
-    return : array of ld    (n x J)
+    returns: (t x n)
     """
-    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
-    out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
-    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
-    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
-    return out
+    ld = np.zeros(aY.shape[:-1])                             # n temps x n Y
+    ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))    # beta^alpha
+    ld -= np.einsum('tnd->tn', gammaln(aAlpha))              # gamma(alpha)
+    ld += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
+    ld -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
+    return ld                                                # per-temp,Y log-density
 
-def dprodgamma_log_multi_y(aY, vAlpha, vBeta, logConstant):
-    """ log density -- product of gammas -- multiple y's (array) against single theta (vector) """
-    ld = (
-        + logConstant
-        # + (vAlpha * np.log(vBeta)).sum()
-        # - gammaln(vAlpha).sum()
-        + ((vAlpha - 1) * np.log(aY)).sum(axis = 1)
-        - (vBeta * aY).sum(axis = 1)
-        )
+def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
+    """
+    projected gamma log-density (proportional) for paired y, theta
+    ----
+    aY     : array of Y     (t x n x d) [Y in S_p^{d-1}]
+    aAlpha : array of alpha (t x n x d)
+    aBeta  : array of beta  (t x n x d)
+    ----
+    returns: (t x n)
+    """
+    ld = np.zeros(aY.shape[:-1])
+    ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
+    ld -= np.einsum('tnd->tn', gammaln(aAlpha))
+    ld += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1))
+    ld += gammaln(np.einsum('tnd->tn', aAlpha))
+    ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('tnd,tnd->tn', aY, aBeta))
     return ld
 
-def dprodgamma_log_multi_theta(vY, aAlpha, aBeta, vlogConstant):
-    """ log density -- product of gammas -- single y (vector) against multiple thetas (matrix) """
-    ld = (
-        + vlogConstant 
-        # + (aAlpha * np.log(aBeta)).sum(axis = 1)
-        # - gammaln(aAlpha).sum(axis = 1)
-        + np.dot(np.log(vY), (aAlpha - 1).T)
-        - np.dot(vY, aBeta.T)
-        # + (np.log(vY) * (aAlpha - 1)).sum(axis = 1)
-        # - (vY * aBeta).sum(axis = 1)
-        )
-    return ld
-
-def dgamma_log_multi_y(vY, alpha, beta, logConstant):
-    """ log density -- gamma -- multiple y's (vector) against single theta (singlular) """
-    ld = (
-        + logConstant
-        # + (alpha * log(beta))
-        # - gammaln(alpha)
-        + ((alpha - 1) * np.log(vY)).sum()
-        - (beta * vY).sum()
-        )
-    return ld
-
-def dgamma_log_multi_theta(y, vAlpha, vBeta, vlogConstant):
-    """ log density -- gamma -- single y (singular) against multiple theta (vector) """
-    ld = (
-        + vlogConstant
-        # + vAlpha * log(beta)
-        # - gammaln(vAlpha)
-        + (vAlpha - 1) * log(y)
-        - (vBeta * y)
-        )
-    return ld
-
-def sample_delta_i(curr_cluster_state, cand_cluster_state, eta, delta_i, p, y, zeta, sigma, logConstant):
+def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
     """ 
-    curr_cluster_state : vector of current cluster counts (np.bincount, integer)
-    cand_cluster_state : vector of bools whether a given cluster is candidate
-    eta   : candidate cluster weighting factor
-    p     : random uniform (scalar between 0 and 1)
-    y     : observation i (vector of length d)
-    zeta  : shape matrix for gamma distribution (J x d)
-    sigma : weight matrix for gamma distribution (J x d)
+    multivariate normal log-density for multiple x, single theta per temp
+    ------
+    x        : array of alphas    (t x j x d)
+    mu       : array of mus       (t x d)
+    cov_chol : array of cov chols (t x d x d)
+    cov_inv  : array of cov mats  (t x d x d)    
     """
-    curr_cluster_state[delta_i] -= 1
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        temp = (
-            + np.log(curr_cluster_state + (cand_cluster_state * eta / cand_cluster_state.sum()))
-            + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
+    ld = np.zeros(x.shape[:-1])
+    ld -= 0.5 * 2 * np.log(np.diag(cov_chol)).sum()
+    ld -= 0.5 * np.einsum('tjd,tdl,tjl->tj', 
+            x - mu.reshape(-1,1,cov_chol.shape[1]), 
+            cov_inv, 
+            x - mu.reshape(-1,1,cov_chol.shape[1]),
             )
-    temp -= temp.max()
-    temp[:] = np.exp(temp).cumsum()
-    temp /= temp[-1]
-    delta_i = (temp < p).sum()
-    curr_cluster_state[delta_i] += 1
-    cand_cluster_state[delta_i] = False
-    return delta_i
-
-def update_zeta_j_wrapper(args):
-    # parse arguments
-    curr_zeta_j, Y_j, alpha, beta, xi, tau = args
-    prop_zeta_j = np.empty(curr_zeta_j.shape)
-    prop_zeta_j[0] = sample_alpha_1_mh(curr_zeta_j[0], Y_j.T[0], alpha[0], beta[0])
-    for i in range(1, curr_zeta_j.shape[0]):
-        prop_zeta_j[i] = sample_alpha_k_mh(
-                curr_zeta_j[i], Y_j.T[i], alpha[i], beta[i], xi[i-1], tau[i-1],
-                )
-    return prop_zeta_j
-
-def update_sigma_j_wrapper(args):
-    zeta_j, Y_j, xi, tau = args
-    prop_sigma_j = np.empty(zeta_j.shape)
-    prop_sigma_j[0] = 1.
-    for i in range(1, prop_sigma_j.shape[0]):
-        prop_sigma_j[i] = sample_beta_fc(zeta_j[i], Y_j.T[i], xi[i-1], tau[i-1])
-    return prop_sigma_j
-
-def update_alpha_l_wrapper(args):
-    return sample_alpha_k_mh(*args)
-
-def update_beta_l_wrapper(args):
-    return sample_beta_fc(*args)
-
-def update_xi_l_wrapper(args):
-    return sample_alpha_k_mh(*args)
-
-def update_tau_l_wrapper(args):
-    return sample_beta_fc(*args)
-
-Prior = namedtuple('Prior', 'eta alpha beta xi tau')
+    return ld
 
 class Samples(object):
     zeta  = None
     sigma = None
-    alpha = None
-    beta  = None
+    mu    = None
+    Sigma = None
     xi    = None
     tau   = None
     delta = None
@@ -153,8 +108,8 @@ class Samples(object):
     def __init__(self, nSamp, nDat, nCol):
         self.zeta  = [None] * (nSamp + 1)
         self.sigma = [None] * (nSamp + 1)
-        self.alpha = np.empty((nSamp + 1, nCol))
-        self.beta  = np.empty((nSamp + 1, nCol))
+        self.mu    = np.empty((nSamp + 1, nCol))
+        self.Sigma = np.empty((nSamp + 1, nCol, nCol))
         self.xi    = np.empty((nSamp + 1, nCol - 1))
         self.tau   = np.empty((nSamp + 1, nCol - 1))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
@@ -170,11 +125,11 @@ class Chain(object):
     def curr_sigma(self):
         return self.samples.sigma[self.curr_iter]
     @property
-    def curr_alpha(self):
-        return self.samples.alpha[self.curr_iter]
+    def curr_mu(self):
+        return self.samples.mu[self.curr_iter]
     @property
-    def curr_beta(self):
-        return self.samples.beta[self.curr_iter]
+    def curr_Sigma(self):
+        return self.samples.Sigma[self.curr_iter]
     @property
     def curr_xi(self):
         return self.samples.xi[self.curr_iter]
@@ -191,53 +146,40 @@ class Chain(object):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
 
-    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, eta, 
-                                        log_likelihood_i, delta_i, p, scratch):
-        scratch *= 0        
+    def sample_delta(self, curr_delta, eta):
+        pass
+
+
+
+    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
+                        eta, delta_i, p, y, zeta, sigma, logConstant, temp):
+        """ 
+        curr_cluster_state : vector of current cluster counts (np.bincount, integer)
+        cand_cluster_state : vector of bools whether a given cluster is candidate
+        eta   : candidate cluster weighting factor
+        p     : random uniform (scalar between 0 and 1)
+        y     : observation i (vector of length d)
+        zeta  : shape matrix for gamma distribution (J x d)
+        sigma : weight matrix for gamma distribution (J x d)
+        """
         curr_cluster_state[delta_i] -= 1
-        scratch += curr_cluster_state
-        scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            np.log(scratch, out = scratch)
-        # scratch += np.log(curr_cluster_state + cand_cluster_state * eta / cand_cluster_state.sum())
-        scratch += log_likelihood_i
-        scratch -= scratch.max()
-        np.exp(scratch, out = scratch)
-        np.cumsum(scratch, out = scratch)
-        delta_i = np.searchsorted(scratch, p * scratch[-1])
+            temp[:] = (
+                + np.log(curr_cluster_state + 
+                    (cand_cluster_state * eta / cand_cluster_state.sum()))
+                + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
+                )
+        temp -= temp.max()
+        np.exp(temp, out = temp)
+        np.cumsum(temp, out = temp)
+        # temp[:] = np.exp(temp).cumsum()
+        # temp /= temp[-1]
+        delta_i = np.searchsorted(temp, p * temp[-1])
         curr_cluster_state[delta_i] += 1
         cand_cluster_state[delta_i] = False
         return delta_i
-
-    # def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
-    #                     eta, delta_i, p, y, zeta, sigma, logConstant, temp):
-    #     """ 
-    #     curr_cluster_state : vector of current cluster counts (np.bincount, integer)
-    #     cand_cluster_state : vector of bools whether a given cluster is candidate
-    #     eta   : candidate cluster weighting factor
-    #     p     : random uniform (scalar between 0 and 1)
-    #     y     : observation i (vector of length d)
-    #     zeta  : shape matrix for gamma distribution (J x d)
-    #     sigma : weight matrix for gamma distribution (J x d)
-    #     """
-    #     curr_cluster_state[delta_i] -= 1
-    #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-    #         temp[:] = (
-    #             + np.log(curr_cluster_state + 
-    #                 (cand_cluster_state * eta / cand_cluster_state.sum()))
-    #             + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
-    #             )
-    #     temp -= temp.max()
-    #     np.exp(temp, out = temp)
-    #     np.cumsum(temp, out = temp)
-    #     # temp[:] = np.exp(temp).cumsum()
-    #     # temp /= temp[-1]
-    #     delta_i = np.searchsorted(temp, p * temp[-1])
-    #     curr_cluster_state[delta_i] += 1
-    #     cand_cluster_state[delta_i] = False
-    #     return delta_i
     
-    def clean_delta_zeta_sigma(self, curr_cluster_state, delta, zeta, sigma):
+    def clean_delta_zeta_sigma(self, delta, zeta, sigma):
         """
         delta : cluster indicator vector (n)
         zeta  : cluster parameter matrix (J* x d)
@@ -250,46 +192,65 @@ class Chain(object):
         # return new indices, cluster parameters associated with populated clusters
         return delta, zeta[keep], sigma[keep]
 
-    def sample_zeta_sigma_new(self, alpha, beta, xi, tau, m):
-        zeta = gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
-        sigma = np.hstack((
-                np.ones((m, 1)),
-                gamma(shape = xi, scale = 1 / tau, size = (m, self.nCol - 1)),
-                ))
-        return zeta, sigma
-
-    def sample_zeta_new(self, alpha, beta, m):
-        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
+    def sample_zeta_new(self, mu, Sigma_chol, m):
+        return np.exp(mu.reshape(1,-1) + (np.triu(Sigma_chol[0]) @ normal(size = (self.nCol, m))).T)
 
     def sample_sigma_new(self, xi, tau, m):
-        return np.hstack((
-                    np.ones((m, 1)), 
-                    gamma(shape = xi, scale = 1/tau, size = (m, self.nCol - 1))
-                    ))
+        return np.hstack((np.ones((m, 1)), gamma(xi, scale = 1 / tau, size = (m, self.nCol - 1))))
 
-    def sample_alpha(self, zeta, curr_alpha):
-        args = zip(
-            curr_alpha,
-            zeta.T,
-            repeat(self.priors.alpha.a),
-            repeat(self.priors.alpha.b),
-            repeat(self.priors.beta.a),
-            repeat(self.priors.beta.b),
-            )
-        res = map(update_alpha_l_wrapper, args)
-        # res = self.pool.map(update_alpha_l_wrapper, args)
-        return np.array(list(res))
+    def sample_zeta(self, curr_zeta, delta, r, Sigma_cho, Sigma_inv, mu):
+        Y = (self.data.Yp.T * r).T
+        nClust = delta.max() + 1
+        Yjs = [Y[np.where(delta == j)[0]] for j in range(nClust)]
+        prop_zeta = np.empty(curr_zeta.shape)
+        for j in range(nClust):
+            prop_zeta[j] = self.sample_zeta_j(curr_zeta[j], Yjs[j], Sigma_cho, Sigma_inv, mu)
+        return prop_zeta
 
-    def sample_beta(self, zeta, alpha):
-        args = zip(
-            alpha,
-            zeta.T,
-            repeat(self.priors.beta.a),
-            repeat(self.priors.beta.b),
+    def sample_zeta_j(self, curr_zeta_j, Yj, Sigma_cho, Sigma_inv, mu):
+        curr_log_zeta_j = np.log(curr_zeta_j)
+        curr_cov = self.localcov(curr_log_zeta_j)
+        curr_cov_cho = cho_factor(curr_cov)
+        curr_cov_inv = cho_solve(curr_cov_cho, np.eye(self.nCol))
+
+        prop_log_zeta_j = curr_log_zeta_j + np.triu(curr_cov_cho[0]) @ normal(size = self.nCol)
+        prop_cov = self.localcov(curr_log_zeta_j)
+        prop_cov_cho = cho_factor(prop_cov)
+        prop_cov_inv = cho_solve(prop_cov_cho, np.eye(self.nCol))
+
+        curr_lp = log_density_log_zeta_j(
+            curr_log_zeta_j, Yj, Sigma_cho, Sigma_inv, mu, self.priors.sigma,
+            ) * self.inv_temper_temp
+        prop_lp = log_density_log_zeta_j(
+            prop_log_zeta_j, Yj, Sigma_cho, Sigma_inv, mu, self.priors.sigma,
+            ) * self.inv_temper_temp
+        pc_ld = log_density_mvnormal(curr_log_zeta_j, prop_log_zeta_j, np.triu(prop_cov_cho[0]), prop_cov_inv)
+        cp_ld = log_density_mvnormal(prop_log_zeta_j, curr_log_zeta_j, np.triu(curr_cov_cho[0]), curr_cov_inv)
+
+        if log(uniform()) < prop_lp + pc_ld - curr_lp - cp_ld:
+            return np.exp(prop_log_zeta_j)
+        return curr_zeta_j
+    
+    def sample_mu(self, zeta, Sigma_inv):
+        n = zeta.shape[0] # number of clusters
+        lzbar = np.log(zeta).mean(axis = 0)
+        _Sigma = cho_solve(
+            cho_factor(n * Sigma_inv * self.inv_temper_temp + self.priors.mu.SInv),
+            np.eye(self.nCol),
             )
-        res = map(update_beta_l_wrapper, args)
-        # res = self.pool.map(update_beta_l_wrapper, args)
-        return np.array(list(res))
+        _mu = _Sigma @ (
+            + n * lzbar @ Sigma_inv * self.inv_temper_temp
+            + self.priors.mu.mu @ self.priors.mu.Sinv
+            )
+        return _mu + cholesky(_Sigma) @ normal(size = self.nCol)
+    
+    def sample_Sigma(self, zeta, mu):
+        n = zeta.shape[0]
+        diff = np.log(zeta) - mu
+        C = sum([np.outer(diff[i], diff[i]) for i in range(zeta.shape[0])])
+        _psi = self.priors.Sigma.psi + C * self.inv_temper_temp
+        _nu  = self.priors.Sigma.nu + n * self.inv_temper_temp
+        return invwishart.rvs(df = _nu, scale = _psi)
 
     def sample_xi(self, sigma, curr_xi):
         args = zip(
@@ -328,20 +289,6 @@ class Chain(object):
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
         return gamma(shape = aaa, scale = 1 / bb)
 
-    def sample_zeta(self, curr_zeta, r, delta, alpha, beta, xi, tau):
-        Y = r.reshape(-1, 1) * self.data.Yp
-        args = zip(
-            curr_zeta,
-            [Y[np.where(delta == j)[0]] for j in range(curr_zeta.shape[0])],
-            repeat(alpha),
-            repeat(beta),
-            repeat(xi),
-            repeat(tau),
-            )
-        res = map(update_zeta_j_wrapper, args)
-        # res = self.pool.map(update_zeta_j_wrapper, args)
-        return np.array(list(res))
-
     def sample_sigma(self, zeta, r, delta, xi, tau):
         Y = r.reshape(-1, 1) * self.data.Yp
         args = zip(
@@ -356,6 +303,8 @@ class Chain(object):
 
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol)
+        self.samples.zeta[0] = np.exp(normal(size = (self.max_clust_count - 5, self.nCol)))
+        self.samples.Sigma[0] = np.eye(self.nCol) * 2
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.xi[0] = 1.
@@ -386,22 +335,17 @@ class Chain(object):
 
         self.curr_iter += 1
         # normalizing constant for product of Gammas
-        # logConstant = (zeta * np.log(sigma)).sum(axis = 1) - gammaln(zeta).sum(axis = 1)
-        log_likelihood = dprodgamma_log_my_mt(r.reshape(-1,1) * self.data.Yp, zeta, sigma)
+        logConstant = (zeta * np.log(sigma)).sum(axis = 1) - gammaln(zeta).sum(axis = 1)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
         scratch = np.empty(self.max_clust_count)
         for i in range(self.nDat):
-            delta[i] = self.sample_delta_i(
-                            curr_cluster_state, cand_cluster_state, eta,
-                            log_likelihood[i], delta[i], unifs[i], scratch,
-                            )
             # Sample new cluster indices
-            # delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
-            #                 delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, sigma, logConstant, scratch)
+            delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
+                            delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, sigma, logConstant, scratch)
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
-        delta, zeta, sigma = self.clean_delta_zeta_sigma(curr_cluster_state, delta, zeta, sigma)
+        delta, zeta, sigma = self.clean_delta_zeta_sigma(delta, zeta, sigma)
         self.samples.delta[self.curr_iter] = delta
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta, sigma)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
@@ -487,6 +431,8 @@ class Chain(object):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
+            prior_mu    = (0., 4.),
+            prior_Sigma = (10, 0.5),
             prior_alpha = GammaPrior(0.5, 0.5),
             prior_beta  = GammaPrior(2., 2.),
             prior_xi    = GammaPrior(0.5, 0.5),
@@ -499,6 +445,15 @@ class Chain(object):
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
+        _prior_mu = NormalPrior(
+            np.ones(self.nCol) * prior_mu[0],
+            np.eye(self.nCol) * np.sqrt(prior_mu[1]),
+            np.eye(self.nCol) / np.sqrt(prior_mu[1]),
+            )
+        _prior_Sigma = InvWishartPrior(
+            self.nCol + prior_Sigma[0],
+            np.eye(self.nCol) * prior_Sigma[1],
+            )
         self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
         self.set_projection()
         # self.pool = Pool(processes = 8, initializer = limit_cpu())
@@ -582,6 +537,7 @@ class Result(object):
         return
 
 # EOF
+
 
 if __name__ == '__main__':
     from data import Data_From_Raw

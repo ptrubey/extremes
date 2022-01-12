@@ -24,7 +24,7 @@ import model_mhpg as mhpg
 import model_mhprg as mhprg
 
 import remodel_dpppg as dpppg
-import model_dppprg as dppprg
+import remodel_dppprg as dppprg
 import model_vppg as vppg
 
 Results = {
