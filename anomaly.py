@@ -150,6 +150,19 @@ class AnomalyDetector(PostPredLoss):
         es = energy_score_inner(np.moveaxis(predicted, 0, 1), self.data.V)
         return es
 
+    def scoring_kde(self, h = 1, kernel = 'gaussian'):
+        return self.scoring_kde_angular(h, kernel) * self.data.R
+    
+    def scoring_kde_angular(self, h = 1, kernel = 'gaussian'):
+        pdr = self.pairwise_distance_to_postpred()
+        if kernel == 'gaussian':
+            return 1 / (np.exp(-(pdr / h)**2) / np.sqrt(2 * np.pi)).mean(axis = 1)
+        elif kernel == 'laplace':
+            return 1 / np.exp(-np.abs(pdr / h)).mean(axis = 1)
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+
     def instantiate_data(self, path, quantile = 0.95, decluster = True):
         """ path: raw data path """
         raw = pd.read_csv(path)
@@ -163,23 +176,27 @@ class AnomalyDetector(PostPredLoss):
         return
 
     def get_scores(self, scalar = 1., base = np.e, epsilon = 0.5):
-        pdr = self.scoring_pdr(scalar, base)
-        pdra = self.scoring_pdr_angular(scalar, base)
-        pdp = self.scoring_pdp(scalar, base)
-        pdpa = self.scoring_pdp_angular(scalar, base)
-        knn = self.scoring_knn(scalar, base)
-        knna = self.scoring_knn_angular(scalar, base)
-        cone = self.scoring_cones(epsilon)
+        pdr   = self.scoring_pdr(scalar, base)
+        pdra  = self.scoring_pdr_angular(scalar, base)
+        pdp   = self.scoring_pdp(scalar, base)
+        pdpa  = self.scoring_pdp_angular(scalar, base)
+        knn   = self.scoring_knn(scalar, base)
+        knna  = self.scoring_knn_angular(scalar, base)
+        cone  = self.scoring_cones(epsilon)
         conea = self.scoring_cones_angular(epsilon)
-        ppl = self.scoring_ppl()
-        ppla = self.scoring_ppl_angular()
-        es  = self.scoring_es()
-        esa = self.scoring_es_angular()
-        return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea, ppl, ppla, es, esa))
-
+        ppl   = self.scoring_ppl()
+        ppla  = self.scoring_ppl_angular()
+        es    = self.scoring_es()
+        esa   = self.scoring_es_angular()
+        kde   = self.scoring_kde()
+        kdea  = self.scoring_kde_angular()
+        return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea, 
+                            ppl, ppla, es, esa, kde, kdea))
+    
     @property
     def metric_names(self):
-        return ['pdr','pdra','pdp','pdpa','knn','knna','cone','conea','ppl','ppla','es','esa']
+        return ['pdr','pdra','pdp','pdpa','knn','knna','cone','conea',
+                        'ppl','ppla','es','esa', 'kde','kdea']
 
     def get_auroc(self, scores):
         res = roc_curve(scores, self.anomaly.y[self.data.I[0]])
