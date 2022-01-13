@@ -58,6 +58,21 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     ld -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
     return ld                                                # per-temp,Y log-density
 
+def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
+    """
+    aY     : (n x t x d) [Y in r^d]
+    aAlpha : (t x J x d) 
+    aBeta  : (t x J x d)
+    ---
+    returns : (n x t x J)
+    """
+    ld = np.zeros((aY.shape[0], aY.shape[1], aAlpha.shape[1]))
+    ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta)).reshape(1,aY.shape[1], aAlpha.shape[1])
+    ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, aY.shape[1], aAlpha.shape[1])
+    ld += np.einsum('ntd,tjd->ntj', np.log(aY), aAlpha - 1)
+    ld -= np.einsum('ntd,tjd->ntj', aY, aBeta)
+    return ld
+
 def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
     """
     projected gamma log-density (proportional) for paired y, theta
@@ -146,9 +161,36 @@ class Chain(object):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
 
-    def sample_delta(self, curr_delta, eta):
-        pass
+    def sample_delta(self, delta, r, zeta, sigma, eta):
+        t_idx = np.arange(self.nTemp)
+        p = uniform(size = (self.nDat, self.nTemp)) + t_idx.reshape(1,-1)
+        
+        scratch = np.empty(self.nTemp, self.max_clust_count)
+        curr_cluster_state = bincount2d_vectorized(delta)
+        cand_cluster_state = (curr_cluster_state == 0)
 
+        Y = np.einsum('ntd,nt->ntd', self.data.Yp, r)
+
+        for i in range(self.nDat):
+            curr_cluster_state[t_idx, delta[i]] -= 1
+            scratch[:] = 0
+            scratch += curr_cluster_state
+            scratch += cand_cluster_state * eta / cand_cluster_state.sum(axis = 1)
+            with np.errstate(divide = 'ignore', invalid = 'ignore'):
+                np.log(scratch, out = scratch)
+            scratch += dprodgamma_log_my_mt(Y[i], zeta, sigma)
+            scratch -= scratch.max(axis = 1).reshape(-1,1)
+            np.exp(scratch, out = scratch)
+            np.cumsum(scratch, axis = 1, out = scratch)
+            scratch /= scratch[:,-1].reshape(1,-1)
+            scratch += t_idx.reshape(-1,1)
+            delta[i] = np.searchsorted(scratch.ravel(), p[i]) // self.max_clust_count
+            curr_cluster_state[t_idx, delta[i]] += 1
+            cand_cluster_state[t_idx, delta[i]] = False
+        
+        return delta
+
+            
 
 
     def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
