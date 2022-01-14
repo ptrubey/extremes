@@ -14,7 +14,7 @@ from multiprocessing import Pool
 
 from argparser import argparser_ppl as argparser
 from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
-from energy import energy_score, energy_score_full, postpred_loss_full
+from energy import energy_score, energy_score_full, postpred_loss_full, limit_cpu
 import cUtility as cu
 import models, models_mpi
 import model_dppn as dppn

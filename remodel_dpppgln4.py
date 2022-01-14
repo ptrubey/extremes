@@ -139,6 +139,28 @@ def dinvwishart_log_ms(Sigma, psi, nu):
             )
     return ld
 
+def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sh, nj,
+                            Sigma_cho, Sigma_inv, mu, xi, tau):
+    """
+    log_zeta_j : (m x d)
+    log_yj_sv  : (m x d)
+    yj_sh      : (m x nj)
+    nj         : (m)
+    Sigma_cho  : (m x d x d)
+    Sigma_inv  : (m x d x d)
+    mu         : (m x d)
+    xi         : (m x d-1)
+    tau        : (m x d-1)
+    """
+    zeta_j = np.exp(log_zeta_j)
+    ld = np.zeros(log_zeta_j.shape[0])
+    ld += np.einsum('md,md->m', zeta_j - 1, log_yj_sv)
+    ld -= nj.reshape(-1,1) * np.einsum('md->m', gammaln(zeta_j))
+    ld += np.einsum('md->m', gammaln(nj.reshape(-1,1) * zeta_j[:,1:] + xi))
+    ld -= np.einsum('md,md->m', nj.reshape(-1,1) * zeta_j[:,1:], np.log(yj_sh + tau))
+    ld -= 0.5 * np.einsum('ml,mld,md->m', log_zeta_j - mu, Sigma_inv, log_zeta_j - mu)
+    return ld
+
 class Samples(object):
     zeta  = None
     sigma = None
@@ -194,12 +216,14 @@ class Chain(object):
     
     am_cov  = None
     am_mean = None
+    max_clust_count = None
 
+    # updated
     def sample_delta(self, delta, r, zeta, sigma, eta):
         """AI is creating summary for sample_delta
 
         Args:
-            delta : (t, n, J)
+            delta : (t, n)
             r     : (t, n)
             zeta  : (t, J, d)
             sigma : (t, J, d)
@@ -209,7 +233,7 @@ class Chain(object):
             delta
         """
         Y = np.einsum('tn,nd->tnd', r, self.data.Yp)           # (t, n, d)
-        curr_cluster_state = bincount2D_vectorized(curr_delta) # (t, J)
+        curr_cluster_state = bincount2D_vectorized(delta) # (t, J)
         cand_cluster_state = (curr_cluster_state == 0)         # (t, J)
         log_likelihood = dprodgamma_log_my_mt(Y, zeta, sigma)  # (n, t, J)
         # Parallel Tempering
@@ -220,6 +244,7 @@ class Chain(object):
         scratch = np.empty(curr_cluster_state.shape)           # (t, J)
 
         for i in range(self.nDat):
+            curr_cluster_state[tidx, delta.T[i]] -= 1
             scratch[:] = 0
             scratch += curr_cluster_state
             scratch += cand_cluster_state * (eta / cand_cluster_state.sum(axis = 1)).reshape(-1,1)
@@ -231,9 +256,12 @@ class Chain(object):
             scratch /= scratch[:,-1].reshape(-1,1)
             scratch += tidx.reshape(-1,1)
             delta.T[i] = np.searchsorted(scratch.ravel(), p[i]) // self.max_clust_count
+            curr_cluster_state[tidx, delta.T[i]] += 1
+            cand_cluster_state[tidx, delta.T[i]] = False
         
         return delta
     
+    # updated
     def clean_delta_zeta_sigma(self, delta, zeta, sigma):
         for t in range(self.nTemp):
             keep, delta[t] = np.unique(delta[t], return_inverse = True)
@@ -241,11 +269,56 @@ class Chain(object):
             sigma[t][:keep.shape[0]] = sigma[t,keep]
         return delta, zeta, sigma
     
-    def sample_zeta_new(self, mu, Sigma_chol, m):
-        return np.exp(mu.reshape(1,-1) + (np.triu(Sigma_chol[0]) @ normal(size = (self.nCol, m))).T)
+    # updated 
+    def sample_zeta_new(self, mu, Sigma_chol, out):
+        """
+        mu         : (t x d)
+        Sigma_chol : (t x d x d)
+        out        : (t x J x d) # Modified in-place
+        """
+        out[:] = 0
+        np.einsum(
+            'tzy,tjy->tjz',
+            np.triu(Sigma_chol), 
+            normal(size = (self.nTemp, self.max_clust_count, self.nCol)),
+            out = out
+            )
+        out += mu.reshape(self.nTemp, 1, self.nCol)
+        return
+    
+    # updated
+    def sample_sigma_new(self, xi, tau, out):
+        """
+        xi  : (t x (d-1))
+        tau : (t x (d-1))
+        out : (t x J x d) # Modified in-place
+        """
+        out[:,:,0] = 1
+        out[:,:,1:] = gamma(
+            xi.reshape(self.nTemp, 1, -1), 
+            scale = 1/tau.reshape(self.nTemp, 1, -1), 
+            size = (self.nTemp, self.max_clust_count, self.nCol - 1),
+            )
+        return
 
-    def sample_sigma_new(self, xi, tau, m):
-        return np.hstack((np.ones((m, 1)), gamma(xi, scale = 1 / tau, size = (m, self.nCol - 1))))
+    def sample_zeta(self, zeta, delta, r, mu, Sigma_cho, Sigma_inv):
+        """
+        zeta      : (t x J x d)
+        delta     : (t x n)
+        r         : (t x n)
+        mu        : (t x d)
+        Sigma_cho : (t x d x d)
+        Sigma_inv : (t x d x d)
+        """
+        Y = np.einsum('tn,nd->tnd', r, self.data.Yp)
+        lY = np.log(Y)
+        curr_cluster_state = bincount2D_vectorized(delta)
+        cand_cluster_state = (curr_cluster_state == 0)
+        delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
+
+
+
+        pass
 
     def sample_zeta(self, curr_zeta, delta, r, Sigma_cho, Sigma_inv, mu):
         Y = (self.data.Yp.T * r).T
