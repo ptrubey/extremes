@@ -139,12 +139,11 @@ def dinvwishart_log_ms(Sigma, psi, nu):
             )
     return ld
 
-def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sh, nj,
-                            Sigma_cho, Sigma_inv, mu, xi, tau):
+def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sh, nj, Sigma_inv, mu, xi, tau):
     """
     log_zeta_j : (m x d)
-    log_yj_sv  : (m x d)
-    yj_sh      : (m x nj)
+    log_yj_sv  : (m x d)   [Summed over n_j]
+    yj_sh      : (m x nj)  [Summed over d]
     nj         : (m)
     Sigma_cho  : (m x d x d)
     Sigma_inv  : (m x d x d)
@@ -160,6 +159,16 @@ def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sh, nj,
     ld -= np.einsum('md,md->m', nj.reshape(-1,1) * zeta_j[:,1:], np.log(yj_sh + tau))
     ld -= 0.5 * np.einsum('ml,mld,md->m', log_zeta_j - mu, Sigma_inv, log_zeta_j - mu)
     return ld
+
+def cluster_covariance_mat(dmat, covs, mus):
+    
+
+
+
+
+    pass
+
+
 
 class Samples(object):
     zeta  = None
@@ -220,7 +229,7 @@ class Chain(object):
 
     # updated
     def sample_delta(self, delta, r, zeta, sigma, eta):
-        """AI is creating summary for sample_delta
+        """modify cluster assignments in-place.
 
         Args:
             delta : (t, n)
@@ -259,15 +268,23 @@ class Chain(object):
             curr_cluster_state[tidx, delta.T[i]] += 1
             cand_cluster_state[tidx, delta.T[i]] = False
         
-        return delta
+        return
     
     # updated
     def clean_delta_zeta_sigma(self, delta, zeta, sigma):
+        """
+        Clean in-place cluster assignments and cluster values
+    
+        Args:
+            delta (t x n)
+            zeta  (t x J)
+            sigma (t x J)
+        """
         for t in range(self.nTemp):
             keep, delta[t] = np.unique(delta[t], return_inverse = True)
             zeta[t][:keep.shape[0]] = zeta[t,keep]
             sigma[t][:keep.shape[0]] = sigma[t,keep]
-        return delta, zeta, sigma
+        return
     
     # updated 
     def sample_zeta_new(self, mu, Sigma_chol, out):
@@ -301,7 +318,7 @@ class Chain(object):
             )
         return
 
-    def sample_zeta(self, zeta, delta, r, mu, Sigma_cho, Sigma_inv):
+    def sample_zeta(self, zeta, delta, r, xi, tau, mu, Sigma_inv):
         """
         zeta      : (t x J x d)
         delta     : (t x n)
@@ -310,11 +327,43 @@ class Chain(object):
         Sigma_cho : (t x d x d)
         Sigma_inv : (t x d x d)
         """
-        Y = np.einsum('tn,nd->tnd', r, self.data.Yp)
-        lY = np.log(Y)
-        curr_cluster_state = bincount2D_vectorized(delta)
-        cand_cluster_state = (curr_cluster_state == 0)
-        delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
+        Y = np.einsum('tn,nd->tnd', r, self.data.Yp) # (t x n x d)
+        lY = np.log(Y)                               # (t x n x d)
+        
+        curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count) # (t x J)
+        cand_cluster_state = (curr_cluster_state == 0)                          # (t x J)  
+          # should be that (~cand_cluster_state).sum() == m, total number of active clusters
+        delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)          # (t x n x J)
+        
+        idx     = np.where(~cand_cluster_state) # length m
+        lz_curr = np.log(zeta[idx])
+
+        covs = 
+        lz_cand = lz_curr + np.einsum('', cholesky(self.am_covs), normal(size = lz_curr.shape)) 
+        Ysh     = np.einsum('tnd,tnj->tjn', Y, delta_ind_mat)[idx]   # Y sum horizontal
+        lYsv    = np.einsum('tnd,tnj->tjd', lY, delta_ind_mat)[idx] # logY sum vertical
+        nj      = curr_cluster_state[idx]
+        
+
+        
+        alpha = np.zeros(nj.shape[0])
+
+
+
+
+        np.log(zeta[idx])
+
+        zeta_cand = mu[idx[0]] + np.einsum('mde,me->md', np.triu())
+
+        ld_curr = log_density_log_zeta_j(
+            np.log(zeta[idx]), lYsv, Ysh, nj, Sigma_inv[idx[0]], 
+            mu[idx[0]], xi[idx[0]], tau[idx[0]],
+            )
+        
+
+        
+        
+
 
 
 
@@ -423,6 +472,27 @@ class Chain(object):
         # res = self.pool.map(update_sigma_j_wrapper, args)
         return np.array(list(res))
 
+    def update_am_cov_initial(self):
+        self.am_mean[:] = self.samples.theta_hist[:self.curr_iter].mean(axis = 0)
+        self.am_cov[:] = np.einsum(
+            'itnj,itnk->tnjk', 
+            self.samples.theta_hist[:self.curr_iter] - self.am_mean,
+            self.samples.theta_hist[:self.curr_iter] - self.am_mean,
+            ) / self.curr_iter
+        return
+
+    def update_am_cov(self):
+        self.am_mean += (self.samples.zeta_hist[self.curr_iter] - self.am_mean) / self.curr_iter
+        self.am_cov[:] = (
+            + (self.curr_iter / (self.curr_iter + 1)) * self.am_cov
+            + (self.curr_iter / self.curr_iter / self.curr_iter) * np.einsum(
+                'tej,tel->tejl', 
+                self.samples.zeta_hist[self.curr_iter] - self.am_mean,
+                self.samples.zeta_hist[self.curr_iter] - self.am_mean,
+                )
+            )
+        return
+
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol)
         self.samples.zeta[0]  = np.exp(normal(size = (self.max_clust_count - 5, self.nCol)))
@@ -439,27 +509,42 @@ class Chain(object):
                 self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
                 )
         self.am_cov = np.empty((self.nDat, self.nTemp, self.nCol, self.nCol))
-        self.am_cov[:] = np.eye(self.nCol, self.nCol).reshape(1,1,self.nCol, self.nCol)
+        self.am_cov[:] = np.eye(self.nCol, self.nCol).reshape(1,1,self.nCol, self.nCol) * 1e-3
         self.am_mean = np.empty((self.nDat, self.nTemp, self.nCol))
         self.am_mean[:] = 0.
         self.curr_iter = 0
         return
 
     def iter_sample(self):
-        # current cluster assignments; number of new candidate clusters
-        delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
-        curr_cluster_state = np.bincount(delta, minlength = self.max_clust_count)
-        cand_cluster_state = np.hstack((np.zeros(delta.max() + 1, dtype = bool), np.ones(m, dtype = bool)))
-        alpha = self.curr_alpha
-        beta  = self.curr_beta
+        # Setup, parsing
+        delta = self.curr_delta.copy()
+        zeta  = self.curr_zeta.copy()
+        sigma = self.curr_sigma.copy()
+        mu    = self.curr_mu
+        Sigma = self.curr_Sigma
+        Sigma_cho = cho_factor(Sigma)
+        Sigma_inv = cho_solve(Sigma_cho, np.eye(self.nCol))
         xi    = self.curr_xi
         tau   = self.curr_tau
-        zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
-        sigma = np.vstack((self.curr_sigma, self.sample_sigma_new(xi, tau, m)))
         eta   = self.curr_eta
         r     = self.curr_r
-
+        # Adaptive Metropolis Update
+        if self.curr_iter > 300:
+            self.update_am_cov()
+        elif self.curr_iter == 300:
+            self.update_am_cov_initial()
+        else:
+            pass
+        # Advance the iterator
         self.curr_iter += 1
+
+        # Compute Cluster assignments & re-index
+        self.sample_delta(delta, r, zeta, sigma, eta)
+        self.clean_delta_zeta_sigma(delta, zeta, sigma)
+
+
+
+
         # normalizing constant for product of Gammas
         logConstant = (zeta * np.log(sigma)).sum(axis = 1) - gammaln(zeta).sum(axis = 1)
         # pre-generate uniforms to inverse-cdf sample cluster indices
