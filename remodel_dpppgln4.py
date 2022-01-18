@@ -161,8 +161,10 @@ def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sh, nj, Sigma_inv, mu, xi, 
     return ld
 
 def cluster_covariance_mat(dmat, covs, mus):
+    """
+    theta
+    """
     
-
 
 
 
@@ -183,7 +185,7 @@ class Samples(object):
 
     def __init__(self, nSamp, nDat, nCol, nTemp):
         self.zeta  = [None] * (nSamp + 1)
-        self.zeta_hist = np.empty((nSamp + 1, setup.ntemps, ))
+        self.log_zeta_hist = np.empty((nSamp + 1, nTemp, nDat, nCol))
         self.sigma = [None] * (nSamp + 1)
         self.mu    = np.empty((nSamp + 1, nTemp, nCol))
         self.Sigma = np.empty((nSamp + 1, nTemp, nCol, nCol))
@@ -223,9 +225,15 @@ class Chain(object):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
     
-    am_cov  = None
-    am_mean = None
+    # Adaptive Metropolis Placeholders
+    am_cov_c  = None
+    am_cov_i  = None
+    am_mean_c = None
+    am_mean_i = None
+    am_n_c    = None
+    am_alpha  = None
     max_clust_count = None
+
 
     # updated
     def sample_delta(self, delta, r, zeta, sigma, eta):
@@ -318,6 +326,23 @@ class Chain(object):
             )
         return
 
+    def am_covariance_matrices(self, delta, index):
+        self.am_n_c[:] = 0      # cluster numbers
+        self.am_mean_c[:] = 0.  # cluster means
+                                # cluster covs
+        self.am_cov_c[:] = np.eye(self.am_cov_c.shape[-1]) * 1e-9
+        
+        temps = np.arange(self.nTemps)
+
+        n = np.empty((self.nTemp))
+        m = np.empty((self.nTemp, self.nCol))
+        C = np.empty((self.nTemp, self.nCol, self.nCol))
+
+        for i in range(self.nDat):
+            n[:] = self.curr_iter
+            m[:] = self.am_mean_i[i]
+            C[:] = self.am_cov_i[i]
+
     def sample_zeta(self, zeta, delta, r, xi, tau, mu, Sigma_inv):
         """
         zeta      : (t x J x d)
@@ -331,76 +356,29 @@ class Chain(object):
         lY = np.log(Y)                               # (t x n x d)
         
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count) # (t x J)
-        cand_cluster_state = (curr_cluster_state == 0)                          # (t x J)  
-          # should be that (~cand_cluster_state).sum() == m, total number of active clusters
+        cand_cluster_state = (curr_cluster_state == 0)                          # (t x J)
         delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)          # (t x n x J)
         
         idx     = np.where(~cand_cluster_state) # length m
-        lz_curr = np.log(zeta[idx])
-
-        covs = 
-        lz_cand = lz_curr + np.einsum('', cholesky(self.am_covs), normal(size = lz_curr.shape)) 
-        Ysh     = np.einsum('tnd,tnj->tjn', Y, delta_ind_mat)[idx]   # Y sum horizontal
+        covs    = self.am_covariance_matrices(delta, idx)
+        lz_curr = np.log(zeta)
+        lz_cand = lz_curr + np.einsum('mpq,mq->mp', cholesky(covs), normal(size = lz_curr.shape))
+        Ysh     = np.einsum('tnd,tnj->tjn', Y, delta_ind_mat)[idx]  # Y sum horizontal
         lYsv    = np.einsum('tnd,tnj->tjd', lY, delta_ind_mat)[idx] # logY sum vertical
         nj      = curr_cluster_state[idx]
         
-
-        
-        alpha = np.zeros(nj.shape[0])
-
-
-
-
-        np.log(zeta[idx])
-
-        zeta_cand = mu[idx[0]] + np.einsum('mde,me->md', np.triu())
-
-        ld_curr = log_density_log_zeta_j(
-            np.log(zeta[idx]), lYsv, Ysh, nj, Sigma_inv[idx[0]], 
-            mu[idx[0]], xi[idx[0]], tau[idx[0]],
+        self.am_alpha[:]   = -np.inf
+        self.am_alpha[idx] = self.inv_temp_ladder[idx[0]] * (
+            + log_density_log_zeta_j(
+                lz_cand[idx], lYsv, Ysh, nj, Sigma_inv[idx[0]], mu[idx[0]], xi[idx[0]], tau[idx[0]],
+                )
+            - log_density_log_zeta_j(
+                lz_curr[idx], lYsv, Ysh, nj, Sigma_inv[idx[0]], mu[idx[0]], xi[idx[0]], tau[idx[0]],
+                )
             )
-        
-
-        
-        
-
-
-
-
-        pass
-
-    def sample_zeta(self, curr_zeta, delta, r, Sigma_cho, Sigma_inv, mu):
-        Y = (self.data.Yp.T * r).T
-        nClust = delta.max() + 1
-        Yjs = [Y[np.where(delta == j)[0]] for j in range(nClust)]
-        prop_zeta = np.empty(curr_zeta.shape)
-        for j in range(nClust):
-            prop_zeta[j] = self.sample_zeta_j(curr_zeta[j], Yjs[j], Sigma_cho, Sigma_inv, mu)
-        return prop_zeta
-
-    def sample_zeta_j(self, curr_zeta_j, Yj, Sigma_cho, Sigma_inv, mu):
-        curr_log_zeta_j = np.log(curr_zeta_j)
-        curr_cov = self.localcov(curr_log_zeta_j)
-        curr_cov_cho = cho_factor(curr_cov)
-        curr_cov_inv = cho_solve(curr_cov_cho, np.eye(self.nCol))
-
-        prop_log_zeta_j = curr_log_zeta_j + np.triu(curr_cov_cho[0]) @ normal(size = self.nCol)
-        prop_cov = self.localcov(curr_log_zeta_j)
-        prop_cov_cho = cho_factor(prop_cov)
-        prop_cov_inv = cho_solve(prop_cov_cho, np.eye(self.nCol))
-
-        curr_lp = log_density_log_zeta_j(
-            curr_log_zeta_j, Yj, Sigma_cho, Sigma_inv, mu, self.priors.sigma,
-            ) * self.inv_temper_temp
-        prop_lp = log_density_log_zeta_j(
-            prop_log_zeta_j, Yj, Sigma_cho, Sigma_inv, mu, self.priors.sigma,
-            ) * self.inv_temper_temp
-        pc_ld = log_density_mvnormal(curr_log_zeta_j, prop_log_zeta_j, np.triu(prop_cov_cho[0]), prop_cov_inv)
-        cp_ld = log_density_mvnormal(prop_log_zeta_j, curr_log_zeta_j, np.triu(curr_cov_cho[0]), curr_cov_inv)
-
-        if log(uniform()) < prop_lp + pc_ld - curr_lp - cp_ld:
-            return np.exp(prop_log_zeta_j)
-        return curr_zeta_j
+        keep = np.where(np.log(uniform(size = self.am_alpha.shape[0])) < self.am_alpha)
+        zeta[keep] = np.exp(lz_cand[keep])
+        return zeta
     
     def sample_mu(self, zeta, Sigma_inv):
         n = zeta.shape[0] # number of clusters
@@ -482,13 +460,13 @@ class Chain(object):
         return
 
     def update_am_cov(self):
-        self.am_mean += (self.samples.zeta_hist[self.curr_iter] - self.am_mean) / self.curr_iter
-        self.am_cov[:] = (
-            + (self.curr_iter / (self.curr_iter + 1)) * self.am_cov
+        self.am_mean_i += (self.samples.zeta_hist[self.curr_iter] - self.am_mean_i) / self.curr_iter
+        self.am_cov_i[:] = (
+            + (self.curr_iter / (self.curr_iter + 1)) * self.am_cov_i
             + (self.curr_iter / self.curr_iter / self.curr_iter) * np.einsum(
                 'tej,tel->tejl', 
-                self.samples.zeta_hist[self.curr_iter] - self.am_mean,
-                self.samples.zeta_hist[self.curr_iter] - self.am_mean,
+                self.samples.zeta_hist[self.curr_iter] - self.am_mean_i,
+                self.samples.zeta_hist[self.curr_iter] - self.am_mean_i,
                 )
             )
         return
@@ -508,10 +486,13 @@ class Chain(object):
         self.samples.r[0]     = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
                 )
-        self.am_cov = np.empty((self.nDat, self.nTemp, self.nCol, self.nCol))
-        self.am_cov[:] = np.eye(self.nCol, self.nCol).reshape(1,1,self.nCol, self.nCol) * 1e-3
-        self.am_mean = np.empty((self.nDat, self.nTemp, self.nCol))
-        self.am_mean[:] = 0.
+        self.am_cov_i = np.empty((self.nDat, self.nTemp, self.nCol, self.nCol))
+        self.am_cov_i[:] = np.eye(self.nCol, self.nCol).reshape(1,1,self.nCol, self.nCol) * 1e-3
+        self.am_mean_i = np.empty((self.nDat, self.nTemp, self.nCol))
+        self.am_mean_i[:] = 0.
+        self.am_cov_c = np.empty((self.nTemps, self.max_clust_count, self.nCol, self.nCol))
+        self.am_mean_c = np.empty((self.nTemps, self.max_clust_count, self.nCol))
+        self.am_n_c = np.zeros((self.nTemps, self.max_clust_count))
         self.curr_iter = 0
         return
 
@@ -570,6 +551,11 @@ class Chain(object):
         self.samples.xi[self.curr_iter]    = self.sample_xi(self.curr_sigma, xi)
         self.samples.tau[self.curr_iter]   = self.sample_tau(self.curr_sigma, self.curr_xi)
         self.samples.eta[self.curr_iter]   = self.sample_eta(eta, self.curr_delta)
+
+        # attempt swap
+
+        # write new values to log_zeta_hist
+
         return
 
     def sample(self, ns):
