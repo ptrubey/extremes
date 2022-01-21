@@ -380,6 +380,36 @@ class Chain(object):
         zeta[keep] = np.exp(lz_cand[keep])
         return zeta
     
+    def sample_sigma(self, zeta, r, delta, xi, tau):
+        """
+        zeta  : (t x J x d)
+        delta : (t x n)
+        r     : (t x n)
+        xi    : (t x d-1)
+        tau   : (t x d-1)
+        """
+        curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
+        idx = np.where(curr_cluster_state > 0)
+        delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
+        Ysv = np.einsum('tnd,tnj->tjd', r.reshape(), detla_ind_mat)[idx]
+        
+
+
+        
+
+    def sample_sigma(self, zeta, r, delta, xi, tau):
+        Y = r.reshape(-1, 1) * self.data.Yp
+        args = zip(
+            zeta,
+            [Y[np.where(delta == j)[0]] for j in range(zeta.shape[0])],
+            repeat(xi),
+            repeat(tau),
+            )
+        res = map(update_sigma_j_wrapper, args)
+        # res = self.pool.map(update_sigma_j_wrapper, args)
+        return np.array(list(res))
+
+
     def sample_mu(self, zeta, Sigma_inv):
         n = zeta.shape[0] # number of clusters
         lzbar = np.log(zeta).mean(axis = 0)
@@ -438,17 +468,6 @@ class Chain(object):
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
         return gamma(shape = aaa, scale = 1 / bb)
 
-    def sample_sigma(self, zeta, r, delta, xi, tau):
-        Y = r.reshape(-1, 1) * self.data.Yp
-        args = zip(
-            zeta,
-            [Y[np.where(delta == j)[0]] for j in range(zeta.shape[0])],
-            repeat(xi),
-            repeat(tau),
-            )
-        res = map(update_sigma_j_wrapper, args)
-        # res = self.pool.map(update_sigma_j_wrapper, args)
-        return np.array(list(res))
 
     def update_am_cov_initial(self):
         self.am_mean[:] = self.samples.theta_hist[:self.curr_iter].mean(axis = 0)
@@ -460,7 +479,7 @@ class Chain(object):
         return
 
     def update_am_cov(self):
-        self.am_mean_i += (self.samples.zeta_hist[self.curr_iter] - self.am_mean_i) / self.curr_iter
+        self.am_mean_i += (self.samples.log_zeta_hist[self.curr_iter] - self.am_mean_i) / self.curr_iter
         self.am_cov_i[:] = (
             + (self.curr_iter / (self.curr_iter + 1)) * self.am_cov_i
             + (self.curr_iter / self.curr_iter / self.curr_iter) * np.einsum(
@@ -522,22 +541,7 @@ class Chain(object):
         # Compute Cluster assignments & re-index
         self.sample_delta(delta, r, zeta, sigma, eta)
         self.clean_delta_zeta_sigma(delta, zeta, sigma)
-
-
-
-
-        # normalizing constant for product of Gammas
-        logConstant = (zeta * np.log(sigma)).sum(axis = 1) - gammaln(zeta).sum(axis = 1)
-        # pre-generate uniforms to inverse-cdf sample cluster indices
-        unifs   = uniform(size = self.nDat)
-        # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
-        scratch = np.empty(self.max_clust_count)
-        for i in range(self.nDat):
-            # Sample new cluster indices
-            delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
-                            delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, sigma, logConstant, scratch)
-        # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
-        delta, zeta, sigma = self.clean_delta_zeta_sigma(delta, zeta, sigma)
+        
         self.samples.delta[self.curr_iter] = delta
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta, sigma)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
@@ -546,6 +550,7 @@ class Chain(object):
         self.samples.sigma[self.curr_iter] = self.sample_sigma(
                 zeta, self.curr_r, self.curr_delta, xi, tau,
                 )
+        curr_cluster_dummy = bincount2D_vectorized(delta) > 0
         self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
         self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
         self.samples.xi[self.curr_iter]    = self.sample_xi(self.curr_sigma, xi)
