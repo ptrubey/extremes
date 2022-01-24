@@ -29,7 +29,7 @@ NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 Prior = namedtuple('Prior', 'mu Sigma xi tau')
 
-def sample_xi_wrapper(args)
+def sample_xi_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
 
 def bincount2D_vectorized(arr, m):
@@ -158,7 +158,7 @@ def dinvwishart_log_ms(Sigma, nu, psi):
     ld += 0.5 * nu * slogdet(psi)[1]
     ld -= multigammaln(nu / 2, psi.shape[-1])
     ld -= 0.5 * nu * psi.shape[-1] * log(2.)
-    ld -= 0.5 * (df + Sigma.shape[-1] + 1) * slogdet(Sigma)[1]
+    ld -= 0.5 * (nu + Sigma.shape[-1] + 1) * slogdet(Sigma)[1]
     ld -= 0.5 * np.einsum(
             '...ii->...', np.einsum('ji,...ij->...ij', psi, inv(Sigma)),
             )
@@ -205,7 +205,7 @@ def cluster_covariance_mat(S, mS, nS, delta, covs, mus, n, temps):
         nC[:] = nS[temps, delta.T[j], None] + n
         mC[:] = 1 / nC * (
             + nS[temps, delta.T[j], None] * mS[temps, delta.T[j]] 
-            + n * mus[i][temps, j]
+            + n * mus[temps, j]
             )
         S[temps, delta.T[j]] = 1 / nC[:,:,None] * (
             + nS[temps, delta.T[j], None, None] * S[temps, delta.T[j]]
@@ -625,7 +625,7 @@ class Chain(object):
                 zeta, self.curr_r, self.curr_delta, xi, tau,
                 )
         extant_clusters = bincount2D_vectorized(delta) > 0
-        self.samples.zeta[self.curr_iter, extant_clusters] = self.sample_zeta_new(mu, Sigma_chol)[extant_clusters]
+        self.samples.zeta[self.curr_iter, extant_clusters] = self.sample_zeta_new(mu, Sigma_cho)[extant_clusters]
         self.samples.sigma[self.curr_iter, extant_clusters] = self.sample_sigma_new(xi, tau)
         self.samples.xi[self.curr_iter]  = self.sample_xi(self.curr_sigma, xi, extant_clusters)
         self.samples.tau[self.curr_iter] = self.sample_tau(self.curr_sigma, self.curr_xi, extant_clusters)
@@ -701,8 +701,6 @@ class Chain(object):
         sigmas_df = pd.DataFrame(
                 sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol)],
                 )
-        alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol)])
-        betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol)])
         xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nCol-1)])
         taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nCol-1)])
         deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
@@ -711,8 +709,6 @@ class Chain(object):
 
         zetas_df.to_sql('zetas',   conn, index = False)
         sigmas_df.to_sql('sigmas', conn, index = False)
-        alphas_df.to_sql('alphas', conn, index = False)
-        betas_df.to_sql('betas',   conn, index = False)
         xis_df.to_sql('xis',       conn, index = False)
         taus_df.to_sql('taus',     conn, index = False)
         deltas_df.to_sql('deltas', conn, index = False)
