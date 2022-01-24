@@ -152,6 +152,24 @@ cpdef double log_post_log_alpha_k(
         )
     return lp
 
+cpdef double log_post_log_alpha_k_summary(
+        double log_alpha_k,
+        int n_k, double y_ksum, double ly_ksum,
+        double a, double b, double c, double d,
+        ):
+    """ log posterior for log alpha, assuming gamma priors, with rate
+    integrated out, and using summary statistics. """
+    alpha_k = exp(log_alpha_k)
+    lp = (
+        + (alpha_k - 1) * ly_ksum
+        - n_k * lgamma(alpha_k)
+        + a * log_alpha_k
+        - b * alpha_k
+        + lgamma(n_k * alpha_k + c)
+        - (n_k * alpha_k + c) * log(y_ksum + d)
+        )
+    return lp
+
 cpdef double sample_alpha_k_mh(
         double curr_alpha_k,
         double[:] y_k,
@@ -176,6 +194,33 @@ cpdef double sample_alpha_k_mh(
     else:
         return curr_alpha_k
 
+cpdef double sample_alpha_k_mh_summary(
+        double curr_alpha_k,
+        int n_k,
+        double y_ksum,
+        double ly_ksum,
+        double a, double b, double c, double d,
+        double proposal_sd = 0.3,
+        double invtemp = 1.
+        ):
+    """
+    Sampling function for shape parameter, 
+    with Gamma likelihood and gamma prior,
+    with rate (with gamma prior) integrated out, 
+    using summary statistics
+    """
+    cdef double curr_log_alpha_k, prop_log_alpha_k, curr_lp, prop_lp
+
+    curr_log_alpha_k = log(curr_alpha_k)
+    prop_log_alpha_k = curr_log_alpha_k + normal(scale = proposal_sd)
+    curr_lp = log_post_log_alpha_k_summary(curr_log_alpha_k, n_k, y_ksum, ly_ksum, a, b, c, d)
+    prop_lp = log_post_log_alpha_k_summary(prop_log_alpha_k, n_k, y_ksum, ly_ksum, a, b, c, d)
+
+    if log(uniform()) < (prop_lp - curr_lp) * invtemp:
+        return exp(prop_log_alpha_k)
+    else: 
+        return curr_alpha_k
+ 
 # cdef double _sample_alpha_k_slice(
 #         double curr_alpha_k,
 #         double[:] y_k,
@@ -207,4 +252,12 @@ cpdef double sample_beta_fc(
     # return # gamma.rvs(aa, scale = 1. / bb)
     return gamma_rvs(aa, bb)
 
+cpdef double sample_beta_fc_summary(
+        double alpha,
+        double ys,
+        double n, 
+        double c,
+        double d,
+        ):
+    return gamma_rvs(n * alpha + c, ys + d)
 # EOF

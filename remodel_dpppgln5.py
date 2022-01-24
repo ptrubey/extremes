@@ -439,42 +439,57 @@ class Chain(object):
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         idx = np.where(curr_cluster_state > 0)
         delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
-        Ysv = np.einsum('tnd,tnj->tjd', r.reshape(), detla_ind_mat)[idx]
+
+        shape = np.zeros((self.nTemp, self.max_clust_count, self.nCol - 1))
+        shape += xi.reshape(self.nTemp, 1, self.nCol - 1)
+        rate  = np.zeros((self.nTemp, self.max_clust_count, self.nCol - 1))
+        rate  += tau.reshape(self.nTemp, 1, self.nCol - 1)
         
+        Ysv = np.einsum('tnd,tnj->tjd', r.reshape(self.nTemps, self.nDat, 1) * self.data.Yp, delta_ind_mat)
 
-    def sample_sigma(self, zeta, r, delta, xi, tau):
-        Y = r.reshape(-1, 1) * self.data.Yp
-        args = zip(
-            zeta,
-            [Y[np.where(delta == j)[0]] for j in range(zeta.shape[0])],
-            repeat(xi),
-            repeat(tau),
-            )
-        res = map(update_sigma_j_wrapper, args)
-        # res = self.pool.map(update_sigma_j_wrapper, args)
-        return np.array(list(res))
+        shape += curr_cluster_state.reshape(self.nTemp, self.max_clust_count, 1) * zeta
+        rate  += Ysv[:,:,1:]
+        
+        sigma_new = np.ones(zeta.shape)
+        sigma_new[:,:,1:] = gamma(shape = shape, scale = 1 / rate)
+        return sigma_new
 
-
-    def sample_mu(self, zeta, Sigma_inv):
-        n = zeta.shape[0] # number of clusters
-        lzbar = np.log(zeta).mean(axis = 0)
+     def sample_mu(self, zeta, Sigma_inv, extant_clusters):
+        """
+        zeta            : (t x J x d)
+        Sigma_Inv       : (t x d x d)
+        extant_clusters : (t x J)     (flag indicating an extant cluster)
+        """
+        n     = extant_clusters.sum(axis = 1)   # number of clusters per temp
+        lzbar = np.log(zeta * extant_clusters).sum(axis = 1) / n
         _Sigma = cho_solve(
-            cho_factor(n * Sigma_inv * self.inv_temper_temp + self.priors.mu.SInv),
+            cho_factor(n * self.inv_temper_temp * Sigma_inv + self.priors.mu.SInv),
             np.eye(self.nCol),
             )
-        _mu = _Sigma @ (
-            + n * lzbar @ Sigma_inv * self.inv_temper_temp
-            + self.priors.mu.mu @ self.priors.mu.Sinv
-            )
-        return _mu + cholesky(_Sigma) @ normal(size = self.nCol)
-    
-    def sample_Sigma(self, zeta, mu):
-        n = zeta.shape[0]
-        diff = np.log(zeta) - mu
-        C = sum([np.outer(diff[i], diff[i]) for i in range(zeta.shape[0])])
+        _mu = np.einsum('tkl,td,tdl->tk', _Sigma, n * self.inv_temper_temp * lzbar, Sigma_inv)
+        return _mu + np.einsum('tkl,tl->tk', cholesky(_Sigma), normal(size = (self.nTemps, self.nCol)))
+
+    def sample_Sigma(self, zeta, mu, extant_clusters):
+        """
+        zeta            : (t x J x d)
+        mu              : (t x d)
+        extant_clusters : (t x J)
+        """
+        n = extant_clusters.sum(axis = 1)
+        diff = (np.log(zeta) - mu) * extant_clusters
+        C = np.einsum('tjd,tje->tde', diff, diff)
         _psi = self.priors.Sigma.psi + C * self.inv_temper_temp
         _nu  = self.priors.Sigma.nu + n * self.inv_temper_temp
         return invwishart.rvs(df = _nu, scale = _psi)
+
+    # TODO
+    def sample_xi(self, curr_xi, sigma, extant_clusters):
+        extant_clusters.sum(axis = 1)
+        (np.log(sigma) * extant_clusters).sum(axis = 1)
+        sigma * extant_clusters.sum(axis = 1)
+
+        pass
+
 
     def sample_xi(self, sigma, curr_xi):
         args = zip(
