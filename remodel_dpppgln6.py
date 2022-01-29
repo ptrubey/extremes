@@ -148,15 +148,22 @@ def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
     cov_inv  : array of cov mats  (t x d x d)    
     """
     ld = np.zeros(x.shape[:-1])
-    ld -= np.einsum('...dd->...', np.log(cov_chol)).reshape(-1,1)
+    ld -= np.einsum('tdd->t', np.log(cov_chol)).reshape(-1,1)
     # ld -= 0.5 * 2 * np.log(np.diag(cov_chol)).sum()
     ld -= 0.5 * np.einsum(
-        '...jd,...dl,...jl->...j', 
+        'tjd,tdl,tjl->tj', 
         x - mu.reshape(-1,1,cov_chol.shape[1]), 
         cov_inv, 
         x - mu.reshape(-1,1,cov_chol.shape[1]),
         )
     return ld
+
+def dmvnormal_log_mx_st(x, mu, cov_chol, cov_inv):
+    ld = np.zeros(x.shape[:-1])
+    ld -= np.log(np.diag(cov_chol)).sum()
+    ld -= 0.5 * np.einsum('td,dl,tl->t',x - mu, cov_inv, x - mu)
+    return ld
+    
 
 # def dmvnormal_log_sxt(x, mu, cov_chol, cov_inv):
 #     """
@@ -283,7 +290,7 @@ class Samples(object):
 
     def __init__(self, nSamp, nDat, nCol, nTemp):
         self.zeta  = [None] * (nSamp + 1)
-        self.log_zeta_hist = np.empty((nSamp + 1, nTemp, nDat, nCol))
+        self.log_zeta_hist = np.empty((nSamp + 1, nDat, nTemp, nCol))
         self.sigma = [None] * (nSamp + 1)
         self.mu    = np.empty((nSamp + 1, nTemp, nCol))
         self.Sigma = np.empty((nSamp + 1, nTemp, nCol, nCol))
@@ -593,7 +600,7 @@ class Chain(object):
     def update_am_cov_initial(self):
         self.am_mean_i[:] = self.samples.log_zeta_hist[:self.curr_iter].mean(axis = 0)
         self.am_cov_i[:] = 1 / self.curr_iter * np.einsum(
-            'itnj,itnk->tnjk', 
+            'intj,intk->ntjk', 
             self.samples.log_zeta_hist[:self.curr_iter] - self.am_mean_i,
             self.samples.log_zeta_hist[:self.curr_iter] - self.am_mean_i,
             )
@@ -635,11 +642,11 @@ class Chain(object):
         self.candidate_zeta  = np.zeros((self.nTemp, self.max_clust_count, self.nCol))
         self.candidate_sigma = np.zeros((self.nTemp, self.max_clust_count, self.nCol))
         self.curr_iter = 0
-        self.samples.log_zeta_hist[0] = np.log(
+        self.samples.log_zeta_hist[0] = np.moveaxis(np.log(
             self.samples.zeta[0][
                 self.temp_unravel, self.samples.delta[0].ravel()
                 ].reshape(self.nTemp, self.nDat, self.nCol)
-            )
+            ), 0, 1)
         return
 
     def iter_sample(self):
@@ -701,7 +708,7 @@ class Chain(object):
             lp += np.einsum('tj,tj->t', 
                     dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
                     )
-            lp += dmvnormal_log_mx(self.curr_mu, *self.priors.mu)
+            lp += dmvnormal_log_mx_st(self.curr_mu, *self.priors.mu)
             lp += dinvwishart_log_ms(self.curr_Sigma, *self.priors.Sigma)
             lp += dgamma_log_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
             lp += dgamma_log_my(self.curr_tau, *self.priors.tau).sum(axis = 1)
@@ -713,10 +720,10 @@ class Chain(object):
             for tt in sw[np.where(logp < sw_alpha)[0]]:
                 self.samples.r[self.curr_iter, tt[0]], self.samples.r[self.curr_iter, tt[1]] = \
                     self.samples.r[self.curr_iter, tt[1]].copy(), self.samples.r[self.curr_iter, tt[0]].copy()
-                self.samples.zeta[self.curr_iter, tt[0]], self.samples.zeta[self.curr_iter, tt[1]] = \
-                    self.samples.zeta[self.curr_iter, tt[1]].copy(), self.samples.zeta[self.curr_iter, tt[0]].copy()
-                self.samples.sigma[self.curr_iter, tt[0]], self.samples.sigma[self.curr_iter, tt[1]] = \
-                    self.samples.sigma[self.curr_iter, tt[1]].copy(), self.samples.sigma[self.curr_iter, tt[0]].copy()
+                self.samples.zeta[self.curr_iter][tt[0]], self.samples.zeta[self.curr_iter][tt[1]] = \
+                    self.samples.zeta[self.curr_iter][tt[1]].copy(), self.samples.zeta[self.curr_iter][tt[0]].copy()
+                self.samples.sigma[self.curr_iter][tt[0]], self.samples.sigma[self.curr_iter][tt[1]] = \
+                    self.samples.sigma[self.curr_iter][tt[1]].copy(), self.samples.sigma[self.curr_iter][tt[0]].copy()
                 self.samples.mu[self.curr_iter, tt[0]], self.samples.mu[self.curr_iter, tt[1]] = \
                     self.samples.mu[self.curr_iter, tt[1]].copy(), self.samples.mu[self.curr_iter, tt[0]].copy()
                 self.samples.Sigma[self.curr_iter, tt[0]], self.samples.Sigma[self.curr_iter, tt[1]] = \
@@ -727,12 +734,14 @@ class Chain(object):
                     self.samples.tau[self.curr_iter, tt[1]].copy(), self.samples.tau[self.curr_iter, tt[0]].copy()
                 self.samples.delta[self.curr_iter, tt[0]], self.samples.delta[self.curr_iter, tt[1]] = \
                     self.samples.delta[self.curr_iter, tt[1]].copy(), self.samples.delta[self.curr_iter, tt[0]].copy()
-                
-        self.samples.log_zeta_hist[self.curr_iter] = \
-            np.log(self.curr_zeta)[self.temp_unravel, self.curr_delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol)
-        
-        # write new values to log_zeta_hist
 
+        # write new values to log_zeta_hist
+        self.samples.log_zeta_hist[self.curr_iter] = np.moveaxis(
+            np.log(self.curr_zeta)[
+                self.temp_unravel, self.curr_delta.ravel()
+                ].reshape(self.nTemp, self.nDat, self.nCol)
+            ,0,1
+            )
         return
 
     def sample(self, ns):
@@ -754,14 +763,14 @@ class Chain(object):
             os.remove(path)
         conn = sql.connect(path)
 
-        nclust = np.array([delta.max(axis = 1) for delta in self.samples.delta[nBurn :: nThin, 0]]) + 1
+        nclust = np.array([delta.max() for delta in self.samples.delta[nBurn :: nThin, 0]]) + 1
         zetas  = np.vstack([
-            np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta[nclust[i]]))
-            for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin, 0])
+            np.hstack((np.ones((nclust[i], 1)) * i, zeta[0][:nclust[i]]))
+            for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
             ])
         sigmas = np.vstack([
-            np.hstack((np.ones((sigma.shape[0], 1)) * i, sigma[nclust[i]]))
-            for i, sigma in enumerate(self.samples.sigma[nBurn :: nThin, 0])
+            np.hstack((np.ones((nclust[i], 1)) * i, sigma[0][:nclust[i]]))
+            for i, sigma in enumerate(self.samples.sigma[nBurn :: nThin])
             ])
 
         mus    = self.samples.mu[nBurn :: nThin, 0]
@@ -772,12 +781,18 @@ class Chain(object):
         rs     = self.samples.r[nBurn :: nThin, 0]
         etas   = self.samples.eta[nBurn :: nThin, 0]
 
+        nSamp = deltas.shape[0]
         zetas_df = pd.DataFrame(
                 zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol)],
                 )
         sigmas_df = pd.DataFrame(
                 sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol)],
                 )
+        mus_df    = pd.DataFrame(mus,    columns = ['mu_{}'.format(i)    for i in range(self.nCol)])
+        Sigmas_df = pd.DataFrame(
+            Sigmas.reshape(nSamp * self.nCol, self.nCol), 
+            columns = ['Sigma_{}'.format(i) for i in range(self.nCol)],
+            )
         xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nCol-1)])
         taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nCol-1)])
         deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
@@ -791,6 +806,8 @@ class Chain(object):
         deltas_df.to_sql('deltas', conn, index = False)
         rs_df.to_sql('rs',         conn, index = False)
         etas_df.to_sql('etas',     conn, index = False)
+        mus_df.to_sql('mus',       conn, index = False)
+        Sigmas_df.to_sql('Sigmas_cov', conn, index = False)
         conn.commit()
         conn.close()
         return
@@ -831,6 +848,7 @@ class Chain(object):
         self.itl = stepping**np.arange(ntemps)
         self.nTemp = ntemps
         self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
+        self.nSwap_per = self.nTemp // 2
         self.swap_start = 300
         # self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
@@ -842,7 +860,10 @@ class Result(object):
             dmax = self.samples.delta[s].max()
             njs = cu.counter(self.samples.delta[s], int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
-            new_zetas = np.exp(self.samples.mu[s] + cholesky(self.samples.Sigma[s]) @ normal(size = (self.nCol, m)))
+            new_zetas = np.exp(
+                + self.samples.mu[s].reshape(1,self.nCol) 
+                + (cholesky(self.samples.Sigma[s]) @ normal(size = (self.nCol, m))).T
+                )
             new_sigmas = np.hstack((
                 np.ones((m, 1)),
                 gamma(shape = self.samples.xi[s], scale = self.samples.tau[s], size = (m, self.nCol - 1)),
@@ -874,30 +895,30 @@ class Result(object):
         conn = sql.connect(path)
 
         deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
+        mus    = pd.read_sql('select * from mus;', conn).values
+
         etas   = pd.read_sql('select * from etas;', conn).values
-        zetas  = pd.read_sql('select * from zetas;', conn).values
-        sigmas = pd.read_sql('select * from sigmas;', conn).values
-        mus    = pd.read_sql('select * from mus', conn).values
-        Sigmas = pd.read_sql('select * from ')
-        alphas = pd.read_sql('select * from alphas;', conn).values
-        betas  = pd.read_sql('select * from betas;', conn).values
         xis    = pd.read_sql('select * from xis;', conn).values
         taus   = pd.read_sql('select * from taus;', conn).values
         rs     = pd.read_sql('select * from rs;', conn).values
 
+        zetas  = pd.read_sql('select * from zetas;', conn).values
+        sigmas = pd.read_sql('select * from sigmas;', conn).values
+        Sigmas = pd.read_sql('select * from Sigmas_cov;', conn).values
+        
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
-        self.nCol  = alphas.shape[1]
+        self.nCol  = mus.shape[1]
 
         self.samples       = Samples_(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
         self.samples.eta   = etas
-        self.samples.alpha = alphas
-        self.samples.beta  = betas
         self.samples.xi    = xis
         self.samples.tau   = taus
         self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
         self.samples.sigma = [sigmas[np.where(sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
+        self.samples.mu    = mus
+        self.samples.Sigma = Sigmas.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.r     = rs
         return
 
