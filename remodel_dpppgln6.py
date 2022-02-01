@@ -1,7 +1,7 @@
 from re import S
 from tkinter import N
 import numpy as np
-np.errstate(divide = 'ignore')
+# np.errstate(divide = 'ignore')
 from numpy.random import choice, gamma, beta, normal, uniform
 from numpy.linalg import cholesky, slogdet, inv
 from scipy.stats import invwishart
@@ -148,7 +148,8 @@ def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
     cov_inv  : array of cov mats  (t x d x d)    
     """
     ld = np.zeros(x.shape[:-1])
-    ld -= np.einsum('tdd->t', np.log(cov_chol)).reshape(-1,1)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld -= np.einsum('tdd->t', np.log(cov_chol)).reshape(-1,1)
     # ld -= 0.5 * 2 * np.log(np.diag(cov_chol)).sum()
     ld -= 0.5 * np.einsum(
         'tjd,tdl,tjl->tj', 
@@ -277,6 +278,38 @@ def cluster_covariance_mat(S, mS, nS, delta, covs, mus, n, temps):
     S += np.eye(S.shape[-1]) * 1e-9
     return
 
+# def sample_delta_per_temperature(delta_t, ll_t, eta_t, temp_t):
+#     """
+#     delta_t : (n)
+#     ll_t    : (n, J)
+#     temp_t  : scalar
+#     eta_t   : scalar
+
+#     """
+#     scratch = np.zeros(ll_t.shape[1])
+#     curr_cluster_state = np.bincount(delta_t, minlength = scratch.shape[0])
+#     cand_cluster_state = (curr_cluster_state == 0)
+#     p_t = uniform(size = delta_t.shape[0])
+#     for n in range(ll_t.shape[0]):
+#         curr_cluster_state[delta_t[n]] -= 1
+#         scratch[:] = 0
+#         scratch += curr_cluster_state
+#         scratch += cand_cluster_state * (eta_t / (cand_cluster_state.sum() + 1e-9))
+#         with np.errstate(divide = 'ignore', invalid = 'ignore'):
+#             np.log(scratch, out = scratch)
+#         scratch += ll_t[n]
+#         scratch *= temp_t
+#         scratch -= scratch.max()
+#         np.exp(scratch, out = scratch)
+#         np.cumsum(scratch, out = scratch)
+#         delta_t[n] = np.searchsorted(scratch, p_t[n] * scratch[-1])
+#         curr_cluster_state[delta_t[n]] += 1
+#         cand_cluster_state[delta_t[n]] = False
+#     return delta_t
+
+# def sample_delta_per_temperature_wrapper(args):
+#     return sample_delta_per_temperature(*args)
+
 class Samples(object):
     zeta  = None
     sigma = None
@@ -366,7 +399,8 @@ class Chain(object):
         Returns:
             delta
         """
-        Y = np.einsum('tn,nd->tnd', r, self.data.Yp)           # (t, n, d)
+        Y = r[:,:,None] * self.data.Yp[None,:,:]               # (t, n, d)
+        # Y = np.einsum('tn,nd->tnd', r, self.data.Yp)           # (t, n, d)
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count) # (t, J)
         cand_cluster_state = (curr_cluster_state == 0)         # (t, J)
         log_likelihood = dprodgamma_log_my_mt(Y, zeta, sigma)  # (n, t, J)
@@ -381,7 +415,8 @@ class Chain(object):
             scratch[:] = 0
             scratch += curr_cluster_state
             scratch += cand_cluster_state * (eta / cand_cluster_state.sum(axis = 1)).reshape(-1,1)
-            np.log(scratch, out = scratch)
+            with np.errstate(divide = 'ignore', invalid = 'ignore'):
+                np.log(scratch, out = scratch)
             scratch += log_likelihood[i]
             scratch -= scratch.max(axis = 1).reshape(-1,1)
             np.exp(scratch, out = scratch)
@@ -393,6 +428,14 @@ class Chain(object):
             cand_cluster_state[tidx, delta.T[i]] = False
         
         return
+    
+    # def sample_delta(self, delta, r, zeta, sigma, eta):
+    #     Y = r[:,:,None] * self.data.Yp[None,:,:]
+    #     log_likelihood = np.moveaxis(dprodgamma_log_my_mt(Y, zeta, sigma), 0, 1) # t x n x J
+    #     args = zip(delta, log_likelihood, eta, self.itl)
+    #     res = self.pool.map(sample_delta_per_temperature_wrapper, args)
+    #     # res = map(sample_delta_per_temperature_wrapper, args)
+    #     return np.array(list(res))
     
     # updated
     def clean_delta_zeta_sigma(self, delta, zeta, sigma):
@@ -561,6 +604,7 @@ class Chain(object):
             repeat(self.priors.tau.a), repeat(self.priors.tau.b),
             )
         res = map(sample_xi_wrapper, args)
+        # res = self.pool.map(sample_xi_wrapper, args)
         return np.array(list(res)).reshape(curr_xi.shape)
 
     def sample_tau(self, sigma, xi, extant_clusters):
@@ -678,7 +722,7 @@ class Chain(object):
         sigma[cand_clusters] = self.sample_sigma_new(xi, tau)[cand_clusters]
 
         # Compute Cluster assignments & re-index
-        self.sample_delta(delta, r, zeta, sigma, eta)
+        delta = self.sample_delta(delta, r, zeta, sigma, eta)
         self.clean_delta_zeta_sigma(delta, zeta, sigma)
         self.samples.delta[self.curr_iter] = delta
 
@@ -826,8 +870,8 @@ class Chain(object):
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
-            ntemps      = 10,
-            stepping    = 1.3,
+            ntemps      = 12,
+            stepping    = 1.2,
             ):
         self.data = data
         self.max_clust_count = max_clust_count
@@ -845,20 +889,19 @@ class Chain(object):
             )
         self.priors = Prior(prior_eta, _prior_mu, _prior_Sigma, prior_xi, prior_tau)
         self.set_projection()
-        self.itl = stepping**np.arange(ntemps)
+        self.itl = 1 / stepping**np.arange(ntemps)
         self.nTemp = ntemps
         self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
         self.nSwap_per = self.nTemp // 2
-        self.swap_start = 300
-        # self.pool = Pool(processes = 8, initializer = limit_cpu())
+        self.swap_start = 10
+        # self.pool = mp.Pool(processes = min(mp.cpu_count(), self.nTemp), initializer = limit_cpu())
         return
 
 class Result(object):
     def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
         new_gammas = []
         for s in range(self.nSamp):
-            dmax = self.samples.delta[s].max()
-            njs = cu.counter(self.samples.delta[s], int(dmax + 1 + m))
+            njs = np.bincount(self.samples.delta[s], int(self.samples.delta[s].max() + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
             new_zetas = np.exp(
                 + self.samples.mu[s].reshape(1,self.nCol) 
@@ -935,15 +978,19 @@ if __name__ == '__main__':
     from projgamma import GammaPrior
     from pandas import read_csv
     import os
+    import time
 
+    t1 = time.time()
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(1000)
-    model.write_to_disk('./test/results.db', 500, 2)
+    model.sample(50000)
+    model.write_to_disk('./test/results.db', 20000, 30)
     res = Result('./test/results.db')
     res.write_posterior_predictive('./test/postpred.csv')
+    t2 = time.time()
+    print((t2-t1)/3600)
     # EOL
 
 

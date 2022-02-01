@@ -509,7 +509,7 @@ class Result(object):
         new_gammas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
-            njs = cu.counter(self.samples.delta[s], int(dmax + 1 + m))
+            njs = np.bincount(self.samples.delta[s], int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
             new_zetas = gamma(
                 shape = self.samples.alpha[s],
