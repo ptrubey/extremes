@@ -1,7 +1,7 @@
 #!/bin/bash
 
 nohup python test_generic.py ./datasets/ad_cardio_x.csv ./ad/cardio dppprg 50000 20000 30 --eta_rate 1e0 --decluster False > /dev/null 2>&1 &
-nohup python test_generic.py ./datasets/ad_cover_x.csv ./ad/cover dppprg 50000 20000 30 --nMix 50 --decluster False > /dev/null 2>&1 &
+# nohup python test_generic.py ./datasets/ad_cover_x.csv ./ad/cover dppprg 50000 20000 30 --eta_rate 1e0  --decluster False > /dev/null 2>&1 &
 nohup python test_generic.py ./datasets/ad_mammography_x.csv ./ad/mammography dppprg 50000 20000 30 --eta_rate 1e0 --decluster False > /dev/null 2>&1 &
 nohup python test_generic.py ./datasets/ad_pima_x.csv ./ad/pima dppprg 50000 20000 30 --eta_rate 1e0 --decluster False > /dev/null 2>&1 &
 nohup python test_generic.py ./datasets/ad_satellite_x.csv ./ad/satellite dppprg 50000 20000 30 --eta_rate 1e0 --decluster False --quantile 0.97 > /dev/null 2>&1 &
