@@ -1,7 +1,7 @@
 from re import S
 from tkinter import N
 import numpy as np
-np.errstate(all = 'raise')
+np.seterr(all = 'raise')
 from numpy.random import choice, gamma, beta, normal, uniform
 from numpy.linalg import cholesky, slogdet, inv
 from scipy.stats import invwishart
@@ -872,7 +872,7 @@ class Chain(object):
         self.nTemp = ntemps
         self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
         self.nSwap_per = self.nTemp // 2
-        self.swap_start = 300
+        self.swap_start = 1e20
         return
 
 class Result(object):
