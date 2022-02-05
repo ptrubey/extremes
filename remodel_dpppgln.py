@@ -253,6 +253,7 @@ def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sv, nj, Sigma_inv, mu, xi, 
     ld -= nj * np.einsum('md->m', gammaln(zeta_j))
     ld += np.einsum('md->m', gammaln(nj.reshape(-1,1) * zeta_j[:,1:] + xi))
     ld -= np.einsum('md,md->m', nj.reshape(-1,1) * zeta_j[:,1:] + xi, np.log(yj_sv[:,1:] + tau))
+    ld 
     ld -= 0.5 * np.einsum('ml,mld,md->m', log_zeta_j - mu, Sigma_inv, log_zeta_j - mu)
     return ld
 
@@ -520,17 +521,16 @@ class Chain(object):
         tau   : (t x d-1)
         """
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
-        idx = np.where(curr_cluster_state > 0)
         delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
+        Ysv = np.einsum('tnd,tnj->tjd', r[:,:,None] * self.data.Yp[None,:,:], delta_ind_mat)
 
         shape = np.zeros((self.nTemp, self.max_clust_count, self.nCol - 1))
-        shape += xi.reshape(self.nTemp, 1, self.nCol - 1)
         rate  = np.zeros((self.nTemp, self.max_clust_count, self.nCol - 1))
-        rate  += tau.reshape(self.nTemp, 1, self.nCol - 1)
         
-        Ysv = np.einsum('tnd,tnj->tjd', r.reshape(self.nTemp, self.nDat, 1) * self.data.Yp, delta_ind_mat)
-
-        shape += curr_cluster_state.reshape(self.nTemp, self.max_clust_count, 1) * zeta[:,:,1:]
+        shape += xi[:,None,:]
+        rate  += tau[:,None,:]
+        
+        shape += curr_cluster_state[:,:,None] * zeta[:,:,1:]
         rate  += Ysv[:,:,1:]
         
         sigma_new = np.ones(zeta.shape)
