@@ -253,7 +253,6 @@ def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sv, nj, Sigma_inv, mu, xi, 
     ld -= nj * np.einsum('md->m', gammaln(zeta_j))
     ld += np.einsum('md->m', gammaln(nj.reshape(-1,1) * zeta_j[:,1:] + xi))
     ld -= np.einsum('md,md->m', nj.reshape(-1,1) * zeta_j[:,1:] + xi, np.log(yj_sv[:,1:] + tau))
-    ld 
     ld -= 0.5 * np.einsum('ml,mld,md->m', log_zeta_j - mu, Sigma_inv, log_zeta_j - mu)
     return ld
 
@@ -535,6 +534,7 @@ class Chain(object):
         
         sigma_new = np.ones(zeta.shape)
         sigma_new[:,:,1:] = gamma(shape = shape, scale = 1 / rate)
+        
         return sigma_new
 
     def sample_mu(self, zeta, Sigma_inv, extant_clusters):
@@ -543,11 +543,18 @@ class Chain(object):
         Sigma_Inv       : (t x d x d)
         extant_clusters : (t x J)     (flag indicating an extant cluster)
         """
-        n     = extant_clusters.sum(axis = 1) # number of clusters per temp
-        lzbar = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) / n.reshape(-1,1)
+        n     = extant_clusters.sum(axis = 1) # number of clusters per temp (t)
+        lzbar = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) / n.reshape(-1,1) # (t x d)
         # lzbar = np.log(zeta * extant_clusters[:,:,None]).sum(axis = 1) / n
-        _Sigma = inv((n * self.itl).reshape(-1,1,1) * Sigma_inv + self.priors.mu.SInv)
-        _mu = np.einsum('tkl,td,tdl->tk', _Sigma, (n * self.itl)[:,None] * lzbar, Sigma_inv)
+        # _Sigma = inv((n * self.itl).reshape(-1,1,1) * Sigma_inv + self.priors.mu.SInv)
+        _Sigma = inv(n[:,None,None] * Sigma_inv + self.priors.mu.SInv)
+        _mu = np.einsum(
+            'tjl,tl->tj',
+            _Sigma,
+            + self.priors.mu.SInv @ self.priors.mu.mu 
+            + np.einsum('tjl,tl->tj', Sigma_inv, n[:,None] * lzbar)
+            )
+        #_mu = np.einsum('tkl,td,tdl->tk', _Sigma, (n * self.itl)[:,None] * lzbar, Sigma_inv)
         return _mu + np.einsum('tkl,tl->tk', cholesky(_Sigma), normal(size = (self.nTemp, self.nCol)))
 
     def sample_Sigma(self, zeta, mu, extant_clusters):
@@ -597,11 +604,13 @@ class Chain(object):
         zeta  : (t x J x d)
         sigma : (t x J x d)
         """
-        As = zeta[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol).sum(axis = 2)
-        Bs = (
-            self.data.Yp.reshape(1, self.nDat, self.nCol) 
-            * sigma[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol)
-            ).sum(axis = 2)
+        # As = zeta[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol).sum(axis = 2)
+        As = zeta[self.temp_unravel, delta.ravel()].sum(axis = 1).reshape(self.nTemp, self.nDat)
+        Bs = np.einsum(
+            'nd,tnd->tn', 
+            self.data.Yp, 
+            sigma[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
+            )
         return gamma(shape = As, scale = 1/Bs)
     
     def sample_eta(self, curr_eta, delta):
@@ -845,7 +854,7 @@ class Chain(object):
             prior_eta   = GammaPrior(2., 0.5),
             prior_mu    = (0., 4.),
             prior_Sigma = (10, 0.5),
-            prior_xi    = GammaPrior(0.5, 0.5),
+            prior_xi    = GammaPrior(1., 1.),
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,

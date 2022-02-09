@@ -87,6 +87,23 @@ cpdef double log_post_log_alpha_1(
         )
     return lp
 
+cpdef double log_post_log_alpha_1_summary(
+        double log_alpha,
+        double y_sum,
+        double ly_sum,
+        int n,
+        double a, double b,
+        ):
+    cdef double alpha, lp
+    alpha = exp(log_alpha)
+    lp = (
+        + a * log_alpha
+        - b * alpha
+        + (alpha - 1) * ly_sum
+        - n * lgamma(alpha)
+        )
+    return lp
+
 cpdef double sample_alpha_1_mh(
         double curr_alpha_1,
         double [:] y_1,
@@ -112,6 +129,31 @@ cpdef double sample_alpha_1_mh(
         return exp(prop_log_alpha_1)
     else:
         return curr_alpha_1
+
+
+cpdef double sample_alpha_1_mh_summary(
+        double curr_alpha,
+        double y_sum,
+        double ly_sum,
+        int n,
+        double a, double b,
+        double proposal_sd = 0.3,
+        ):
+    cdef double curr_log_alpha, prop_log_alpha, curr_lp, prop_lp
+
+    if n == 0:
+        return gamma_rvs(a, b)
+    
+    curr_log_alpha = log(curr_alpha)
+    prop_log_alpha = curr_log_alpha + normal(scale = proposal_sd)
+
+    curr_lp = log_post_log_alpha_1_summary(curr_log_alpha, y_sum, ly_sum, n, a, b)
+    prop_lp = log_post_log_alpha_1_summary(prop_log_alpha, y_sum, ly_sum, n, a, b)
+
+    if log(uniform()) < prop_lp - curr_lp:
+        return exp(prop_log_alpha)
+    else:
+        return curr_alpha
 
 # cdef double _sample_alpha_1_slice(
 #         double curr_alpha_1,
