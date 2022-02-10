@@ -580,11 +580,12 @@ class Chain(object):
         sigma   : (t x J x d)
         extant_clusters : (t x J)
         """
+        # return np.ones(curr_xi.shape)
         n  = np.repeat(extant_clusters.sum(axis = 1), sigma.shape[-1] - 1)  # (t x (d-1))
         ls = np.nansum(np.log(sigma[:,:,1:]) * extant_clusters[:,:,None], axis = 1) # (t, d-1)
         s  = (sigma[:,:,1:] * extant_clusters[:,:,None]).sum(axis = 1)              # (t, d-1)
         args = zip(
-            curr_xi.ravel(), n, ls.ravel(), s.ravel(), 
+            curr_xi.ravel(), n, s.ravel(), ls.ravel(),
             repeat(self.priors.xi.a), repeat(self.priors.xi.b), 
             repeat(self.priors.tau.a), repeat(self.priors.tau.b),
             )
@@ -592,9 +593,10 @@ class Chain(object):
         return np.array(list(res)).reshape(curr_xi.shape)
 
     def sample_tau(self, sigma, xi, extant_clusters):
-        n = extant_clusters.sum(axis = 1).reshape(-1, 1)
+        # return np.ones(xi.shape)
+        n = extant_clusters.sum(axis = 1) # .reshape(-1, 1)
         s = (sigma[:,:,1:] * extant_clusters[:,:,None]).sum(axis = 1) # (t, d-1)
-        shape = n * xi + self.priors.tau.a          # (t, d-1)
+        shape = n[:, None] * xi + self.priors.tau.a # (t, d-1)
         rate  = s + self.priors.tau.b               # (t, d-1)
         return gamma(shape = shape, scale = 1 / rate)  # (t, d-1)
 

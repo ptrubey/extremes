@@ -242,8 +242,8 @@ cpdef double sample_alpha_k_mh_summary(
         double y_ksum,
         double ly_ksum,
         double a, double b, double c, double d,
+        double invtemp = 1.,
         double proposal_sd = 0.3,
-        double invtemp = 1.
         ):
     """
     Sampling function for shape parameter, 

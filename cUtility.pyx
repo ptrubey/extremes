@@ -35,7 +35,7 @@ cpdef np.ndarray[dtype = np.int_t, ndim = 1] generate_indices(
         np.ndarray[dtype = np.float_t, ndim = 1] probs,
         int n
         ):
-    cdef np.ndarray[dtype = np.int_t, ndim = 1] indices = np.empty(n, dtype = np.int)
+    cdef np.ndarray[dtype = np.int_t, ndim = 1] indices = np.empty(n, dtype = int)
     cdef int iter_result, iter_indices
     cdef np.ndarray[dtype = np.int_t, ndim = 1] result = multinomial(n = n, pvals = probs)
     iter_indices = 0
