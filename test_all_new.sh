@@ -26,4 +26,8 @@
 nohup python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dpppg 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
 nohup python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dppprg 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
 
+nohup python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dpppgln 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
+nohup python test_generic.py ./datasets/ivt_updated_nov_mar.csv ./output2 dppprgln 50000 20000 30 --eta_shape 2 --eta_rate 1e-1 > /dev/null 2>&1 &
+
+
 # EOF
