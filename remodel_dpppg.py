@@ -201,8 +201,10 @@ class Chain(object):
             np.log(scratch, out = scratch)
         # scratch += np.log(curr_cluster_state + cand_cluster_state * eta / cand_cluster_state.sum())
         scratch += log_likelihood_i
+        np.nan_to_num(scratch, False, -np.inf)
         scratch -= scratch.max()
-        np.exp(scratch, out = scratch)
+        with np.errstate(under = 'ignore'):
+            np.exp(scratch, out = scratch)
         np.cumsum(scratch, out = scratch)
         delta_i = np.searchsorted(scratch, p * scratch[-1])
         curr_cluster_state[delta_i] += 1

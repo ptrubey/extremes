@@ -401,11 +401,13 @@ class Chain(object):
             scratch[:] = 0
             scratch += curr_cluster_state
             scratch += cand_cluster_state * (eta / (cand_cluster_state.sum(axis = 1) + 1e-9)).reshape(-1,1)
-            with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            with np.errstate(divide = 'ignore', invalid = 'ignore', under = 'ignore'):
                 np.log(scratch, out = scratch)
             scratch += log_likelihood[i]
+            np.nan_to_num(scratch, False, -np.inf)
             scratch -= scratch.max(axis = 1).reshape(-1,1)
-            np.exp(scratch, out = scratch)
+            with np.errstate(under='ignore'):
+                np.exp(scratch, out = scratch)
             np.cumsum(scratch, axis = 1, out = scratch)
             scratch /= scratch.T[-1].reshape(-1,1)
             scratch += tidx.reshape(-1,1)
