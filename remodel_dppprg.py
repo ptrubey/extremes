@@ -1,22 +1,21 @@
-from numpy.random import choice, gamma, beta, normal, uniform
+from numpy.random import choice, gamma, beta, uniform
 from collections import namedtuple
-from itertools import repeat, chain
+from itertools import repeat
 import numpy as np
+np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 import pandas as pd
 import os
 import sqlite3 as sql
 from math import ceil, log
-# from multiprocessing import Pool
-from energy import limit_cpu
-
 from scipy.special import gammaln
 
-
 import cUtility as cu
-from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc, \
-                        logddirichlet, logdgamma, logdgamma_restricted
-from data import euclidean_to_angular, euclidean_to_simplex, euclidean_to_hypercube, Data
-from projgamma import GammaPrior, DirichletPrior
+from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc
+from data import euclidean_to_angular, euclidean_to_hypercube, Data
+from projgamma import GammaPrior
+
+# from multiprocessing import Pool
+# from energy import limit_cpu
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """

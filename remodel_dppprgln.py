@@ -1,7 +1,5 @@
-from re import S
-from tkinter import N
 import numpy as np
-np.seterr(all = 'raise')
+np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 from numpy.random import choice, gamma, beta, normal, uniform
 from numpy.linalg import cholesky, slogdet, inv
 from scipy.stats import invwishart
