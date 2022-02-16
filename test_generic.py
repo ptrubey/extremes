@@ -5,8 +5,23 @@ from pandas import read_csv
 import models
 import os
 
+class Object(object):
+    pass
+
 if __name__ == '__main__':
-    p = argparser()
+    # p = argparser()
+    p = Object()
+
+    p.model = "dpppgln"
+    p.out_folder = "./output2"
+    p.in_path = './datasets/ivt_updated_nov_mar.csv'
+    p.decluster = 'True'
+    p.quantile = '0.95'
+    p.eta_shape = '2'
+    p.eta_rate = '1e0'
+    p.nSamp = '5000'
+    p.nKeep = '2000'
+    p.nThin = '3'
 
     Chain  = models.Chains[p.model]
     Result = models.Results[p.model]

@@ -178,8 +178,8 @@ class Data_From_Raw(Data):
         P = np.apply_along_axis(lambda x: compute_gp_parameters(x, q), 0, raw)
         Z = scale_pareto(raw, P)
         return Z, P
-
-    def __init__(self, raw, decluster = False, quantile = 0.95):
+    
+    def fill_real(self, raw, decluster, quantile):
         # if input is pandas dataframe, then take numpy array representation
         try:
             self.raw = raw.values
@@ -198,6 +198,9 @@ class Data_From_Raw(Data):
         self.nDat = self.A.shape[0]
         # Pre-compute the trig components of the likelihood.
         self.fill_out()
+
+    def __init__(self, raw, decluster = False, quantile = 0.95):
+        self.fill_real(raw, decluster, quantile)        
         return
 
 class Data_From_Sphere(Data):
@@ -211,6 +214,39 @@ class Data_From_Sphere(Data):
         self.V = euclidean_to_hypercube(pV)
         self.nDat, self.nCol = pV.shape
         self.fill_out()
+        return
+
+class Categorical(object):
+    def fill_categorical(self, raw, values, index):
+        # If values are supplied, verify that all values in data
+        # are represented in supplied.
+        if values is not None:
+            assert len(values) == raw.shape[1]
+            for i in range(raw.shape[1]):
+                assert len(set(raw.T[i]).difference(set(values[i]))) == 0
+        else:
+            values = [np.unique(raw.T[i]) for i in range(raw.shape[1])]
+        
+        if index is None:
+            index == np.arange(raw.shape[0])
+
+        dummies = []
+        for i in range(raw.shape[i]):
+            dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
+        self.W = np.vstack(dummies).T[index]
+        return
+    
+    def __init__(self, raw, values = None, index = None):
+        self.fill_categorical(raw, values, index)
+        return
+
+class MixedData(Data_From_Raw, Categorical):
+    def __init__(self, raw, cat_vars, 
+            decluster = False, quantile = 0.95, values = None,
+            ):
+        real_vars = np.array(set(np.arange(raw.shape[1])).difference(set(cat_vars)))
+        self.fill_real(raw[:, real_vars], decluster, quantile)
+        self.fill_categorical(raw[:, cat_vars], values, self.I)
         return
 
 if __name__ == '__main__':
