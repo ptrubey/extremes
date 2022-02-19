@@ -217,6 +217,9 @@ class Data_From_Sphere(Data):
         return
 
 class Categorical(object):
+    Cats = None    # numpy array indicating number of categories per categorical variable
+    nCat = None    # Total number of categories (sum of Cats)
+
     def fill_categorical(self, raw, values, index):
         # If values are supplied, verify that all values in data
         # are represented in supplied.
@@ -231,9 +234,14 @@ class Categorical(object):
             index == np.arange(raw.shape[0])
 
         dummies = []
+        cats = []
         for i in range(raw.shape[i]):
             dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
+            cats.append(len(values[i]))
         self.W = np.vstack(dummies).T[index]
+        self.nCat = self.W.shape[1]
+        self.Cats = np.array(cats)
+        assert self.Cats.sum() == self.nCat
         return
     
     def __init__(self, raw, values = None, index = None):
