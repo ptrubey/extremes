@@ -10,12 +10,25 @@ from math import ceil, log
 from scipy.special import gammaln
 
 import cUtility as cu
-from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc
+from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
+from cProjgamma import sample_alpha_k_mh, sample_beta_fc
 from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
 
 # from multiprocessing import Pool
 # from energy import limit_cpu
+
+def dprojgamma_log_my_mt(aY , aAlpha, aBeta):
+    """
+    Kernel of Projected Gamma distribution
+    """
+    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
+    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta))[None,:]
+    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
+    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))
+    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
+    out -= np.einsum('j,nd,jd->nj', np.einsum('jd->j', aAlpha), aY, aBeta)
+    return out
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
@@ -31,7 +44,7 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
     out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
     out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
-    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
+    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(-beta y)
     return out
 
 def dprodgamma_log_multi_y(aY, vAlpha, vBeta, logConstant):
@@ -104,27 +117,33 @@ def sample_delta_i(curr_cluster_state, cand_cluster_state, eta, delta_i, p, y, z
     cand_cluster_state[delta_i] = False
     return delta_i
 
-
-## Need to update to use summarized Y's 
 def update_zeta_j_wrapper(args):
     # parse arguments
-    curr_zeta_j, Y_j, alpha, beta, xi, tau = args
+    curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau = args
     prop_zeta_j = np.empty(curr_zeta_j.shape)
-    prop_zeta_j[0] = sample_alpha_1_mh(curr_zeta_j[0], Y_j.T[0], alpha[0], beta[0])
+    prop_zeta_j[0] = sample_alpha_1_mh_summary(
+        curr_zeta_j[0], n_j, Y_js[0], lY_js[0], alpha[0], beta[0],
+        )
+    # prop_zeta_j[0] = sample_alpha_1_mh(curr_zeta_j[0], Y_j.T[0], alpha[0], beta[0])
     for i in range(1, curr_zeta_j.shape[0]):
-        prop_zeta_j[i] = sample_alpha_k_mh(
-                curr_zeta_j[i], Y_j.T[i], alpha[i], beta[i], xi[i-1], tau[i-1],
+        prop_zeta_j[i] = sample_alpha_k_mh_summary(
+                curr_zeta_j[i], n_j, Y_js[i], lY_js[i], 
+                alpha[i], beta[i], xi[i-1], tau[i-1],
                 )
+        # prop_zeta_j[i] = sample_alpha_k_mh(
+        #         curr_zeta_j[i], Y_j.T[i], alpha[i], beta[i], xi[i-1], tau[i-1],
+        #         )
     return prop_zeta_j
 
 
 ## Need to update to use summarized Y's 
 def update_sigma_j_wrapper(args):
-    zeta_j, Y_j, xi, tau = args
+    zeta_j, n_j, Y_js, xi, tau = args
     prop_sigma_j = np.empty(zeta_j.shape)
     prop_sigma_j[0] = 1.
-    for i in range(1, prop_sigma_j.shape[0]):
-        prop_sigma_j[i] = sample_beta_fc(zeta_j[i], Y_j.T[i], xi[i-1], tau[i-1])
+    prop_sigma_j[1:] = gamma(shape = n_j * zeta_j[1:] + xi, scale = 1 / (Y_js + tau))
+    # for i in range(1, prop_sigma_j.shape[0]):
+    #     prop_sigma_j[i] = sample_beta_fc_summary(zeta_j[i], n_j, Y_js[i], xi[i-1], tau[i-1])
     return prop_sigma_j
 
 def update_alpha_l_wrapper(args):
@@ -313,12 +332,18 @@ class Chain(object):
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
         return gamma(shape = aaa, scale = 1 / bb)
 
+    # need to update such that every projection's sigma_1 = 1
     def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta, xi, tau):
         dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
         Y = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
+        n = dmat.sum(axis = 0)
         Ysv = (Y.T @ dmat).T          # np.einsum('nd,nj->jd', Y, dmat) 
         lYsv = (np.log(Y).T @ dmat).T # np.einsum('nd,nj->jd', np.log(Y), dmat)
-        args = zip(curr_zeta, Ysv, lYsv, repeat(alpha), repeat(beta), repeat(xi), repeat(tau))
+        args = zip(
+            curr_zeta, n, Ysv, lYsv, 
+            repeat(alpha), repeat(beta), 
+            repeat(xi), repeat(tau),
+            )
         res = map(update_zeta_j_wrapper, args)
         # args = zip(
         #     curr_zeta,
@@ -335,6 +360,7 @@ class Chain(object):
     def sample_sigma(self, zeta, r, rho, delta, xi, tau):
         dmat = delta[:, None] == np.arange(delta.max() + 1)
         Y = np.hstack((r[:,None] * self.data.Yp, rho))
+        n = dmat.sum(axis = 0)
         # Y = r.reshape(-1, 1) * self.data.Yp
         Ysv = (Y.T @ dmat).T # (J x d)
         args = zip(
