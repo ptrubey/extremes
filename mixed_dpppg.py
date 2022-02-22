@@ -93,57 +93,31 @@ def dgamma_log_multi_theta(y, vAlpha, vBeta, vlogConstant):
         )
     return ld
 
-def sample_delta_i(curr_cluster_state, cand_cluster_state, eta, delta_i, p, y, zeta, sigma, logConstant):
-    """ 
-    curr_cluster_state : vector of current cluster counts (np.bincount, integer)
-    cand_cluster_state : vector of bools whether a given cluster is candidate
-    eta   : candidate cluster weighting factor
-    p     : random uniform (scalar between 0 and 1)
-    y     : observation i (vector of length d)
-    zeta  : shape matrix for gamma distribution (J x d)
-    sigma : weight matrix for gamma distribution (J x d)
-    """
-    curr_cluster_state[delta_i] -= 1
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        temp = (
-            + np.log(curr_cluster_state + (cand_cluster_state * eta / cand_cluster_state.sum()))
-            + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
-            )
-    temp -= temp.max()
-    temp[:] = np.exp(temp).cumsum()
-    temp /= temp[-1]
-    delta_i = (temp < p).sum()
-    curr_cluster_state[delta_i] += 1
-    cand_cluster_state[delta_i] = False
-    return delta_i
-
 def update_zeta_j_wrapper(args):
     # parse arguments
-    curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau = args
+    curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau, sigma_unity = args
     prop_zeta_j = np.empty(curr_zeta_j.shape)
-    prop_zeta_j[0] = sample_alpha_1_mh_summary(
-        curr_zeta_j[0], n_j, Y_js[0], lY_js[0], alpha[0], beta[0],
-        )
-    # prop_zeta_j[0] = sample_alpha_1_mh(curr_zeta_j[0], Y_j.T[0], alpha[0], beta[0])
-    for i in range(1, curr_zeta_j.shape[0]):
-        prop_zeta_j[i] = sample_alpha_k_mh_summary(
-                curr_zeta_j[i], n_j, Y_js[i], lY_js[i], 
-                alpha[i], beta[i], xi[i-1], tau[i-1],
+    xitau_iter = 0
+    for i in range(curr_zeta_j.shape[0]):
+        if sigma_unity[i]:
+            prop_zeta_j[i] = sample_alpha_1_mh_summary(
+                curr_zeta_j[0], n_j, Y_js[0], lY_js[0], alpha[0], beta[0],
                 )
-        # prop_zeta_j[i] = sample_alpha_k_mh(
-        #         curr_zeta_j[i], Y_j.T[i], alpha[i], beta[i], xi[i-1], tau[i-1],
-        #         )
+        else:
+            prop_zeta_j[i] = sample_alpha_k_mh_summary(
+                curr_zeta_j[i], n_j, Y_js[i], lY_js[i], 
+                alpha[i], beta[i], xi[xitau_iter], tau[xitau_iter],
+                )
+            xitau_iter += 1
     return prop_zeta_j
 
-
-## Need to update to use summarized Y's 
 def update_sigma_j_wrapper(args):
-    zeta_j, n_j, Y_js, xi, tau = args
-    prop_sigma_j = np.empty(zeta_j.shape)
-    prop_sigma_j[0] = 1.
-    prop_sigma_j[1:] = gamma(shape = n_j * zeta_j[1:] + xi, scale = 1 / (Y_js + tau))
-    # for i in range(1, prop_sigma_j.shape[0]):
-    #     prop_sigma_j[i] = sample_beta_fc_summary(zeta_j[i], n_j, Y_js[i], xi[i-1], tau[i-1])
+    zeta_j, n_j, Y_js, xi, tau, sigma_unity = args
+    prop_sigma_j = np.ones(zeta_j.shape)
+    prop_sigma_j[np.where(~sigma_unity)[0]] = gamma(
+        shape = n_j * zeta_j[np.where(~sigma_unity)[0]] + xi,
+        scale = 1 / (Y_js[np.where(~sigma_unity)[0]] + tau),
+        )
     return prop_sigma_j
 
 def update_alpha_l_wrapper(args):
@@ -172,14 +146,19 @@ class Samples(object):
     r     = None
     eta   = None
 
-    def __init__(self, nSamp, nDat, nCol, nCat):
+    def __init__(self, nSamp, nDat, nCol, nCat, nCats):
+        """
+        nCol: number of 
+        nCat: number of categorical columns
+        nCats: number of categorical variables        
+        """
         self.zeta  = [None] * (nSamp + 1)
         self.sigma = [None] * (nSamp + 1)
         self.rho    = np.empty((nSamp + 1, nDat, nCat))
         self.alpha = np.empty((nSamp + 1, nCol + nCat))
         self.beta  = np.empty((nSamp + 1, nCol + nCat))
-        self.xi    = np.empty((nSamp + 1, nCol + nCat - 1))
-        self.tau   = np.empty((nSamp + 1, nCol + nCat - 1))
+        self.xi    = np.empty((nSamp + 1, nCol + nCat - 1 - nCats))
+        self.tau   = np.empty((nSamp + 1, nCol + nCat - 1 - nCats))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
         self.r     = np.empty((nSamp + 1, nDat))
         self.eta   = np.empty(nSamp + 1)
@@ -216,6 +195,8 @@ class Chain(object):
     @property
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
+
+    sigma_unity = None
 
     def sample_delta_i(self, curr_cluster_state, cand_cluster_state, eta, 
                                         log_likelihood_i, delta_i, p, scratch):
@@ -254,6 +235,11 @@ class Chain(object):
         return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
 
     def sample_sigma_new(self, xi, tau, m):
+        prop_sigma = np.empty(self.nCol + self.nCat)
+        prop_sigma[np.where(self.sigma_unity)[0]] = 1
+        prop_sigma[np.where(~self.sigma_unity)[0]] = gamma(
+            shape = xi, scale = 1 / tau, size = (m, self.nSigma)
+            )
         return np.hstack((
                     np.ones((m, 1)), 
                     gamma(shape = xi, scale = 1/tau, size = (m, self.nCol - 1))
@@ -286,7 +272,8 @@ class Chain(object):
     def sample_xi(self, sigma, curr_xi):
         args = zip(
             curr_xi,
-            sigma.T[1:],
+            sigma.T[np.where(~self.sigma_unity)[0]],
+            # sigma.T[1:],
             repeat(self.priors.xi.a),
             repeat(self.priors.xi.b),
             repeat(self.priors.tau.a),
@@ -299,7 +286,8 @@ class Chain(object):
     def sample_tau(self, sigma, xi):
         args = zip(
             xi,
-            sigma.T[1:],
+            sigma.T[np.where(~self.sigma_unity)[0]],
+            # sigma.T[1:],
             repeat(self.priors.tau.a),
             repeat(self.priors.tau.b),
             )
@@ -332,7 +320,6 @@ class Chain(object):
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
         return gamma(shape = aaa, scale = 1 / bb)
 
-    # need to update such that every projection's sigma_1 = 1
     def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta, xi, tau):
         dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
         Y = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
@@ -342,19 +329,9 @@ class Chain(object):
         args = zip(
             curr_zeta, n, Ysv, lYsv, 
             repeat(alpha), repeat(beta), 
-            repeat(xi), repeat(tau),
+            repeat(xi), repeat(tau), repeat(self.sigma_unity),
             )
         res = map(update_zeta_j_wrapper, args)
-        # args = zip(
-        #     curr_zeta,
-        #     [Y[np.where(delta == j)[0]] for j in range(curr_zeta.shape[0])],
-        #     repeat(alpha),
-        #     repeat(beta),
-        #     repeat(xi),
-        #     repeat(tau),
-        #     )
-        # res = map(update_zeta_j_wrapper, args)
-        # res = self.pool.map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
     def sample_sigma(self, zeta, r, rho, delta, xi, tau):
@@ -364,28 +341,28 @@ class Chain(object):
         # Y = r.reshape(-1, 1) * self.data.Yp
         Ysv = (Y.T @ dmat).T # (J x d)
         args = zip(
-            zeta,
-            Ysv, # [Y[np.where(delta == j)[0]] for j in range(zeta.shape[0])],
-            repeat(xi),
-            repeat(tau),
+            zeta, Ysv,
+            repeat(xi), repeat(tau), repeat(self.sigma_unity),
             )
         res = map(update_sigma_j_wrapper, args)
         # res = self.pool.map(update_sigma_j_wrapper, args)
         return np.array(list(res))
 
     def initialize_sampler(self, ns):
-        self.samples = Samples(ns, self.nDat, self.nCol)
+        self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.xi[0] = 1.
         self.samples.tau[0] = 1.
-        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol))
-        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol))
+        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol + self.nCat))
+        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol + self.nCat))
+        self.samples.sigma[0][:,np.where(self.sigma_unity)[0]] = 1.
         self.samples.eta[0] = 40.
         self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
         self.samples.r[0] = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
                 )
+        self.samples.rho[0] = self.CatMat / self.data.cats
         self.curr_iter = 0
         return
 
@@ -402,10 +379,14 @@ class Chain(object):
         sigma = np.vstack((self.curr_sigma, self.sample_sigma_new(xi, tau, m)))
         eta   = self.curr_eta
         r     = self.curr_r
+        rho   = self.curr_rho
 
         self.curr_iter += 1
         # normalizing constant for product of Gammas
-        log_likelihood = dprodgamma_log_my_mt(r.reshape(-1,1) * self.data.Yp, zeta, sigma)
+        log_likelihood = (
+            + dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta[:self.nCol], sigma[:self.nCol])
+            + dprojgamma_log_my_mt(rho, zeta[self.nCol:], sigma[self.nCol:])
+            )
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
@@ -419,11 +400,12 @@ class Chain(object):
         delta, zeta, sigma = self.clean_delta_zeta_sigma(curr_cluster_state, delta, zeta, sigma)
         self.samples.delta[self.curr_iter] = delta
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta, sigma)
+        self.samples.rho[self.curr_iter]   = self.sample_rho(self.curr_delta, zeta, sigma)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
-                zeta, self.curr_r, self.curr_delta, alpha, beta, xi, tau,
+                zeta, self.curr_r, self.curr_rho, self.curr_delta, alpha, beta, xi, tau,
                 )
         self.samples.sigma[self.curr_iter] = self.sample_sigma(
-                zeta, self.curr_r, self.curr_delta, xi, tau,
+                self.curr_zeta, self.curr_r, self.curr_rho, self.curr_delta, xi, tau,
                 )
         self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
         self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
@@ -459,6 +441,7 @@ class Chain(object):
             np.hstack((np.ones((sigma.shape[0], 1)) * i, sigma))
             for i, sigma in enumerate(self.samples.sigma[nBurn :: nThin])
             ])
+        rhos   = self.samples.rho[nBurn::nThin].reshape(-1, self.nCat)
         alphas = self.samples.alpha[nBurn :: nThin]
         betas  = self.samples.beta[nBurn :: nThin]
         xis    = self.samples.xi[nBurn :: nThin]
@@ -468,18 +451,20 @@ class Chain(object):
         etas   = self.samples.eta[nBurn :: nThin]
 
         zetas_df = pd.DataFrame(
-                zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol)],
+                zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol + self.nCat)],
                 )
         sigmas_df = pd.DataFrame(
-                sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol)],
+                sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol + self.nCat)],
                 )
-        alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol)])
-        betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol)])
-        xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nCol-1)])
-        taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nCol-1)])
+        alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol + self.nCat)])
+        betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol + self.nCat)])
+        xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nSigma)])
+        taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nSigma)])
         deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
         rs_df     = pd.DataFrame(rs,     columns = ['r_{}'.format(i)     for i in range(self.nDat)])
+        rhos_df   = pd.DataFrame(rhos,   columns = ['rho_{}'.format(i)   for i in range(self.nCat)])
         etas_df   = pd.DataFrame({'eta' : etas})
+        su_df     = pd.DataFrame({'sigmaunity' : self.sigma_unity})
 
         zetas_df.to_sql('zetas',   conn, index = False)
         sigmas_df.to_sql('sigmas', conn, index = False)
@@ -490,6 +475,8 @@ class Chain(object):
         deltas_df.to_sql('deltas', conn, index = False)
         rs_df.to_sql('rs',         conn, index = False)
         etas_df.to_sql('etas',     conn, index = False)
+        rhos_df.to_sql('rhos',     conn, index = False)
+        su_df.to_sql('sigmaunity', conn, index = False)
         conn.commit()
         conn.close()
         return
@@ -504,6 +491,22 @@ class Chain(object):
         self.CatMat = cats[:, None] == np.arange(len(self.data.cats))
         return
 
+    def build_sigma_unity(self):
+        sigma_unity = np.zeros(self.nCol + self.nCat, dtype = bool)
+        # declare sigma_0 = 1
+        sigma_unity[0] = True
+        # advance iterator to the start of the categorical columns
+        iter = self.nCol
+        # for each set of categorical columns (each projected gamma) set first sigma = 1
+        for ncat in self.data.cats:
+            for x in range(ncat):
+                if (x == 0):
+                    sigma_unity[iter] = True
+                iter += 1
+        self.sigma_unity = sigma_unity
+        self.nSigma = sum(~self.sigma_unity)
+        return
+    
     def __init__(
             self,
             data,
@@ -522,9 +525,11 @@ class Chain(object):
         self.nCat = self.data.nCat
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
+        self.nCats = self.data.cats.shape[0]
         self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
         self.set_projection()
         self.categorical_considerations()
+        self.build_sigma_unity()
         # self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
 
@@ -540,6 +545,13 @@ class Result(object):
                 scale = 1. / self.samples.beta[s],
                 size = (m, self.nCol),
                 )
+            new_sigmas = np.ones(new_zetas.shape)
+            new_sigmas[:,np.where(~self.sigma_unity)[0]] = gamma(
+                shape = self.samples.xi[s],
+                scale = 1 / self.samples.tau[s],
+                size = (m,  )
+            )
+
             new_sigmas = np.hstack((
                 np.ones((m, 1)),
                 gamma(
@@ -575,18 +587,25 @@ class Result(object):
         conn = sql.connect(path)
 
         deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        etas   = pd.read_sql('select * from etas;', conn).values
+        etas   = pd.read_sql('select * from etas;', conn).values.ravel()
         zetas  = pd.read_sql('select * from zetas;', conn).values
         sigmas = pd.read_sql('select * from sigmas;', conn).values
         alphas = pd.read_sql('select * from alphas;', conn).values
         betas  = pd.read_sql('select * from betas;', conn).values
         xis    = pd.read_sql('select * from xis;', conn).values
         taus   = pd.read_sql('select * from taus;', conn).values
-        rs     = pd.read_sql('select * from rs;', conn).values
+        rs     = pd.read_sql('select * from rs;', conn).values.ravel()
+        rhos   = pd.read_sql('select * from rhos;', conn).values
+        su     = pd.read_sql('select * from sigmaunity;', conn).values.astype(bool).ravel()
+        
+        self.sigma_unity = su
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
-        self.nCol  = alphas.shape[1]
+        self.nCat  = rhos.shape[1]
+        self.nCol  = alphas.shape[1] - self.nCat
+        self.nCats = su.sum() - 1 # number of projections - 1.
+        self.nSigma = self.nCol + self.nCat - self.nCats - 1
 
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
@@ -598,6 +617,7 @@ class Result(object):
         self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
         self.samples.sigma = [sigmas[np.where(sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
         self.samples.r     = rs
+        self.samples.rho   = rhos.reshape(self.nSamp, self.nDat, self.nCat)
         return
 
     def __init__(self, path):
