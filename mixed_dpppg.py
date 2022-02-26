@@ -232,18 +232,15 @@ class Chain(object):
         return delta, zeta[keep], sigma[keep]
 
     def sample_zeta_new(self, alpha, beta, m):
-        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
+        return gamma(shape = alpha, scale = 1 / beta, size = (m, self.nCol + self.nCat))
 
     def sample_sigma_new(self, xi, tau, m):
-        prop_sigma = np.empty(self.nCol + self.nCat)
-        prop_sigma[np.where(self.sigma_unity)[0]] = 1
-        prop_sigma[np.where(~self.sigma_unity)[0]] = gamma(
+        prop_sigma = np.empty((m, self.nCol + self.nCat))
+        prop_sigma[:, np.where(self.sigma_unity)[0]] = 1
+        prop_sigma[:, np.where(~self.sigma_unity)[0]] = gamma(
             shape = xi, scale = 1 / tau, size = (m, self.nSigma)
             )
-        return np.hstack((
-                    np.ones((m, 1)), 
-                    gamma(shape = xi, scale = 1/tau, size = (m, self.nCol - 1))
-                    ))
+        return prop_sigma
 
     def sample_alpha(self, zeta, curr_alpha):
         args = zip(
@@ -297,7 +294,7 @@ class Chain(object):
 
     def sample_r(self, delta, zeta, sigma):
         As = zeta[delta][:,:self.nCol].sum(axis = 1)
-        Bs = (self.data.Yp * sigma[delta][:self.nCol]).sum(axis = 1)
+        Bs = (self.data.Yp * sigma[delta][:,:self.nCol]).sum(axis = 1)
         return gamma(shape = As, scale = 1/Bs)
 
     def sample_rho(self, delta, zeta, sigma):
@@ -310,7 +307,9 @@ class Chain(object):
         """
         As = zeta[delta][:, self.nCol:] + self.data.W
         Bs = sigma[delta][:, self.nCol:]
-        return gamma(shape = As, scale = Bs)
+        rho = gamma(shape = As, scale = Bs)
+        rho[rho < 1e-9] = 1e-9
+        return rho
 
     def sample_eta(self, curr_eta, delta):
         g = beta(curr_eta + 1, self.nDat)
@@ -336,15 +335,16 @@ class Chain(object):
 
     def sample_sigma(self, zeta, r, rho, delta, xi, tau):
         dmat = delta[:, None] == np.arange(delta.max() + 1)
-        Y = np.hstack((r[:,None] * self.data.Yp, rho))
+        Y = np.hstack((r[:, None] * self.data.Yp, rho))
         n = dmat.sum(axis = 0)
         # Y = r.reshape(-1, 1) * self.data.Yp
         Ysv = (Y.T @ dmat).T # (J x d)
         args = zip(
-            zeta, Ysv,
+            zeta, n, Ysv,
             repeat(xi), repeat(tau), repeat(self.sigma_unity),
             )
         res = map(update_sigma_j_wrapper, args)
+        # zeta_j, n_j, Y_js, xi, tau, sigma_unity = args
         # res = self.pool.map(update_sigma_j_wrapper, args)
         return np.array(list(res))
 
@@ -362,7 +362,7 @@ class Chain(object):
         self.samples.r[0] = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
                 )
-        self.samples.rho[0] = self.CatMat / self.data.cats
+        self.samples.rho[0] = (self.CatMat / self.data.Cats).sum(axis = 1)
         self.curr_iter = 0
         return
 
@@ -382,10 +382,12 @@ class Chain(object):
         rho   = self.curr_rho
 
         self.curr_iter += 1
-        # normalizing constant for product of Gammas
+        # projecting rho onto unit simplex (for each projection)
+        rho_normalized = rho * np.einsum('dc,nc->nd', self.CatMat, 1 / (rho @ self.CatMat))
+        # Pre-Compute Log-likelihood under each (extant and candidate) cluster
         log_likelihood = (
-            + dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta[:self.nCol], sigma[:self.nCol])
-            + dprojgamma_log_my_mt(rho, zeta[self.nCol:], sigma[self.nCol:])
+            + dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta[:, :self.nCol], sigma[:, :self.nCol])
+            + dprojgamma_log_my_mt(rho_normalized, zeta[:, self.nCol:], sigma[:, self.nCol:])
             )
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
@@ -483,12 +485,13 @@ class Chain(object):
 
     def set_projection(self):
         self.data.Yp = (self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)).T
+        self.data.Yp[self.data.Yp <= 1e-6] = 1e-6
         return
     
     def categorical_considerations(self):
         """ Builds the CatMat """
-        cats = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(self.data.cats)))
-        self.CatMat = cats[:, None] == np.arange(len(self.data.cats))
+        cats = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(self.data.Cats)))
+        self.CatMat = cats[:, None] == np.arange(len(self.data.Cats))
         return
 
     def build_sigma_unity(self):
@@ -498,7 +501,7 @@ class Chain(object):
         # advance iterator to the start of the categorical columns
         iter = self.nCol
         # for each set of categorical columns (each projected gamma) set first sigma = 1
-        for ncat in self.data.cats:
+        for ncat in self.data.Cats:
             for x in range(ncat):
                 if (x == 0):
                     sigma_unity[iter] = True
@@ -525,7 +528,7 @@ class Chain(object):
         self.nCat = self.data.nCat
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        self.nCats = self.data.cats.shape[0]
+        self.nCats = self.data.Cats.shape[0]
         self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
         self.set_projection()
         self.categorical_considerations()
@@ -633,14 +636,14 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    data = MixedData(raw, decluster = True, quantile = 0.95)
+    raw = read_csv('./datasets/ad2_cover_x.csv')
+    data = MixedData(raw, cat_vars = np.array([0,3], dtype = int), decluster = False, quantile = 0.999)
     data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(50000)
-    model.write_to_disk('./test/results.db', 20000, 30)
-    res = Result('./test/results.db')
-    res.write_posterior_predictive('./test/postpred.csv')
+    model.sample(10000)
+    model.write_to_disk('./test/results.db', 5000, 2)
+    # res = Result('./test/results.db')
+    # res.write_posterior_predictive('./test/postpred.csv')
     # EOL
 
 

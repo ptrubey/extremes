@@ -71,9 +71,21 @@ def cluster_max_row_ids(series):
 
 def scale_pareto(raw, P):
     """ Do the actual Pareto scaling """
-    Z = (1 + P[2] * (raw - P[0]) / P[1])**(1/P[2])
-    Z[Z < 0.] = 0.
-    return Z
+    scratch = np.zeros(raw.shape)
+    scratch += raw
+    scratch -= P[0]
+    scratch /= P[1]
+    scratch *= P[2]
+    scratch += 1.
+    # scratch = 1 + P[2] * (raw - P[0]) / P[1]
+    with np.errstate(invalid = 'ignore'):
+        np.log(scratch, out = scratch)
+    np.nan_to_num(scratch, copy = False, nan = -np.inf)
+    scratch /= P[2]
+    np.exp(scratch, out = scratch)
+    # Z = (1 + P[2] * (raw - P[0]) / P[1])**(1/P[2])
+    # Z[Z < 0.] = 0.
+    return scratch
 
 def descale_pareto(Z, P):
     """ Given Pareto scaled RV's, return original scale """
@@ -157,7 +169,7 @@ class Data_From_Raw(Data):
         projections, the row max, and the indices in the original data
         corresponding to the observations """
         R = par.max(axis = 1)
-        V = (par.T / R).T
+        V = par / R[:,None] # (par.T / R).T
         if decluster:
             I = cluster_max_row_ids(R)
         else:
@@ -235,7 +247,7 @@ class Categorical(object):
 
         dummies = []
         cats = []
-        for i in range(raw.shape[i]):
+        for i in range(raw.shape[1]):
             dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
             cats.append(len(values[i]))
         self.W = np.vstack(dummies).T[index]
@@ -252,7 +264,9 @@ class MixedData(Data_From_Raw, Categorical):
     def __init__(self, raw, cat_vars, 
             decluster = False, quantile = 0.95, values = None,
             ):
-        real_vars = np.array(set(np.arange(raw.shape[1])).difference(set(cat_vars)))
+        if type(raw) is pd.DataFrame:
+            raw = raw.values
+        real_vars = np.array(list(set(np.arange(raw.shape[1])).difference(set(cat_vars))), dtype = int)
         self.fill_real(raw[:, real_vars], decluster, quantile)
         self.fill_categorical(raw[:, cat_vars], values, self.I)
         return
