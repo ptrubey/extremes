@@ -1,18 +1,19 @@
 from numpy.random import choice, gamma, beta, uniform
 from collections import namedtuple
-from itertools import repeat
+from itertools import repeat, chain
 import numpy as np
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 import pandas as pd
 import os
 import sqlite3 as sql
+import pickle
 from math import ceil, log
 from scipy.special import gammaln
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from cProjgamma import sample_alpha_k_mh, sample_beta_fc
-from data import euclidean_to_angular, euclidean_to_hypercube, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, Data
 from projgamma import GammaPrior
 
 # from multiprocessing import Pool
@@ -433,7 +434,7 @@ class Chain(object):
             os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
-        conn = sql.connect(path)
+        # conn = sql.connect(path)
 
         zetas  = np.vstack([
             np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
@@ -452,35 +453,57 @@ class Chain(object):
         rs     = self.samples.r[nBurn :: nThin]
         etas   = self.samples.eta[nBurn :: nThin]
 
-        zetas_df = pd.DataFrame(
-                zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol + self.nCat)],
-                )
-        sigmas_df = pd.DataFrame(
-                sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol + self.nCat)],
-                )
-        alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol + self.nCat)])
-        betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol + self.nCat)])
-        xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nSigma)])
-        taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nSigma)])
-        deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
-        rs_df     = pd.DataFrame(rs,     columns = ['r_{}'.format(i)     for i in range(self.nDat)])
-        rhos_df   = pd.DataFrame(rhos,   columns = ['rho_{}'.format(i)   for i in range(self.nCat)])
-        etas_df   = pd.DataFrame({'eta' : etas})
-        su_df     = pd.DataFrame({'sigmaunity' : self.sigma_unity})
+        out = {
+            'zetas'  : zetas,
+            'sigmas' : sigmas,
+            'alphas' : alphas,
+            'betas'  : betas,
+            'xis'    : xis,
+            'taus'   : taus,
+            'rhos'   : rhos,
+            'rs'     : rs,
+            'deltas' : deltas,
+            'etas'   : etas,
+            'nCol'   : self.nCol,
+            'nDat'   : self.nDat,
+            'nCat'   : self.nCat,
+            'nSigma' : self.nSigma,
+            'sigmaunity' : self.sigma_unity,
+            'cats'   : self.data.Cats,
+            }
+        
+        with open(path, 'wb') as file:
+            pickle.dump(out, file)
 
-        zetas_df.to_sql('zetas',   conn, index = False)
-        sigmas_df.to_sql('sigmas', conn, index = False)
-        alphas_df.to_sql('alphas', conn, index = False)
-        betas_df.to_sql('betas',   conn, index = False)
-        xis_df.to_sql('xis',       conn, index = False)
-        taus_df.to_sql('taus',     conn, index = False)
-        deltas_df.to_sql('deltas', conn, index = False)
-        rs_df.to_sql('rs',         conn, index = False)
-        etas_df.to_sql('etas',     conn, index = False)
-        rhos_df.to_sql('rhos',     conn, index = False)
-        su_df.to_sql('sigmaunity', conn, index = False)
-        conn.commit()
-        conn.close()
+        # zetas_df = pd.DataFrame(
+        #         zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol + self.nCat)],
+        #         )
+        # sigmas_df = pd.DataFrame(
+        #         sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol + self.nCat)],
+        #         )
+        # alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol + self.nCat)])
+        # betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol + self.nCat)])
+        # xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nSigma)])
+        # taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nSigma)])
+        # deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
+        # rs_df     = pd.DataFrame(rs,     columns = ['r_{}'.format(i)     for i in range(self.nDat)])
+        # rhos_df   = pd.DataFrame(rhos,   columns = ['rho_{}'.format(i)   for i in range(self.nCat)])
+        # etas_df   = pd.DataFrame({'eta' : etas})
+        # su_df     = pd.DataFrame({'sigmaunity' : self.sigma_unity})
+
+        # zetas_df.to_sql('zetas',   conn, index = False)
+        # sigmas_df.to_sql('sigmas', conn, index = False)
+        # alphas_df.to_sql('alphas', conn, index = False)
+        # betas_df.to_sql('betas',   conn, index = False)
+        # xis_df.to_sql('xis',       conn, index = False)
+        # taus_df.to_sql('taus',     conn, index = False)
+        # deltas_df.to_sql('deltas', conn, index = False)
+        # rs_df.to_sql('rs',         conn, index = False)
+        # etas_df.to_sql('etas',     conn, index = False)
+        # rhos_df.to_sql('rhos',     conn, index = False)
+        # su_df.to_sql('sigmaunity', conn, index = False)
+        # conn.commit()
+        # conn.close()
         return
 
     def set_projection(self):
@@ -552,17 +575,8 @@ class Result(object):
             new_sigmas[:,np.where(~self.sigma_unity)[0]] = gamma(
                 shape = self.samples.xi[s],
                 scale = 1 / self.samples.tau[s],
-                size = (m,  )
-            )
-
-            new_sigmas = np.hstack((
-                np.ones((m, 1)),
-                gamma(
-                    shape = self.samples.xi[s],
-                    scale = self.samples.tau[s],
-                    size = (m, self.nCol - 1),
-                    ),
-                ))
+                size = (m, self.nSigma)
+                )
             prob = ljs / ljs.sum()
             deltas = cu.generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
@@ -572,43 +586,79 @@ class Result(object):
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10):
         gammas = self.generate_posterior_predictive_gammas(n_per_sample, m)
-        return euclidean_to_hypercube(gammas)
+        hypcube = euclidean_to_hypercube(gammas[:,:self.nCol])
+        simplex = []
+        cat_idx = np.where(self.sigma_unity)[0][1:]
+        for i in range(cat_idx.shape[0]):
+            cat_start = cat_idx[i]
+            try:
+                cat_end = cat_idx[i + 1]
+            except IndexError:
+                cat_end = self.sigma_unity.shape[0]
+            simplex.append(euclidean_to_simplex(gammas[:,cat_start:cat_end]))
+        return np.hstack([hypcube] + simplex)
 
     def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10):
         hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
         return euclidean_to_angular(hyp)
 
     def write_posterior_predictive(self, path, n_per_sample = 1):
+        colnames_y = ['Y_{}'.format(i) for i in range(self.nCol)]
+        colnames_p = [
+            ['p_{}_{}'.format(i,j) for j in range(catlength)]
+            for i, catlength in enumerate(self.cats)
+            ]
+        colnames_p = list(chain(colnames_p))
+
         thetas = pd.DataFrame(
-                self.generate_posterior_predictive_angular(n_per_sample),
-                columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
+                self.generate_posterior_predictive_hypercube(n_per_sample),
+                # self.generate_posterior_predictive_angular(n_per_sample),
+                #columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
+                columns = colnames_y + colnames_p
                 )
         thetas.to_csv(path, index = False)
         return
 
     def load_data(self, path):
-        conn = sql.connect(path)
+        # conn = sql.connect(path)
 
-        deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        etas   = pd.read_sql('select * from etas;', conn).values.ravel()
-        zetas  = pd.read_sql('select * from zetas;', conn).values
-        sigmas = pd.read_sql('select * from sigmas;', conn).values
-        alphas = pd.read_sql('select * from alphas;', conn).values
-        betas  = pd.read_sql('select * from betas;', conn).values
-        xis    = pd.read_sql('select * from xis;', conn).values
-        taus   = pd.read_sql('select * from taus;', conn).values
-        rs     = pd.read_sql('select * from rs;', conn).values.ravel()
-        rhos   = pd.read_sql('select * from rhos;', conn).values
-        su     = pd.read_sql('select * from sigmaunity;', conn).values.astype(bool).ravel()
+        # deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
+        # etas   = pd.read_sql('select * from etas;', conn).values.ravel()
+        # zetas  = pd.read_sql('select * from zetas;', conn).values
+        # sigmas = pd.read_sql('select * from sigmas;', conn).values
+        # alphas = pd.read_sql('select * from alphas;', conn).values
+        # betas  = pd.read_sql('select * from betas;', conn).values
+        # xis    = pd.read_sql('select * from xis;', conn).values
+        # taus   = pd.read_sql('select * from taus;', conn).values
+        # rs     = pd.read_sql('select * from rs;', conn).values.ravel()
+        # rhos   = pd.read_sql('select * from rhos;', conn).values
+        # su     = pd.read_sql('select * from sigmaunity;', conn).values.astype(bool).ravel()
         
+        with open(path, 'rb') as file:
+            out = pickle.load(file)
+        
+        deltas = out['deltas']
+        etas   = out['etas']
+        zetas  = out['zetas']
+        sigmas = out['sigmas']
+        alphas = out['alphas']
+        betas  = out['betas']
+        xis    = out['xis']
+        taus   = out['taus']
+        rs     = out['rs']
+        rhos   = out['rhos']
+        su     = out['su']
+        cats   = out['cats']
+
         self.sigma_unity = su
 
-        self.nSamp = deltas.shape[0]
-        self.nDat  = deltas.shape[1]
-        self.nCat  = rhos.shape[1]
-        self.nCol  = alphas.shape[1] - self.nCat
-        self.nCats = su.sum() - 1 # number of projections - 1.
+        self.nSamp  = deltas.shape[0]
+        self.nDat   = deltas.shape[1]
+        self.nCat   = rhos.shape[1]
+        self.nCol   = alphas.shape[1] - self.nCat
+        self.nCats  = su.sum() - 1 # number of projections - 1.
         self.nSigma = self.nCol + self.nCat - self.nCats - 1
+        self.cats   = cats
 
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
@@ -640,10 +690,10 @@ if __name__ == '__main__':
     data = MixedData(raw, cat_vars = np.array([0,3], dtype = int), decluster = False, quantile = 0.999)
     data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(10000)
-    model.write_to_disk('./test/results.db', 5000, 2)
-    # res = Result('./test/results.db')
-    # res.write_posterior_predictive('./test/postpred.csv')
+    model.sample(20000)
+    model.write_to_disk('./test/results.pickle', 10000, 2)
+    res = Result('./test/results.pickle')
+    res.write_posterior_predictive('./test/postpred.csv')
     # EOL
 
 
