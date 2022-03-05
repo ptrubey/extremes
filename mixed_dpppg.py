@@ -564,12 +564,12 @@ class Result(object):
         new_gammas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
-            njs = np.bincount(self.samples.delta[s], int(dmax + 1 + m))
+            njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
             new_zetas = gamma(
                 shape = self.samples.alpha[s],
                 scale = 1. / self.samples.beta[s],
-                size = (m, self.nCol),
+                size = (m, self.nCol + self.nCat),
                 )
             new_sigmas = np.ones(new_zetas.shape)
             new_sigmas[:,np.where(~self.sigma_unity)[0]] = gamma(
@@ -608,7 +608,7 @@ class Result(object):
             ['p_{}_{}'.format(i,j) for j in range(catlength)]
             for i, catlength in enumerate(self.cats)
             ]
-        colnames_p = list(chain(colnames_p))
+        colnames_p = list(chain(*colnames_p))
 
         thetas = pd.DataFrame(
                 self.generate_posterior_predictive_hypercube(n_per_sample),
@@ -660,7 +660,7 @@ class Result(object):
         self.nSigma = self.nCol + self.nCat - self.nCats - 1
         self.cats   = cats
 
-        self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples       = Samples(self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.delta = deltas
         self.samples.eta   = etas
         self.samples.alpha = alphas
@@ -689,9 +689,9 @@ if __name__ == '__main__':
     raw = read_csv('./datasets/ad2_cover_x.csv')
     data = MixedData(raw, cat_vars = np.array([0,3], dtype = int), decluster = False, quantile = 0.999)
     data.write_empirical('./test/empirical.csv')
-    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(20000)
-    model.write_to_disk('./test/results.pickle', 10000, 2)
+    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    # model.sample(20000)
+    # model.write_to_disk('./test/results.pickle', 10000, 2)
     res = Result('./test/results.pickle')
     res.write_posterior_predictive('./test/postpred.csv')
     # EOL
