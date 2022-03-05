@@ -647,7 +647,7 @@ class Result(object):
         taus   = out['taus']
         rs     = out['rs']
         rhos   = out['rhos']
-        su     = out['su']
+        su     = out['sigmaunity']
         cats   = out['cats']
 
         self.sigma_unity = su
