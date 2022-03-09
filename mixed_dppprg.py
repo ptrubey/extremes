@@ -12,24 +12,11 @@ from scipy.special import gammaln
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
-from cProjgamma import sample_alpha_k_mh, sample_beta_fc
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, Data
 from projgamma import GammaPrior
 
 # from multiprocessing import Pool
 # from energy import limit_cpu
-
-def dprojgamma_log_my_mt(aY , aAlpha, aBeta):
-    """
-    Kernel of Projected Gamma distribution
-    """
-    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta))[None,:]
-    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
-    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))
-    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
-    out -= np.einsum('j,nd,jd->nj', np.einsum('jd->j', aAlpha), aY, aBeta)
-    return out
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
@@ -48,75 +35,31 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(-beta y)
     return out
 
-def dprodgamma_log_multi_y(aY, vAlpha, vBeta, logConstant):
-    """ log density -- product of gammas -- multiple y's (array) against single theta (vector) """
-    ld = (
-        + logConstant
-        # + (vAlpha * np.log(vBeta)).sum()
-        # - gammaln(vAlpha).sum()
-        + ((vAlpha - 1) * np.log(aY)).sum(axis = 1)
-        - (vBeta * aY).sum(axis = 1)
-        )
-    return ld
-
-def dprodgamma_log_multi_theta(vY, aAlpha, aBeta, vlogConstant):
-    """ log density -- product of gammas -- single y (vector) against multiple thetas (matrix) """
-    ld = (
-        + vlogConstant 
-        # + (aAlpha * np.log(aBeta)).sum(axis = 1)
-        # - gammaln(aAlpha).sum(axis = 1)
-        + np.dot(np.log(vY), (aAlpha - 1).T)
-        - np.dot(vY, aBeta.T)
-        # + (np.log(vY) * (aAlpha - 1)).sum(axis = 1)
-        # - (vY * aBeta).sum(axis = 1)
-        )
-    return ld
-
-def dgamma_log_multi_y(vY, alpha, beta, logConstant):
-    """ log density -- gamma -- multiple y's (vector) against single theta (singlular) """
-    ld = (
-        + logConstant
-        # + (alpha * log(beta))
-        # - gammaln(alpha)
-        + ((alpha - 1) * np.log(vY)).sum()
-        - (beta * vY).sum()
-        )
-    return ld
-
-def dgamma_log_multi_theta(y, vAlpha, vBeta, vlogConstant):
-    """ log density -- gamma -- single y (singular) against multiple theta (vector) """
-    ld = (
-        + vlogConstant
-        # + vAlpha * log(beta)
-        # - gammaln(vAlpha)
-        + (vAlpha - 1) * log(y)
-        - (vBeta * y)
-        )
-    return ld
-
 def update_zeta_j_wrapper(args):
     # parse arguments
     curr_zeta_j, n_j, Y_js, lY_js, alpha, beta = args
     prop_zeta_j = np.empty(curr_zeta_j.shape)
+    # iterate through zeta sampling
     for i in range(curr_zeta_j.shape[0]):
         prop_zeta_j[i] = sample_alpha_1_mh_summary(
             curr_zeta_j[i], n_j, Y_js[i], lY_js[i], alpha[i], beta[i]
             )
     return prop_zeta_j
 
-def update_alpha_l_wrapper(args):
-    return sample_alpha_k_mh(*args)
 
-def update_beta_l_wrapper(args):
-    return sample_beta_fc(*args)
+def sample_gamma_shape_wrapper(args):
+    return sample_alpha_k_mh_summary(*args)
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
 class Samples(object):
     pi    = None
     zeta  = None
+    sigma = None
     alpha = None
     beta  = None
+    xi    = None
+    tau   = None
     delta = None
     r     = None
     eta   = None
@@ -128,7 +71,7 @@ class Samples(object):
         nCats: number of categorical variables        
         """
         self.zeta  = [None] * (nSamp + 1)
-        self.rho    = np.empty((nSamp + 1, nDat, nCat))
+        self.rho   = np.empty((nSamp + 1, nDat, nCat))
         self.alpha = np.empty((nSamp + 1, nCol + nCat))
         self.beta  = np.empty((nSamp + 1, nCol + nCat))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
@@ -161,7 +104,7 @@ class Chain(object):
 
     def sample_delta_i(self, curr_cluster_state, cand_cluster_state, eta, 
                                         log_likelihood_i, delta_i, p, scratch):
-        scratch *= 0
+        scratch[:] = 0
         curr_cluster_state[delta_i] -= 1
         scratch += curr_cluster_state
         scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
@@ -195,32 +138,29 @@ class Chain(object):
         return gamma(shape = alpha, scale = 1 / beta, size = (m, self.nCol + self.nCat))
 
     def sample_alpha(self, zeta, curr_alpha):
+        n = zeta.shape[0]
+        zs = zeta.sum(axis = 0)
+        lzs = np.log(zeta).sum(axis = 0)
         args = zip(
-            curr_alpha,
-            zeta.T,
-            repeat(self.priors.alpha.a),
-            repeat(self.priors.alpha.b),
-            repeat(self.priors.beta.a),
-            repeat(self.priors.beta.b),
+            curr_alpha, repeat(n), zs, lzs,
+            repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
+            repeat(self.priors.beta.a), repeat(self.priors.beta.b),
             )
-        res = map(update_alpha_l_wrapper, args)
-        # res = self.pool.map(update_alpha_l_wrapper, args)
+        res = map(sample_gamma_shape_wrapper, args)
         return np.array(list(res))
 
     def sample_beta(self, zeta, alpha):
-        args = zip(
-            alpha,
-            zeta.T,
-            repeat(self.priors.beta.a),
-            repeat(self.priors.beta.b),
-            )
-        res = map(update_beta_l_wrapper, args)
-        # res = self.pool.map(update_beta_l_wrapper, args)
-        return np.array(list(res))
+        n  = zeta.shape[0]
+        zs = zeta.sum(axis = 0)
+        As = n * alpha + self.priors.beta.a
+        Bs = zs + self.priors.beta.b
+        return gamma(shape = As, scale = 1/Bs)
 
     def sample_r(self, delta, zeta):
-        As = zeta[delta][:,:self.nCol].sum(axis = 1)
-        Bs = (self.data.Yp).sum(axis = 1)
+        # As = zeta[delta][:, :self.nCol].sum(axis = 1)
+        # Bs = (self.data.Yp * sigma[delta][:, :self.nCol]).sum(axis = 1)
+        As = np.einsum('il->i', zeta[:,:self.nCol][delta])
+        Bs = np.einsum('il->i', self.data.Yp)
         return gamma(shape = As, scale = 1/Bs)
 
     def sample_rho(self, delta, zeta):
@@ -230,8 +170,8 @@ class Chain(object):
             delta ([type]): [description]
             zeta ([type]): [description]
         """
-        As = zeta[delta][:, self.nCol:] + self.data.W
-        Bs = 1
+        As = zeta[:, self.nCol:][delta] + self.data.W
+        Bs = 1.
         rho = gamma(shape = As, scale = 1 / Bs)
         rho[rho < 1e-9] = 1e-9
         return rho
@@ -254,6 +194,7 @@ class Chain(object):
             curr_zeta, n, Ysv, lYsv, 
             repeat(alpha), repeat(beta),
             )
+        # curr_zeta_j, n_j, Y_js, lY_js, alpha, beta = args
         res = map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
@@ -261,15 +202,18 @@ class Chain(object):
         self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
-        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol + self.nCat))
+        self.samples.zeta[0] = gamma(
+                shape = 2., scale = 2., 
+                size = (self.max_clust_count - 30, self.nCol + self.nCat),
+                )
         self.samples.eta[0] = 40.
         self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
         self.samples.r[0] = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0],
                 )
-        self.sigma_placeholder = np.ones((self.max_clust_count, self.nCol + self.nCat))
         self.samples.rho[0] = (self.CatMat / self.data.Cats).sum(axis = 1)
         self.curr_iter = 0
+        self.sigma_placeholder = np.ones((self.max_clust_count, self.nCol + self.nCat))
         return
 
     def iter_sample(self):
@@ -285,12 +229,8 @@ class Chain(object):
         rho   = self.curr_rho
 
         self.curr_iter += 1
-        # projecting rho onto unit simplex (for each projection)
-        rho_normalized = rho * np.einsum('dc,nc->nd', self.CatMat, 1 / (rho @ self.CatMat))
-        # Pre-Compute Log-likelihood under each (extant and candidate) cluster
-        log_likelihood = (
-            + dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta[:, :self.nCol], self.sigma_placeholder[:, :self.nCol])
-            + dprojgamma_log_my_mt(rho_normalized, zeta[:, self.nCol:], self.sigma_placeholder[:, self.nCol:])
+        log_likelihood = dprodgamma_log_my_mt(
+            np.hstack((r[:,None] * self.data.Yp, rho)), zeta, self.sigma_placeholder,
             )
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
@@ -331,7 +271,6 @@ class Chain(object):
             os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
-        # conn = sql.connect(path)
 
         zetas  = np.vstack([
             np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
@@ -360,6 +299,7 @@ class Chain(object):
         
         with open(path, 'wb') as file:
             pickle.dump(out, file)
+
         return
 
     def set_projection(self):
@@ -377,9 +317,9 @@ class Chain(object):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_alpha = GammaPrior(0.5, 0.5),
+            prior_alpha = GammaPrior(2., 2.),
             prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(0.5, 0.5),
+            prior_xi    = GammaPrior(2., 2.),
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
@@ -418,17 +358,23 @@ class Result(object):
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10):
         gammas = self.generate_posterior_predictive_gammas(n_per_sample, m)
+        # hypercube transformation for real variates
         hypcube = euclidean_to_hypercube(gammas[:,:self.nCol])
-        simplex = []
-
-        cols = list(range(self.nCol + self.nCat))
-        for i in range(self.cats.shape[0]):
-            cat_length = self.cats[- i - 1]
-            cat_end = cols.pop()
-            for j in range(cat_length - 1):
-                cat_start = cols.pop()
-            simplex.append(euclidean_to_simplex(gammas[:,cat_start:(cat_end+1)]))
-        return np.hstack([hypcube] + simplex)
+        # simplex transformation for categ variates
+        simplex_reverse = []
+        indices = list(np.arange(self.nCol + self.nCat))
+        # Foe each category, last first
+        for i in list(range(self.cats.shape[0]))[::-1]:
+            # identify the ending index (+1 to include boundary)
+            cat_length = self.cats[i]
+            cat_end = indices.pop() + 1
+            # identify starting index
+            for _ in range(cat_length - 1):
+                cat_start = indices.pop()
+            # transform gamma variates to simplex
+            simplex_reverse.append(euclidean_to_simplex(gammas[:,cat_start:cat_end]))
+        # stack hypercube and categorical variables side by side.
+        return np.hstack([hypcube] + simplex_reverse[::-1])
 
     def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10):
         hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
@@ -451,7 +397,7 @@ class Result(object):
         thetas.to_csv(path, index = False)
         return
 
-    def load_data(self, path):
+    def load_data(self, path):        
         with open(path, 'rb') as file:
             out = pickle.load(file)
         
@@ -469,6 +415,7 @@ class Result(object):
         self.nCat   = rhos.shape[1]
         self.nCol   = alphas.shape[1] - self.nCat
         self.nCats  = cats.shape[0]
+        self.nSigma = self.nCol + self.nCat - self.nCats - 1
         self.cats   = cats
 
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats)

@@ -133,9 +133,9 @@ cpdef double sample_alpha_1_mh(
 
 cpdef double sample_alpha_1_mh_summary(
         double curr_alpha,
+        int n,
         double y_sum,
         double ly_sum,
-        int n,
         double a, double b,
         double proposal_sd = 0.3,
         ):

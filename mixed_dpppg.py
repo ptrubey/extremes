@@ -39,24 +39,22 @@ def update_zeta_j_wrapper(args):
     # parse arguments
     curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau, sigma_unity = args
     prop_zeta_j = np.empty(curr_zeta_j.shape)
-    
-    # xitau_iter = 0
-    xxi  = np.ones(curr_zeta_j.shape)
+    # prepare placeholders for xi, tau (with same indexing as zeta)
+    xxi = np.ones(curr_zeta_j.shape)
     xta = np.ones(curr_zeta_j.shape)
     xxi[~sigma_unity] = xi
     xta[~sigma_unity] = tau
-
+    # iterate through zeta sampling
     for i in range(curr_zeta_j.shape[0]):
         if sigma_unity[i]:
             prop_zeta_j[i] = sample_alpha_1_mh_summary(
-                curr_zeta_j[0], n_j, Y_js[0], lY_js[0], alpha[0], beta[0],
+                curr_zeta_j[i], n_j, Y_js[i], lY_js[i], alpha[i], beta[i],
                 )
         else:
             prop_zeta_j[i] = sample_alpha_k_mh_summary(
                 curr_zeta_j[i], n_j, Y_js[i], lY_js[i], 
-                alpha[i], beta[i], xxi[i], xta[i], # xi[xitau_iter], tau[xitau_iter],
+                alpha[i], beta[i], xxi[i], xta[i],
                 )
-            # xitau_iter += 1
     return prop_zeta_j
 
 def update_sigma_j_wrapper(args):
@@ -69,6 +67,7 @@ def update_sigma_j_wrapper(args):
 
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
+    # return sample_alpha_1_mh_summary(*args)
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
@@ -198,6 +197,7 @@ class Chain(object):
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
         return gamma(shape = As, scale = 1/Bs)
+        # return np.ones(As.shape)
 
     def sample_xi(self, sigma, curr_xi):
         n   = sigma.shape[0]
@@ -217,10 +217,13 @@ class Chain(object):
         As = n * xi + self.priors.tau.a
         Bs = ss + self.priors.tau.b
         return gamma(shape = As, scale = 1/Bs)
+        # return np.ones(As.shape)
 
     def sample_r(self, delta, zeta, sigma):
-        As = zeta[delta][:,:self.nCol].sum(axis = 1)
-        Bs = (self.data.Yp * sigma[delta][:,:self.nCol]).sum(axis = 1)
+        # As = zeta[delta][:, :self.nCol].sum(axis = 1)
+        # Bs = (self.data.Yp * sigma[delta][:, :self.nCol]).sum(axis = 1)
+        As = np.einsum('il->i', zeta[:,:self.nCol][delta])
+        Bs = np.einsum('il,il->i', self.data.Yp, sigma[:, :self.nCol][delta])
         return gamma(shape = As, scale = 1/Bs)
 
     def sample_rho(self, delta, zeta, sigma):
@@ -231,8 +234,8 @@ class Chain(object):
             zeta ([type]): [description]
             sigma ([type]): [description]
         """
-        As = zeta[delta][:, self.nCol:] + self.data.W
-        Bs = sigma[delta][:, self.nCol:]
+        As = zeta[:, self.nCol:][delta] + self.data.W
+        Bs = sigma[:, self.nCol:][delta]
         rho = gamma(shape = As, scale = 1 / Bs)
         rho[rho < 1e-9] = 1e-9
         return rho
@@ -256,6 +259,7 @@ class Chain(object):
             repeat(alpha), repeat(beta), 
             repeat(xi), repeat(tau), repeat(self.sigma_unity),
             )
+        # curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau, sigma_unity = args
         res = map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
@@ -283,7 +287,7 @@ class Chain(object):
         self.samples.tau[0] = 1.
         self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol + self.nCat))
         self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol + self.nCat))
-        self.samples.sigma[0][:,np.where(self.sigma_unity)[0]] = 1.
+        self.samples.sigma[0][:, self.sigma_unity] = 1.
         self.samples.eta[0] = 40.
         self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
         self.samples.r[0] = self.sample_r(
@@ -364,7 +368,6 @@ class Chain(object):
             os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
-        # conn = sql.connect(path)
 
         zetas  = np.vstack([
             np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
@@ -405,35 +408,6 @@ class Chain(object):
         with open(path, 'wb') as file:
             pickle.dump(out, file)
 
-        # zetas_df = pd.DataFrame(
-        #         zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol + self.nCat)],
-        #         )
-        # sigmas_df = pd.DataFrame(
-        #         sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol + self.nCat)],
-        #         )
-        # alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol + self.nCat)])
-        # betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol + self.nCat)])
-        # xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nSigma)])
-        # taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nSigma)])
-        # deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
-        # rs_df     = pd.DataFrame(rs,     columns = ['r_{}'.format(i)     for i in range(self.nDat)])
-        # rhos_df   = pd.DataFrame(rhos,   columns = ['rho_{}'.format(i)   for i in range(self.nCat)])
-        # etas_df   = pd.DataFrame({'eta' : etas})
-        # su_df     = pd.DataFrame({'sigmaunity' : self.sigma_unity})
-
-        # zetas_df.to_sql('zetas',   conn, index = False)
-        # sigmas_df.to_sql('sigmas', conn, index = False)
-        # alphas_df.to_sql('alphas', conn, index = False)
-        # betas_df.to_sql('betas',   conn, index = False)
-        # xis_df.to_sql('xis',       conn, index = False)
-        # taus_df.to_sql('taus',     conn, index = False)
-        # deltas_df.to_sql('deltas', conn, index = False)
-        # rs_df.to_sql('rs',         conn, index = False)
-        # etas_df.to_sql('etas',     conn, index = False)
-        # rhos_df.to_sql('rhos',     conn, index = False)
-        # su_df.to_sql('sigmaunity', conn, index = False)
-        # conn.commit()
-        # conn.close()
         return
 
     def set_projection(self):
@@ -467,9 +441,9 @@ class Chain(object):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_alpha = GammaPrior(0.5, 0.5),
+            prior_alpha = GammaPrior(2., 2.),
             prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(0.5, 0.5),
+            prior_xi    = GammaPrior(2., 2.),
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
