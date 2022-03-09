@@ -5,17 +5,15 @@ import numpy as np
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 import pandas as pd
 import os
+import pickle
 import sqlite3 as sql
 from math import ceil, log
 from scipy.special import gammaln
 
 import cUtility as cu
-from cProjgamma import sample_alpha_1_mh, sample_alpha_k_mh, sample_beta_fc
+from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
-
-# from multiprocessing import Pool
-# from energy import limit_cpu
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
@@ -34,106 +32,30 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
     return out
 
-def dprodgamma_log_multi_y(aY, vAlpha, vBeta, logConstant):
-    """ log density -- product of gammas -- multiple y's (array) against single theta (vector) """
-    ld = (
-        + logConstant
-        # + (vAlpha * np.log(vBeta)).sum()
-        # - gammaln(vAlpha).sum()
-        + ((vAlpha - 1) * np.log(aY)).sum(axis = 1)
-        - (vBeta * aY).sum(axis = 1)
-        )
-    return ld
-
-def dprodgamma_log_multi_theta(vY, aAlpha, aBeta, vlogConstant):
-    """ log density -- product of gammas -- single y (vector) against multiple thetas (matrix) """
-    ld = (
-        + vlogConstant 
-        # + (aAlpha * np.log(aBeta)).sum(axis = 1)
-        # - gammaln(aAlpha).sum(axis = 1)
-        + np.dot(np.log(vY), (aAlpha - 1).T)
-        - np.dot(vY, aBeta.T)
-        # + (np.log(vY) * (aAlpha - 1)).sum(axis = 1)
-        # - (vY * aBeta).sum(axis = 1)
-        )
-    return ld
-
-def dgamma_log_multi_y(vY, alpha, beta, logConstant):
-    """ log density -- gamma -- multiple y's (vector) against single theta (singlular) """
-    ld = (
-        + logConstant
-        # + (alpha * log(beta))
-        # - gammaln(alpha)
-        + ((alpha - 1) * np.log(vY)).sum()
-        - (beta * vY).sum()
-        )
-    return ld
-
-def dgamma_log_multi_theta(y, vAlpha, vBeta, vlogConstant):
-    """ log density -- gamma -- single y (singular) against multiple theta (vector) """
-    ld = (
-        + vlogConstant
-        # + vAlpha * log(beta)
-        # - gammaln(vAlpha)
-        + (vAlpha - 1) * log(y)
-        - (vBeta * y)
-        )
-    return ld
-
-def sample_delta_i(curr_cluster_state, cand_cluster_state, eta, delta_i, p, y, zeta, sigma, logConstant):
-    """ 
-    curr_cluster_state : vector of current cluster counts (np.bincount, integer)
-    cand_cluster_state : vector of bools whether a given cluster is candidate
-    eta   : candidate cluster weighting factor
-    p     : random uniform (scalar between 0 and 1)
-    y     : observation i (vector of length d)
-    zeta  : shape matrix for gamma distribution (J x d)
-    sigma : weight matrix for gamma distribution (J x d)
-    """
-    curr_cluster_state[delta_i] -= 1
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        temp = (
-            + np.log(curr_cluster_state + (cand_cluster_state * eta / cand_cluster_state.sum()))
-            + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
-            )
-    temp -= temp.max()
-    temp[:] = np.exp(temp).cumsum()
-    temp /= temp[-1]
-    delta_i = (temp < p).sum()
-    curr_cluster_state[delta_i] += 1
-    cand_cluster_state[delta_i] = False
-    return delta_i
-
 def update_zeta_j_wrapper(args):
     # parse arguments
-    curr_zeta_j, Y_j, alpha, beta, xi, tau = args
+    curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau = args
     prop_zeta_j = np.empty(curr_zeta_j.shape)
-    prop_zeta_j[0] = sample_alpha_1_mh(curr_zeta_j[0], Y_j.T[0], alpha[0], beta[0])
+    prop_zeta_j[0] = sample_alpha_1_mh_summary(
+        curr_zeta_j[0], n_j, Y_js[0], lY_js[0], alpha[0], beta[0]
+        )
     for i in range(1, curr_zeta_j.shape[0]):
-        prop_zeta_j[i] = sample_alpha_k_mh(
-                curr_zeta_j[i], Y_j.T[i], alpha[i], beta[i], xi[i-1], tau[i-1],
-                )
+        prop_zeta_j[i] = sample_alpha_k_mh_summary(
+            curr_zeta_j[i], n_j, Y_js[i], lY_js[i], 
+            alpha[i], beta[i], xi[i-1], tau[i-1],
+            )
     return prop_zeta_j
 
 def update_sigma_j_wrapper(args):
-    zeta_j, Y_j, xi, tau = args
-    prop_sigma_j = np.empty(zeta_j.shape)
-    prop_sigma_j[0] = 1.
-    for i in range(1, prop_sigma_j.shape[0]):
-        prop_sigma_j[i] = sample_beta_fc(zeta_j[i], Y_j.T[i], xi[i-1], tau[i-1])
+    zeta_j, n_j, Y_js, xi, tau = args
+    prop_sigma_j = np.ones(zeta_j.shape)
+    As = n_j * zeta_j[1:] + xi
+    Bs = Y_js[1:] + tau
+    prop_sigma_j[1:] = gamma(shape = As, scale = 1 / Bs)
     return prop_sigma_j
 
-def update_alpha_l_wrapper(args):
-    return sample_alpha_k_mh(*args)
-
-def update_beta_l_wrapper(args):
-    return sample_beta_fc(*args)
-
-def update_xi_l_wrapper(args):
-    return sample_alpha_k_mh(*args)
-
-def update_tau_l_wrapper(args):
-    return sample_beta_fc(*args)
+def sample_gamma_shape_wrapper(args):
+    return sample_alpha_k_mh_summary(*args)
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
@@ -189,9 +111,9 @@ class Chain(object):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
 
-    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, eta, 
-                                        log_likelihood_i, delta_i, p, scratch):
-        scratch *= 0        
+    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
+                            eta, log_likelihood_i, delta_i, p, scratch):
+        scratch[:] = 0        
         curr_cluster_state[delta_i] -= 1
         scratch += curr_cluster_state
         scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
@@ -208,34 +130,6 @@ class Chain(object):
         curr_cluster_state[delta_i] += 1
         cand_cluster_state[delta_i] = False
         return delta_i
-
-    # def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
-    #                     eta, delta_i, p, y, zeta, sigma, logConstant, temp):
-    #     """ 
-    #     curr_cluster_state : vector of current cluster counts (np.bincount, integer)
-    #     cand_cluster_state : vector of bools whether a given cluster is candidate
-    #     eta   : candidate cluster weighting factor
-    #     p     : random uniform (scalar between 0 and 1)
-    #     y     : observation i (vector of length d)
-    #     zeta  : shape matrix for gamma distribution (J x d)
-    #     sigma : weight matrix for gamma distribution (J x d)
-    #     """
-    #     curr_cluster_state[delta_i] -= 1
-    #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-    #         temp[:] = (
-    #             + np.log(curr_cluster_state + 
-    #                 (cand_cluster_state * eta / cand_cluster_state.sum()))
-    #             + dprodgamma_log_multi_theta(y, zeta, sigma, logConstant)
-    #             )
-    #     temp -= temp.max()
-    #     np.exp(temp, out = temp)
-    #     np.cumsum(temp, out = temp)
-    #     # temp[:] = np.exp(temp).cumsum()
-    #     # temp /= temp[-1]
-    #     delta_i = np.searchsorted(temp, p * temp[-1])
-    #     curr_cluster_state[delta_i] += 1
-    #     cand_cluster_state[delta_i] = False
-    #     return delta_i
     
     def clean_delta_zeta_sigma(self, curr_cluster_state, delta, zeta, sigma):
         """
@@ -250,14 +144,6 @@ class Chain(object):
         # return new indices, cluster parameters associated with populated clusters
         return delta, zeta[keep], sigma[keep]
 
-    def sample_zeta_sigma_new(self, alpha, beta, xi, tau, m):
-        zeta = gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
-        sigma = np.hstack((
-                np.ones((m, 1)),
-                gamma(shape = xi, scale = 1 / tau, size = (m, self.nCol - 1)),
-                ))
-        return zeta, sigma
-
     def sample_zeta_new(self, alpha, beta, m):
         return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
 
@@ -268,58 +154,48 @@ class Chain(object):
                     ))
 
     def sample_alpha(self, zeta, curr_alpha):
+        n    = zeta.shape[0]
+        zs   = zeta.sum(axis = 0)
+        lzs  = np.log(zeta).sum(axis = 0)
         args = zip(
-            curr_alpha,
-            zeta.T,
-            repeat(self.priors.alpha.a),
-            repeat(self.priors.alpha.b),
-            repeat(self.priors.beta.a),
-            repeat(self.priors.beta.b),
+            curr_alpha, repeat(n), zs, lzs,
+            repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
+            repeat(self.priors.beta.a), repeat(self.priors.beta.b),
             )
-        res = map(update_alpha_l_wrapper, args)
-        # res = self.pool.map(update_alpha_l_wrapper, args)
+        res = map(sample_gamma_shape_wrapper, args)
         return np.array(list(res))
 
     def sample_beta(self, zeta, alpha):
-        args = zip(
-            alpha,
-            zeta.T,
-            repeat(self.priors.beta.a),
-            repeat(self.priors.beta.b),
-            )
-        res = map(update_beta_l_wrapper, args)
-        # res = self.pool.map(update_beta_l_wrapper, args)
-        return np.array(list(res))
+        n = zeta.shape[0]
+        zs = zeta.sum(axis = 0)
+        As = n * alpha + self.priors.beta.a
+        Bs = zs + self.priors.beta.b
+        return gamma(shape = As, scale = 1 / Bs)
 
     def sample_xi(self, sigma, curr_xi):
+        n    = sigma.shape[0]
+        ss   = sigma.sum(axis = 0)
+        lss  = np.log(sigma).sum(axis = 0)
         args = zip(
-            curr_xi,
-            sigma.T[1:],
-            repeat(self.priors.xi.a),
-            repeat(self.priors.xi.b),
-            repeat(self.priors.tau.a),
-            repeat(self.priors.tau.b),
+            curr_xi, repeat(n), ss, lss,
+            repeat(self.priors.xi.a), repeat(self.priors.xi.b),
+            repeat(self.priors.tau.a), repeat(self.priors.tau.b),
             )
-        res = map(update_xi_l_wrapper, args)
-        # res = self.pool.map(update_xi_l_wrapper, args)
+        res = map(sample_gamma_shape_wrapper, args)
         return np.array(list(res))
 
     def sample_tau(self, sigma, xi):
-        args = zip(
-            xi,
-            sigma.T[1:],
-            repeat(self.priors.tau.a),
-            repeat(self.priors.tau.b),
-            )
-        res = map(update_tau_l_wrapper, args)
-        # res = self.pool.map(update_tau_l_wrapper, args)
-        return np.array(list(res))
+        n  = sigma.shape[0]
+        ss = sigma[:,1:].sum(axis = 0)
+        As = n * xi + self.priors.tau.a
+        Bs = ss + self.priors.tau.b
+        return gamma(shape = As, scale = 1 / Bs)
 
     def sample_r(self, delta, zeta, sigma):
-        As = zeta[delta].sum(axis = 1)
-        Bs = (self.data.Yp * sigma[delta]).sum(axis = 1)
-        return gamma(shape = As, scale = 1/Bs)
-
+        As = np.einsum('il->i', zeta[delta])
+        Bs = np.einsum('il,il->i', self.data.Yp, sigma[delta])
+        return gamma(shape = As, scale = 1 / Bs)
+    
     def sample_eta(self, curr_eta, delta):
         g = beta(curr_eta + 1, self.nDat)
         aa = self.priors.eta.a + delta.max() + 1
@@ -329,31 +205,29 @@ class Chain(object):
         return gamma(shape = aaa, scale = 1 / bb)
 
     def sample_zeta(self, curr_zeta, r, delta, alpha, beta, xi, tau):
-        Y = r.reshape(-1, 1) * self.data.Yp
+        dmat = delta[:,None] == np.arange(delta.max() + 1)
+        Y    = r[:,None] * self.data.Yp
+        n    = dmat.sum(axis = 0)
+        Ysv  = (Y.T @ dmat).T
+        lYsv = (np.log(Y).T @ dmat).T
         args = zip(
-            curr_zeta,
-            [Y[np.where(delta == j)[0]] for j in range(curr_zeta.shape[0])],
-            repeat(alpha),
-            repeat(beta),
-            repeat(xi),
-            repeat(tau),
+            curr_zeta, n, Ysv, lYsv, 
+            repeat(alpha), repeat(beta), 
+            repeat(xi), repeat(tau),
             )
         res = map(update_zeta_j_wrapper, args)
-        # res = self.pool.map(update_zeta_j_wrapper, args)
         return np.array(list(res))
-
+    
     def sample_sigma(self, zeta, r, delta, xi, tau):
-        Y = r.reshape(-1, 1) * self.data.Yp
-        args = zip(
-            zeta,
-            [Y[np.where(delta == j)[0]] for j in range(zeta.shape[0])],
-            repeat(xi),
-            repeat(tau),
-            )
-        res = map(update_sigma_j_wrapper, args)
-        # res = self.pool.map(update_sigma_j_wrapper, args)
-        return np.array(list(res))
-
+        dmat = delta[:, None] == np.arange(delta.max() + 1)
+        Y = r[:,None] * self.data.Yp
+        n = dmat.sum(axis = 0)
+        Ysv = (Y.T @ dmat).T # (J x d)
+        args = zip(zeta, n, Ysv, repeat(xi), repeat(tau))
+        res = np.array(list(map(update_sigma_j_wrapper, args)))
+        res[res < 1e-12] = 1e-12
+        return res
+    
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol)
         self.samples.alpha[0] = 1.
@@ -434,8 +308,7 @@ class Chain(object):
             os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
-        conn = sql.connect(path)
-
+        
         zetas  = np.vstack([
             np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
             for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
@@ -452,31 +325,23 @@ class Chain(object):
         rs     = self.samples.r[nBurn :: nThin]
         etas   = self.samples.eta[nBurn :: nThin]
 
-        zetas_df = pd.DataFrame(
-                zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol)],
-                )
-        sigmas_df = pd.DataFrame(
-                sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol)],
-                )
-        alphas_df = pd.DataFrame(alphas, columns = ['alpha_{}'.format(i) for i in range(self.nCol)])
-        betas_df  = pd.DataFrame(betas,  columns = ['beta_{}'.format(i)  for i in range(self.nCol)])
-        xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nCol-1)])
-        taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nCol-1)])
-        deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
-        rs_df     = pd.DataFrame(rs,     columns = ['r_{}'.format(i)     for i in range(self.nDat)])
-        etas_df   = pd.DataFrame({'eta' : etas})
+        out = {
+            'zetas'  : zetas,
+            'sigmas' : sigmas,
+            'alphas' : alphas,
+            'betas'  : betas,
+            'xis'    : xis,
+            'taus'   : taus,
+            'rs'     : rs,
+            'deltas' : deltas,
+            'etas'   : etas,
+            'nCol'   : self.nCol,
+            'nDat'   : self.nDat,
+            }
+        
+        with open(path, 'wb') as file:
+            pickle.dump(out, file)
 
-        zetas_df.to_sql('zetas',   conn, index = False)
-        sigmas_df.to_sql('sigmas', conn, index = False)
-        alphas_df.to_sql('alphas', conn, index = False)
-        betas_df.to_sql('betas',   conn, index = False)
-        xis_df.to_sql('xis',       conn, index = False)
-        taus_df.to_sql('taus',     conn, index = False)
-        deltas_df.to_sql('deltas', conn, index = False)
-        rs_df.to_sql('rs',         conn, index = False)
-        etas_df.to_sql('etas',     conn, index = False)
-        conn.commit()
-        conn.close()
         return
 
     def set_projection(self):
@@ -501,7 +366,6 @@ class Chain(object):
         self.nDat = self.data.nDat
         self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
         self.set_projection()
-        # self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
 
 class Result(object):
@@ -509,7 +373,7 @@ class Result(object):
         new_gammas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
-            njs = np.bincount(self.samples.delta[s], int(dmax + 1 + m))
+            njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
             new_zetas = gamma(
                 shape = self.samples.alpha[s],
@@ -548,17 +412,18 @@ class Result(object):
         return
 
     def load_data(self, path):
-        conn = sql.connect(path)
-
-        deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        etas   = pd.read_sql('select * from etas;', conn).values
-        zetas  = pd.read_sql('select * from zetas;', conn).values
-        sigmas = pd.read_sql('select * from sigmas;', conn).values
-        alphas = pd.read_sql('select * from alphas;', conn).values
-        betas  = pd.read_sql('select * from betas;', conn).values
-        xis    = pd.read_sql('select * from xis;', conn).values
-        taus   = pd.read_sql('select * from taus;', conn).values
-        rs     = pd.read_sql('select * from rs;', conn).values
+        with open(path, 'rb') as file:
+            out = pickle.load(file)
+        
+        deltas = out['deltas']
+        etas   = out['etas']
+        zetas  = out['zetas']
+        sigmas = out['sigmas']
+        alphas = out['alphas']
+        betas  = out['betas']
+        xis    = out['xis']
+        taus   = out['taus']
+        rs     = out['rs']
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
@@ -571,8 +436,12 @@ class Result(object):
         self.samples.beta  = betas
         self.samples.xi    = xis
         self.samples.tau   = taus
-        self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
-        self.samples.sigma = [sigmas[np.where(sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
+        self.samples.zeta  = [
+            zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)
+            ]
+        self.samples.sigma = [
+            sigmas[np.where(sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)
+            ]
         self.samples.r     = rs
         return
 
@@ -593,9 +462,9 @@ if __name__ == '__main__':
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(50000)
-    model.write_to_disk('./test/results.db', 20000, 30)
-    res = Result('./test/results.db')
+    model.sample(4000)
+    model.write_to_disk('./test/results.pickle', 2000, 2)
+    res = Result('./test/results.pickle')
     res.write_posterior_predictive('./test/postpred.csv')
     # EOL
 

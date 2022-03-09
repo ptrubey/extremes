@@ -196,13 +196,13 @@ class Chain(object):
         zs = zeta.sum(axis = 0)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
-        return gamma(shape = As, scale = 1/Bs)
+        return gamma(shape = As, scale = 1 / Bs)
         # return np.ones(As.shape)
 
     def sample_xi(self, sigma, curr_xi):
-        n   = sigma.shape[0]
-        ss  = sigma.sum(axis = 0)
-        lss = np.log(sigma).sum(axis = 0)
+        n    = sigma.shape[0]
+        ss   = sigma.sum(axis = 0)
+        lss  = np.log(sigma).sum(axis = 0)
         args = zip(
             curr_xi, repeat(n), ss, lss,
             repeat(self.priors.xi.a), repeat(self.priors.xi.b),
@@ -216,15 +216,14 @@ class Chain(object):
         ss = sigma[:,~self.sigma_unity].sum(axis = 0)
         As = n * xi + self.priors.tau.a
         Bs = ss + self.priors.tau.b
-        return gamma(shape = As, scale = 1/Bs)
-        # return np.ones(As.shape)
+        return gamma(shape = As, scale = 1 / Bs)
 
     def sample_r(self, delta, zeta, sigma):
         # As = zeta[delta][:, :self.nCol].sum(axis = 1)
         # Bs = (self.data.Yp * sigma[delta][:, :self.nCol]).sum(axis = 1)
         As = np.einsum('il->i', zeta[:,:self.nCol][delta])
         Bs = np.einsum('il,il->i', self.data.Yp, sigma[:, :self.nCol][delta])
-        return gamma(shape = As, scale = 1/Bs)
+        return gamma(shape = As, scale = 1 / Bs)
 
     def sample_rho(self, delta, zeta, sigma):
         """ Sampling the PG_1 gammas for categorical variables
@@ -250,9 +249,9 @@ class Chain(object):
 
     def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta, xi, tau):
         dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
-        Y = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
-        n = dmat.sum(axis = 0)
-        Ysv = (Y.T @ dmat).T          # np.einsum('nd,nj->jd', Y, dmat) 
+        Y    = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
+        n    = dmat.sum(axis = 0)
+        Ysv  = (Y.T @ dmat).T          # np.einsum('nd,nj->jd', Y, dmat) 
         lYsv = (np.log(Y).T @ dmat).T # np.einsum('nd,nj->jd', np.log(Y), dmat)
         args = zip(
             curr_zeta, n, Ysv, lYsv, 
@@ -524,20 +523,6 @@ class Result(object):
         return
 
     def load_data(self, path):
-        # conn = sql.connect(path)
-
-        # deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        # etas   = pd.read_sql('select * from etas;', conn).values.ravel()
-        # zetas  = pd.read_sql('select * from zetas;', conn).values
-        # sigmas = pd.read_sql('select * from sigmas;', conn).values
-        # alphas = pd.read_sql('select * from alphas;', conn).values
-        # betas  = pd.read_sql('select * from betas;', conn).values
-        # xis    = pd.read_sql('select * from xis;', conn).values
-        # taus   = pd.read_sql('select * from taus;', conn).values
-        # rs     = pd.read_sql('select * from rs;', conn).values.ravel()
-        # rhos   = pd.read_sql('select * from rhos;', conn).values
-        # su     = pd.read_sql('select * from sigmaunity;', conn).values.astype(bool).ravel()
-        
         with open(path, 'rb') as file:
             out = pickle.load(file)
         
