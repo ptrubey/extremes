@@ -131,7 +131,7 @@ class Chain(object):
         cand_cluster_state[delta_i] = False
         return delta_i
     
-    def clean_delta_zeta_sigma(self, curr_cluster_state, delta, zeta, sigma):
+    def clean_delta_zeta_sigma(self, delta, zeta, sigma):
         """
         delta : cluster indicator vector (n)
         zeta  : cluster parameter matrix (J* x d)
@@ -260,7 +260,6 @@ class Chain(object):
 
         self.curr_iter += 1
         # normalizing constant for product of Gammas
-        # logConstant = (zeta * np.log(sigma)).sum(axis = 1) - gammaln(zeta).sum(axis = 1)
         log_likelihood = dprodgamma_log_my_mt(r.reshape(-1,1) * self.data.Yp, zeta, sigma)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
@@ -271,11 +270,8 @@ class Chain(object):
                             curr_cluster_state, cand_cluster_state, eta,
                             log_likelihood[i], delta[i], unifs[i], scratch,
                             )
-            # Sample new cluster indices
-            # delta[i] = self.sample_delta_i(curr_cluster_state, cand_cluster_state, eta, 
-            #                 delta[i], unifs[i], r[i] * self.data.Yp[i], zeta, sigma, logConstant, scratch)
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
-        delta, zeta, sigma = self.clean_delta_zeta_sigma(curr_cluster_state, delta, zeta, sigma)
+        delta, zeta, sigma = self.clean_delta_zeta_sigma(delta, zeta, sigma)
         self.samples.delta[self.curr_iter] = delta
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta, sigma)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
@@ -293,7 +289,7 @@ class Chain(object):
 
     def sample(self, ns):
         self.initialize_sampler(ns)
-        print_string = '\rSampling {:.1%} Completed, {} Clusters     '
+        print_string = '\rSampling {:.2%} Completed, {} Clusters     '
         print(print_string.format(self.curr_iter / ns, self.nDat), end = '')
         while (self.curr_iter < ns):
             if (self.curr_iter % 10) == 0:

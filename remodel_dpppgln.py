@@ -581,7 +581,7 @@ class Chain(object):
         extant_clusters : (t x J)
         """
         # return np.ones(curr_xi.shape)
-        n  = np.repeat(extant_clusters.sum(axis = 1), sigma.shape[-1] - 1)  # (t x (d-1))
+        n  = np.repeat(extant_clusters.sum(axis = 1), sigma.shape[-1] - 1)          # (t x (d-1))
         ls = np.nansum(np.log(sigma[:,:,1:]) * extant_clusters[:,:,None], axis = 1) # (t, d-1)
         s  = (sigma[:,:,1:] * extant_clusters[:,:,None]).sum(axis = 1)              # (t, d-1)
         args = zip(
