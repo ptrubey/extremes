@@ -12,7 +12,8 @@ from scipy.special import gammaln
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, \
+    Data, MixedData
 from projgamma import GammaPrior
 
 # from multiprocessing import Pool
@@ -259,7 +260,7 @@ class Chain(object):
         print_string = '\rSampling {:.1%} Completed, {} Clusters     '
         print(print_string.format(self.curr_iter / ns, self.nDat), end = '')
         while (self.curr_iter < ns):
-            if (self.curr_iter % 10) == 0:
+            if (self.curr_iter % 100) == 0:
                 print(print_string.format(self.curr_iter / ns, self.curr_delta.max() + 1), end = '')
             self.iter_sample()
         print('\rSampling 100% Completed                    ')
@@ -317,9 +318,9 @@ class Chain(object):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_alpha = GammaPrior(2., 2.),
+            prior_alpha = GammaPrior(0.5, 0.5),
             prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(2., 2.),
+            prior_xi    = GammaPrior(0.5, 0.5),
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,

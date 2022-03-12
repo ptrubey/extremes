@@ -193,7 +193,7 @@ class Chain(object):
         r     = self.curr_r
 
         self.curr_iter += 1
-        # normalizing constant for product of Gammas
+        # Log-density for product of Gammas
         log_likelihood = dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_placeholder)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)

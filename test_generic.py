@@ -1,83 +1,80 @@
 from argparser import argparser_generic as argparser
-from data import Data_From_Raw
+from data import Data_From_Raw, Data_From_Sphere, MixedData
 from projgamma import GammaPrior
 from pandas import read_csv
+from energy import limit_cpu
 import models
 import os
 
-class Object(object):
-    pass
-
 if __name__ == '__main__':
-    # p = argparser()
-    p = Object()
-
-    p.model = "dpppgln"
-    p.out_folder = "./output2"
-    p.in_path = './datasets/ivt_updated_nov_mar.csv'
-    p.decluster = 'True'
-    p.quantile = '0.95'
-    p.eta_shape = '2'
-    p.eta_rate = '1e0'
-    p.nSamp = '5000'
-    p.nKeep = '2000'
-    p.nThin = '3'
+    p = argparser()
+    limit_cpu()
+    # Verify using a mixed model if using categorical variables
+    # -- or not using a mixed model, if not using categorical variables
+    if eval(p.cats):
+        assert(p.model.startswith('m'))
+    else:
+        assert(not p.model.startswith('m'))
 
     Chain  = models.Chains[p.model]
     Result = models.Results[p.model]
+    raw = read_csv(p.in_path).values
 
-    raw  = read_csv(p.in_path)
-    # so nice, I tried it twice.
-    try:
-        data = Data_From_Raw(raw, decluster = eval(p.decluster), quantile = float(p.quantile))
-    except:
-        data = Data_From_Raw(raw, decluster = eval(p.decluster), quantile = float(p.quantile))
+    if eval(p.cats):
+        if eval(p.sphere):
+            data = MixedData(raw, eval(p.cats), eval(p.sphere))
+        else:
+            try:
+                data = MixedData(
+                    raw, 
+                    eval(p.cats), 
+                    decluster = eval(p.decluster), 
+                    quantile = float(p.quantile),
+                    )
+            except:
+                data = MixedData(
+                    raw, 
+                    eval(p.cats), 
+                    decluster = eval(p.decluster), 
+                    quantile = float(p.quantile),
+                    )
+    else:
+        if eval(p.sphere):
+            data = Data_From_Sphere(raw)
+        else:
+            try:
+                data = Data_From_Raw(
+                    raw, 
+                    decluster = eval(p.decluster), 
+                    quantile = float(p.quantile),
+                    )
+            except:
+                data = Data_From_Raw(
+                    raw, 
+                    decluster = eval(p.decluster), 
+                    quantile = float(p.quantile),
+                    )
 
-    if p.model.startswith('dp'):
-        emp_path = os.path.join(
-            p.out_folder, p.model, 'empirical.csv',
-            )
-        out_path = os.path.join(
-            p.out_folder, p.model, 'results_{}_{}.db'.format(p.eta_shape, p.eta_rate),
-            )
-        pp_path = os.path.join(
-            p.out_folder, p.model, 'postpred_{}_{}.csv'.format(p.eta_shape, p.eta_rate),
-            )
-        model = Chain(data, prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)))
+    out_folder = os.path.split(p.out_path)[0]
+    emp_path = os.path.join(out_folder, 'empirical.csv')
 
-    elif p.model.startswith('m'):
-        emp_path = os.path.join(
-            p.out_folder, p.model, 'empirical.csv',
-            )
-        out_path = os.path.join(
-            p.out_folder, p.model, 'results_{}.db'.format(p.nMix),
-            )
-        pp_path = os.path.join(
-            p.out_folder, p.model, 'postpred_{}.csv'.format(p.nMix),
-            )
-        model = Chain(data, nMix = int(p.nMix))
+    if p.model.startswith('dp') or p.model.startswith('mdp'):
+        model = Chain(
+                    data, 
+                    prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)), 
+                    p = int(p.p), max_clust_count = int(p.maxclust),
+                    )
+    elif p.model.startwith('m'):
+        model = Chain(data, nMix = int(p.nMix), p = int(p.p),)
     elif p.model.startswith('v'):
-        emp_path = os.path.join(
-            p.out_folder, p.model, 'empirical.csv',
-            )
-        out_path = os.path.join(
-            p.out_folder, p.model, 'results.db',
-            )
-        pp_path = os.path.join(
-            p.out_folder, p.model, 'postpred.csv',
-            )
-        model = Chain(data)
+        model = Chain(data, p = int(p.p),)
     else:
         raise ValueError
 
     data.write_empirical(emp_path)
-
     model.sample(int(p.nSamp))
-
-    model.write_to_disk(out_path, int(p.nKeep), int(p.nThin))
-
-    res = Result(out_path)
-
-    res.write_posterior_predictive(pp_path)
+    model.write_to_disk(p.out_path, int(p.nKeep), int(p.nThin))
+    # res = Result(out_path)
+    # res.write_posterior_predictive(pp_path)
 
 # EOF

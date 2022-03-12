@@ -27,17 +27,20 @@ def argparser_v():
 def argparser_generic():
     p = argparse.ArgumentParser()
     p.add_argument('in_path')
-    p.add_argument('out_folder')
+    p.add_argument('out_path')
     p.add_argument('model')
-    p.add_argument('nSamp')
-    p.add_argument('nKeep')
-    p.add_argument('nThin')
+    p.add_argument('--nSamp', default = '50000')
+    p.add_argument('--nKeep', default = '20000')
+    p.add_argument('--nThin', default = '30')
+    p.add_argument('--cats', default = '[]')
     p.add_argument('--nMix', default = 30)
     p.add_argument('--eta_shape', default = '2')
-    p.add_argument('--eta_rate',  default = '1e-1')
+    p.add_argument('--eta_rate',  default = '5e-1')
+    p.add_argument('--sphere', default = 'False')
     p.add_argument('--quantile' , default = 0.95)
     p.add_argument('--decluster', default = 'True')
     p.add_argument('--p', default = '10')
+    p.add_argument('--maxclust', default = '300')
     return p.parse_args()
 
 def argparser_simulation():
@@ -85,4 +88,4 @@ def argparser_varying_p():
     return p.parse_args()
 
 if __name__ == '__main__':
-    p = argparser_dp()
+    p = argparser_generic()

@@ -216,16 +216,15 @@ class Data_From_Raw(Data):
         return
 
 class Data_From_Sphere(Data):
-    def fill_out(self):
+    def fill_sphere(self, raw):
+        self.V = euclidean_to_hypercube(raw)
+        self.nDat, self.nCol = self.V.shape
         self.A = euclidean_to_angular(self.V)
         self.S = euclidean_to_simplex(self.V)
         return
 
-    def __init__(self, path):
-        pV = pd.read_csv(path).values
-        self.V = euclidean_to_hypercube(pV)
-        self.nDat, self.nCol = pV.shape
-        self.fill_out()
+    def __init__(self, raw):
+        self.fill_sphere(raw)
         return
 
 class Categorical(object):
@@ -243,7 +242,7 @@ class Categorical(object):
             values = [np.unique(raw.T[i]) for i in range(raw.shape[1])]
         
         if index is None:
-            index == np.arange(raw.shape[0])
+            index = np.arange(raw.shape[0])
 
         dummies = []
         cats = []
@@ -260,16 +259,25 @@ class Categorical(object):
         self.fill_categorical(raw, values, index)
         return
 
-class MixedData(Data_From_Raw, Categorical):
-    def __init__(self, raw, cat_vars, 
+class MixedData(Data_From_Raw, Data_From_Sphere, Categorical):
+    def __init__(self, raw, cat_vars, sphere = False,
             decluster = False, quantile = 0.95, values = None,
             ):
         if type(raw) is pd.DataFrame:
             raw = raw.values
-        real_vars = np.array(list(set(np.arange(raw.shape[1])).difference(set(cat_vars))), dtype = int)
-        self.fill_real(raw[:, real_vars], decluster, quantile)
+        real_vars = np.array(
+            list(set(np.arange(raw.shape[1])).difference(set(cat_vars))), 
+            dtype = int
+            )
+        if sphere:
+            self.fill_sphere(raw[:, real_vars])
+        else:
+            self.fill_real(raw[:, real_vars], decluster, quantile)
         self.fill_categorical(raw[:, cat_vars], values, self.I)
         return
+    
+
+
 
 if __name__ == '__main__':
     pass
