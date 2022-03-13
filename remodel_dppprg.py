@@ -253,7 +253,13 @@ class Chain(object):
             'etas'   : etas,
             'nCol'   : self.nCol,
             'nDat'   : self.nDat,
+            'V'      : self.data.V,
             }
+        
+        try:
+            out['Y'] = self.data.Y
+        except AttributeError:
+            pass
         
         with open(path, 'wb') as file:
             pickle.dump(out, file)
@@ -333,6 +339,12 @@ class Result(object):
         self.nDat  = deltas.shape[1]
         self.nCol  = alphas.shape[1]
 
+        self.V = out['V']
+        try:
+            self.Y = out['Y']
+        except KeyError:
+            pass
+
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
         self.samples.eta   = etas
@@ -346,10 +358,7 @@ class Result(object):
 
     def __init__(self, path):
         self.load_data(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
-
-# EOF
 
 if __name__ == '__main__':
     from data import Data_From_Raw
@@ -359,14 +368,10 @@ if __name__ == '__main__':
 
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
     model.sample(4000)
     model.write_to_disk('./test/results.pickle', 2000, 2)
     res = Result('./test/results.pickle')
     res.write_posterior_predictive('./test/postpred.csv')
-    # EOL
 
-
-
-# EOF 2
+# EOF

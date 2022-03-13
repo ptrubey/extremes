@@ -20,6 +20,7 @@ if __name__ == '__main__':
     Result = models.Results[p.model]
     raw = read_csv(p.in_path).values
 
+    ## Initialize Data
     if eval(p.cats):
         if eval(p.sphere):
             data = MixedData(raw, eval(p.cats), eval(p.sphere))
@@ -55,9 +56,12 @@ if __name__ == '__main__':
                     quantile = float(p.quantile),
                     )
 
-    out_folder = os.path.split(p.out_path)[0]
-    emp_path = os.path.join(out_folder, 'empirical.csv')
-
+    ## If there's a supplied outcome, initialize it
+    if os.path.exists(p.outcome_path):
+        outcome = read_csv(p.outcome_path).values
+        data.load_outcome(outcome)
+    
+    ## Initialize Chain
     if p.model.startswith('dp') or p.model.startswith('mdp'):
         model = Chain(
                     data, 
@@ -70,11 +74,11 @@ if __name__ == '__main__':
         model = Chain(data, p = int(p.p),)
     else:
         raise ValueError
-
-    data.write_empirical(emp_path)
+    
+    ## Run Sampler
     model.sample(int(p.nSamp))
-    model.write_to_disk(p.out_path, int(p.nKeep), int(p.nThin))
-    # res = Result(out_path)
-    # res.write_posterior_predictive(pp_path)
 
+    ## Write to disk
+    model.write_to_disk(p.out_path, int(p.nKeep), int(p.nThin))
+    
 # EOF

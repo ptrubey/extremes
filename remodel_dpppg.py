@@ -333,7 +333,13 @@ class Chain(object):
             'etas'   : etas,
             'nCol'   : self.nCol,
             'nDat'   : self.nDat,
+            'V'      : self.data.V,
             }
+        
+        try:
+            out['Y'] = self.data.Y
+        except AttributeError:
+            pass
         
         with open(path, 'wb') as file:
             pickle.dump(out, file)
@@ -425,6 +431,11 @@ class Result(object):
         self.nDat  = deltas.shape[1]
         self.nCol  = alphas.shape[1]
 
+        self.V = out['V']
+        try:
+            self.Y = out['Y']
+        except KeyError:
+            pass
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
         self.samples.eta   = etas
@@ -443,7 +454,6 @@ class Result(object):
 
     def __init__(self, path):
         self.load_data(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 # EOF

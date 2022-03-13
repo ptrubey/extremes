@@ -92,6 +92,11 @@ def descale_pareto(Z, P):
     raw = P[0] + P[1] * (Z**P[2] - 1) / P[2]
     return raw
 
+class Outcome(object):
+    def fill_outcome(self, Y):
+        self.Y = Y
+        return
+
 class Transformer(object):
     @staticmethod
     def probit(x):
@@ -148,7 +153,7 @@ class Data(Transformer):
         self.fill_out()
         return
 
-class Data_From_Raw(Data):
+class Data_From_Raw(Data, Outcome):
     raw = None # raw data
     Z   = None # Standardized Pareto Transformed (for those > 1)
     P   = None # Generalized Pareto Parameters (threshold, scale, extreme index)
@@ -211,11 +216,13 @@ class Data_From_Raw(Data):
         # Pre-compute the trig components of the likelihood.
         self.fill_out()
 
-    def __init__(self, raw, decluster = False, quantile = 0.95):
-        self.fill_real(raw, decluster, quantile)        
+    def __init__(self, raw, decluster = False, quantile = 0.95, outcome = 'None'):
+        self.fill_real(raw, decluster, quantile)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
         return
 
-class Data_From_Sphere(Data):
+class Data_From_Sphere(Data, Outcome):
     def fill_sphere(self, raw):
         self.V = euclidean_to_hypercube(raw)
         self.nDat, self.nCol = self.V.shape
@@ -223,11 +230,13 @@ class Data_From_Sphere(Data):
         self.S = euclidean_to_simplex(self.V)
         return
 
-    def __init__(self, raw):
+    def __init__(self, raw, outcome = 'None'):
         self.fill_sphere(raw)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
         return
 
-class Categorical(object):
+class Categorical(Outcome, Outcome):
     Cats = None    # numpy array indicating number of categories per categorical variable
     nCat = None    # Total number of categories (sum of Cats)
 
@@ -255,12 +264,14 @@ class Categorical(object):
         assert self.Cats.sum() == self.nCat
         return
     
-    def __init__(self, raw, values = None, index = None):
+    def __init__(self, raw, values = None, index = None, outcome = 'None'):
         self.fill_categorical(raw, values, index)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
         return
 
-class MixedData(Data_From_Raw, Data_From_Sphere, Categorical):
-    def __init__(self, raw, cat_vars, sphere = False,
+class MixedData(Data_From_Raw, Data_From_Sphere, Categorical, Outcome):
+    def __init__(self, raw, cat_vars, outcome = 'None', sphere = False,
             decluster = False, quantile = 0.95, values = None,
             ):
         if type(raw) is pd.DataFrame:
@@ -274,10 +285,9 @@ class MixedData(Data_From_Raw, Data_From_Sphere, Categorical):
         else:
             self.fill_real(raw[:, real_vars], decluster, quantile)
         self.fill_categorical(raw[:, cat_vars], values, self.I)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
         return
-    
-
-
 
 if __name__ == '__main__':
     pass

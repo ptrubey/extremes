@@ -8,7 +8,7 @@ from collections import namedtuple
 from itertools import repeat
 import pandas as pd
 import os
-import sqlite3 as sql
+import pickle
 from math import log
 
 # import pt
@@ -795,7 +795,6 @@ class Chain(object):
             os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
-        conn = sql.connect(path)
 
         nclust = np.array([delta.max() for delta in self.samples.delta[nBurn :: nThin, 0]]) + 1
         zetas  = np.vstack([
@@ -806,7 +805,6 @@ class Chain(object):
             np.hstack((np.ones((nclust[i], 1)) * i, sigma[0][:nclust[i]]))
             for i, sigma in enumerate(self.samples.sigma[nBurn :: nThin])
             ])
-
         mus    = self.samples.mu[nBurn :: nThin, 0]
         Sigmas = self.samples.Sigma[nBurn :: nThin, 0]
         xis    = self.samples.xi[nBurn :: nThin, 0]
@@ -815,35 +813,27 @@ class Chain(object):
         rs     = self.samples.r[nBurn :: nThin, 0]
         etas   = self.samples.eta[nBurn :: nThin, 0]
 
-        nSamp = deltas.shape[0]
-        zetas_df = pd.DataFrame(
-                zetas, columns = ['iter'] + ['zeta_{}'.format(i) for i in range(self.nCol)],
-                )
-        sigmas_df = pd.DataFrame(
-                sigmas, columns = ['iter'] + ['sigma_{}'.format(i) for i in range(self.nCol)],
-                )
-        mus_df    = pd.DataFrame(mus,    columns = ['mu_{}'.format(i)    for i in range(self.nCol)])
-        Sigmas_df = pd.DataFrame(
-            Sigmas.reshape(nSamp * self.nCol, self.nCol), 
-            columns = ['Sigma_{}'.format(i) for i in range(self.nCol)],
-            )
-        xis_df    = pd.DataFrame(xis,    columns = ['xi_{}'.format(i)    for i in range(self.nCol-1)])
-        taus_df   = pd.DataFrame(taus,   columns = ['tau_{}'.format(i)   for i in range(self.nCol-1)])
-        deltas_df = pd.DataFrame(deltas, columns = ['delta_{}'.format(i) for i in range(self.nDat)])
-        rs_df     = pd.DataFrame(rs,     columns = ['r_{}'.format(i)     for i in range(self.nDat)])
-        etas_df   = pd.DataFrame({'eta' : etas})
+        out = {
+            'nclust' : nclust,
+            'zetas'  : zetas,
+            'sigmas' : sigmas,
+            'mus'    : mus,
+            'Sigmas' : Sigmas,
+            'xis'    : xis,
+            'taus'   : taus,
+            'deltas' : deltas,
+            'rs'     : rs,
+            'etas'   : etas,
+            'V'      : self.data.V,
+            }
 
-        zetas_df.to_sql('zetas',   conn, index = False)
-        sigmas_df.to_sql('sigmas', conn, index = False)
-        xis_df.to_sql('xis',       conn, index = False)
-        taus_df.to_sql('taus',     conn, index = False)
-        deltas_df.to_sql('deltas', conn, index = False)
-        rs_df.to_sql('rs',         conn, index = False)
-        etas_df.to_sql('etas',     conn, index = False)
-        mus_df.to_sql('mus',       conn, index = False)
-        Sigmas_df.to_sql('Sigmas_cov', conn, index = False)
-        conn.commit()
-        conn.close()
+        try:
+            out['Y'] = self.data.Y
+        except AttributeError:
+            pass
+
+        with open(path, 'wb') as file:
+            pickle.dump(out, file)
         return
 
     def set_projection(self):
@@ -927,19 +917,24 @@ class Result(object):
         return
 
     def load_data(self, path):
-        conn = sql.connect(path)
-
-        deltas = pd.read_sql('select * from deltas;', conn).values.astype(int)
-        mus    = pd.read_sql('select * from mus;', conn).values
-
-        etas   = pd.read_sql('select * from etas;', conn).values
-        xis    = pd.read_sql('select * from xis;', conn).values
-        taus   = pd.read_sql('select * from taus;', conn).values
-        rs     = pd.read_sql('select * from rs;', conn).values
-
-        zetas  = pd.read_sql('select * from zetas;', conn).values
-        sigmas = pd.read_sql('select * from sigmas;', conn).values
-        Sigmas = pd.read_sql('select * from Sigmas_cov;', conn).values
+        with open(path, 'rb') as file:
+            out = pickle.load(file)
+        
+        deltas = out['deltas']
+        zetas  = out['zetas']
+        sigmas = out['sigmas']
+        mus    = out['mus']
+        Sigmas = out['Sigmas']
+        xis    = out['xis']
+        taus   = out['taus']
+        rs     = out['rs']
+        etas   = out['etas']
+        
+        self.V = out['V']
+        try:
+            self.Y = out['Y']
+        except KeyError:
+            pass
         
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
@@ -959,7 +954,6 @@ class Result(object):
 
     def __init__(self, path):
         self.load_data(path)
-        self.data = Data(os.path.join(os.path.split(path)[0], 'empirical.csv'))
         return
 
 # EOF
