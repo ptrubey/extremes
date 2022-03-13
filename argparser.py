@@ -29,6 +29,7 @@ def argparser_generic():
     p.add_argument('in_path')
     p.add_argument('out_path')
     p.add_argument('model')
+    p.add_argument('--outcome', default = 'None')
     p.add_argument('--nSamp', default = '50000')
     p.add_argument('--nKeep', default = '20000')
     p.add_argument('--nThin', default = '30')
