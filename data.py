@@ -236,7 +236,7 @@ class Data_From_Sphere(Data, Outcome):
             self.fill_outcome(outcome)
         return
 
-class Categorical(Outcome, Outcome):
+class Categorical(Outcome):
     Cats = None    # numpy array indicating number of categories per categorical variable
     nCat = None    # Total number of categories (sum of Cats)
 
