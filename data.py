@@ -271,8 +271,9 @@ class Categorical(Outcome):
         return
 
 class MixedData(Data_From_Raw, Data_From_Sphere, Categorical, Outcome):
-    def __init__(self, raw, cat_vars, outcome = 'None', sphere = False,
+    def __init__(self, raw, cat_vars, sphere = False,
             decluster = False, quantile = 0.95, values = None,
+            outcome = 'None',
             ):
         if type(raw) is pd.DataFrame:
             raw = raw.values

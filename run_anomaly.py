@@ -29,7 +29,7 @@ if __name__ == '__main__':
 
         processes.append(Popen(
             [sys.executable, 'test_generic.py', file, out_path, model, 
-                "--cats", str(catCols), '--sphere', 'True', '--outcome', out_path]
+                '--outcome', out_path, "--cats", str(catCols), '--sphere', 'True']
             ))
     
     for process in processes:

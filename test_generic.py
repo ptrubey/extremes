@@ -57,8 +57,8 @@ if __name__ == '__main__':
                     )
 
     ## If there's a supplied outcome, initialize it
-    if os.path.exists(p.outcome_path):
-        outcome = read_csv(p.outcome_path).values
+    if os.path.exists(p.outcome):
+        outcome = read_csv(p.outcome).values
         data.load_outcome(outcome)
     
     ## Initialize Chain
