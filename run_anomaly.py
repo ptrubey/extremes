@@ -12,12 +12,14 @@ if __name__ == '__main__':
 
     processes = []
 
+    files = [file for file in files if re.search(search_string, file)]
+
     for file in files:
         match = re.search(search_string, file)
-        if match:
-            nMix = match.group(1)
-            nCol = match.group(2)
-            nCat = match.group(3)
+        
+        nMix = match.group(1)
+        nCol = match.group(2)
+        nCat = match.group(3)
 
         outcome  = 'class_m{}.csv'.format(nMix)
 
