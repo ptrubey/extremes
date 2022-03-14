@@ -356,7 +356,7 @@ class Chain(object):
         print_string = '\rSampling {:.1%} Completed, {} Clusters     '
         print(print_string.format(self.curr_iter / ns, self.nDat), end = '')
         while (self.curr_iter < ns):
-            if (self.curr_iter % 10) == 0:
+            if (self.curr_iter % 100) == 0:
                 print(print_string.format(self.curr_iter / ns, self.curr_delta.max() + 1), end = '')
             self.iter_sample()
         print('\rSampling 100% Completed                    ')
