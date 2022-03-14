@@ -238,6 +238,7 @@ class Chain(object):
         self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol))
         self.samples.eta[0] = 40.
         self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
+        self.samples.delta[0][-1] = np.arange(self.max_clust_count - 30)[-1]
         self.samples.r[0] = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
                 )
