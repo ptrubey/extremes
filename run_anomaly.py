@@ -4,7 +4,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 source_path = './datasets/sim_mixed/*.csv'
 dest_path   = './sim_mixed_ad'
-model       = 'mdppprg'
+models      = ['mdpppg'] #, 'mdppprg']
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
@@ -26,11 +26,11 @@ if __name__ == '__main__':
         out_path = os.path.join(dest_path, out_name)
 
         catCols = list(np.arange(int(nCol) + int(nCat))[int(nCol):])
-
-        processes.append(Popen(
-            [sys.executable, 'test_generic.py', file, out_path, model, 
-                '--outcome', out_path, "--cats", str(catCols), '--sphere', 'True']
-            ))
+        for model in models:
+            processes.append(Popen(
+                [sys.executable, 'test_generic.py', file, out_path, model, 
+                    '--outcome', out_path, "--cats", str(catCols), '--sphere', 'True']
+                ))
     
     for process in processes:
         process.wait()
