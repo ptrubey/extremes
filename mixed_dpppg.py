@@ -12,7 +12,7 @@ from scipy.special import gammaln
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
 from projgamma import GammaPrior
 
 # from multiprocessing import Pool
