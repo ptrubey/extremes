@@ -2,9 +2,9 @@ import sys, os, glob, re
 import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
-source_path = './datasets/sim_mixed/*.csv'
+source_path = './datasets/sim_mixed/data_*.csv'
 dest_path   = './sim_mixed_ad'
-models      = ['mdpppg'] #, 'mdppprg']
+models      = ['mdpppg', 'mdppprg']
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
@@ -12,6 +12,7 @@ if __name__ == '__main__':
 
     processes = []
 
+    # ensure that only data files are considered
     files = [file for file in files if re.search(search_string, file)]
 
     for file in files:
@@ -27,12 +28,13 @@ if __name__ == '__main__':
             out_name = 'results_{}_{}_{}_{}.pkl'.format(model, nMix, nCol, nCat)
             log_name = 'log_{}_{}_{}_{}.log'.format(model, nMix, nCol, nCat)
             out_path = os.path.join(dest_path, out_name)
+            cla_path = os.path.join(os.path.split(file)[0], outcome)
             
             catCols = list(np.arange(int(nCol) + int(nCat))[int(nCol):])
-            
+
             processes.append(Popen(
                 [sys.executable, 'test_generic.py', file, out_path, model, 
-                    '--outcome', out_path, "--cats", str(catCols), '--sphere', 'True']
+                    '--outcome', cla_path, "--cats", str(catCols), '--sphere', 'True']
                 ))
     
     for process in processes:
