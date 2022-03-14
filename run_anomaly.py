@@ -18,15 +18,16 @@ if __name__ == '__main__':
             nMix = match.group(1)
             nCol = match.group(2)
             nCat = match.group(3)
-        
-        out_name = 'results_{}_{}_{}_{}.pkl'.format(model, nMix, nCol, nCat)
-        log_name = 'log_{}_{}_{}_{}.log'.format(model, nMix, nCol, nCat)
-        outcome  = 'class_m{}.csv'.format(nMix)
-        
-        out_path = os.path.join(dest_path, out_name)
 
-        catCols = list(np.arange(int(nCol) + int(nCat))[int(nCol):])
+        outcome  = 'class_m{}.csv'.format(nMix)
+
         for model in models:
+            out_name = 'results_{}_{}_{}_{}.pkl'.format(model, nMix, nCol, nCat)
+            log_name = 'log_{}_{}_{}_{}.log'.format(model, nMix, nCol, nCat)
+            out_path = os.path.join(dest_path, out_name)
+            
+            catCols = list(np.arange(int(nCol) + int(nCat))[int(nCol):])
+            
             processes.append(Popen(
                 [sys.executable, 'test_generic.py', file, out_path, model, 
                     '--outcome', out_path, "--cats", str(catCols), '--sphere', 'True']
