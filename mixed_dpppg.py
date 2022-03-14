@@ -448,10 +448,10 @@ class Chain(object):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_alpha = GammaPrior(0.5, 0.5),
+            prior_alpha = GammaPrior(4., 2.),
             prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(2., 2.),
-            prior_tau   = GammaPrior(2., 2.),
+            prior_xi    = GammaPrior(4., 4.),
+            prior_tau   = GammaPrior(4., 4.),
             p           = 10,
             max_clust_count = 300,
             ):
