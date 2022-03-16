@@ -67,7 +67,6 @@ def update_sigma_j_wrapper(args):
 
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
-    # return sample_alpha_1_mh_summary(*args)
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
@@ -196,8 +195,9 @@ class Chain(object):
         zs = zeta.sum(axis = 0)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
-        return gamma(shape = As, scale = 1 / Bs)
-        # return np.ones(As.shape)
+        beta = gamma(shape = As, scale = 1 / Bs)
+        beta[beta < 1e-9] = 1e-9
+        return beta
 
     def sample_xi(self, sigma, curr_xi):
         n    = sigma.shape[0]
@@ -216,7 +216,9 @@ class Chain(object):
         ss = sigma[:,~self.sigma_unity].sum(axis = 0)
         As = n * xi + self.priors.tau.a
         Bs = ss + self.priors.tau.b
-        return gamma(shape = As, scale = 1 / Bs)
+        tau = gamma(shape = As, scale = 1 / Bs)
+        tau[tau < 1e-9] = 1e-9
+        return tau
 
     def sample_r(self, delta, zeta, sigma):
         # As = zeta[delta][:, :self.nCol].sum(axis = 1)
@@ -275,7 +277,7 @@ class Chain(object):
         res = np.array(list(map(update_sigma_j_wrapper, args)))
         # zeta_j, n_j, Y_js, xi, tau, sigma_unity = args
         # res = self.pool.map(update_sigma_j_wrapper, args)
-        res[res < 1e-12] = 1e-12
+        res[res < 1e-9] = 1e-9
         return res
 
     def initialize_sampler(self, ns):

@@ -154,7 +154,9 @@ class Chain(object):
         zs = zeta.sum(axis = 0)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
-        return gamma(shape = As, scale = 1/Bs)
+        beta = gamma(shape = As, scale = 1/Bs)
+        beta[beta < 1e-9] = 1e-9
+        return beta
 
     def sample_r(self, delta, zeta):
         # As = zeta[delta][:, :self.nCol].sum(axis = 1)
