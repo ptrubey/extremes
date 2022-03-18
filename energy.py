@@ -1,7 +1,7 @@
 import numpy as np
 import psutil
 import os
-from multiprocessing import Pool, cpu_count
+from multiprocessing import pool, Pool, cpu_count
 from itertools import repeat
 from sklearn.metrics import pairwise_distances
 from hypercube_deviance import hcdev
@@ -11,6 +11,9 @@ def hypercube_distance_unsummed(args):
 
 def hypercube_distance(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev).sum()
+
+def euclidean_distance_unsummed(args):
+    return pairwise_distances(args[0], args[1].reshape(1,-1))
 
 def prediction_pairwise_distance(prediction):
     n = prediction.shape[0]
@@ -39,16 +42,8 @@ def energy_score_inner(predictions, targets):
     pool.close()
     return np.array(list(res2)) - 0.5 * np.array(list(res1))
 
-def energy_score_inner_new(predictions, targets):
-    pool = Pool(processes = cpu_count(), initializer = limit_cpu)
-    res1 = prediction_pairwise_distance(predictions)
-    res2 = pool.map(target_pairwise_distance, zip(repeat(predictions), targets))
-    pool.close()
-    return np.array(list(res2)).mean() - 0.5 * res1
-
 def energy_score(predictions, targets):
     return energy_score_inner(predictions, targets).mean()
-    # return energy_score_inner_new(predictions, targets)
 
 def energy_score_full(predictions, targets):
     res1 = prediction_pairwise_distance(predictions) # same for all elements.  do once.
@@ -108,6 +103,38 @@ def postpred_loss_single(predicted, empirical):
     for d in range(empirical.shape[0]):
         pvari[d] = np.trace(np.cov(pdevi[:,d].T))
     return bias + pvari
+
+def hypercube_distance_matrix(predictions, targets, pool = None):
+    if type(pool) is not pool.Pool:
+        pool = Pool(processes = cpu_count, initializer = limit_cpu)
+    res = pool.map(
+            hypercube_distance_unsummed, 
+            zip(repeat(predictions), targets)
+            )
+    return np.array(list(res))
+
+def euclidean_distance_matrix(predictions, targets, pool = None):
+    if type(pool) is not pool.Pool:
+        pool = Pool(processes = cpu_count, initializer = limit_cpu)
+    res = pool.map(
+            euclidean_distance_unsummed, 
+            zip(repeat(predictions), targets)
+            )
+    return np.array(list(res))
+
+def mixed_distance(predictions, targets):
+    """
+    predictions, targets = named tuples (with elements V, W)
+    x.V = hypersphere projection
+    x.W = one-hot encoding of categorical vars (alternatively, probability of class membership)
+    ------------
+    returns: (n_t, n_p, 2) np.ndarray, with:
+        (x,y,0) : V distance (hypercube)
+        (x,y,1) : W distance (euclidean)
+    """
+    hyp = hypercube_distance_matrix(predictions.V, targets.V)
+    euc = euclidean_distance_matrix(predictions.W, targets.W)
+    return np.vstack((hyp, euc))
 
 if __name__ == '__main__':
     pass
