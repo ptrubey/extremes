@@ -16,10 +16,11 @@ from argparser import argparser_ppl as argparser
 from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
 from energy import energy_score, energy_score_full, postpred_loss_full, limit_cpu
 import cUtility as cu
-import models, models_mpi
-import model_dppn as dppn
+import models #, models_mpi
+# import model_dppn as dppn
 
-Results = {**models.Results, **models_mpi.Results}
+# Results = {**models.Results, **models_mpi.Results}
+Results = models.Results
 
 from data import Data, euclidean_to_hypercube, euclidean_to_simplex, angular_to_euclidean
 
@@ -178,52 +179,11 @@ class Prediction_Gamma_Alter_Restricted(object):
             predicted[s] = gamma(shape = alpha) + epsilon
         return predicted
 
-# class Prediction_Gamma_Random(object):
-#     def prediction(self):
-#         predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-#         for s in range(self.nSamp):
-#             temp = uniform(size = self.nDat, self.nCol - 1)
-#             predicted[s] = np.insert(temp, choice(self.nCol, 1)[0], np.ones(self.nDat), axis = 1)
-#         return predicted
-
-# Special case for Probit Normal model
-class DPPN_Result(dppn.Result, PostPredLoss):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for i in range(self.nSamp):
-            pred_temp = np.empty((self.nDat, self.nCol - 1))
-            for j in range(self.nDat):
-                pred_temp[j] = 0.5 * np.pi * self.invprobit(
-                    + self.samples.mu[i][self.samples.delta[i,j]]
-                    + cholesky(self.samples.Sigma[i][self.samples.delta[i,j]]) @ normal(size = self.nCol - 1)
-                    )
-            predicted[i] = angular_to_euclidean(pred_temp)
-        return predicted
-
-Results['dppn'] = DPPN_Result
-
-# Updating the Result objects with the new methods.
-
 Prediction_Gammas = {}
-for model in ['md','dpd','mprg','dpprg','dpdc','dphprg','mhprg','dppprg']:
+for model in ['mdppprg', 'dppprg']:
     Prediction_Gammas[model] = Prediction_Gamma_Restricted
-for model in ['mgd','dpgd','mpg','dppg','dphpg','mhpg','dpppg']:
+for model in ['mdpppg', 'dpppg']:
     Prediction_Gammas[model] = Prediction_Gamma
-for model in ['vd','vprg']:
-    Prediction_Gammas[model] = Prediction_Gamma_Vanilla_Restricted
-for model in ['vgd','vpg','vhpg','vppg']:
-    Prediction_Gammas[model] = Prediction_Gamma_Vanilla
-for model in ['mdln','dpdln','mprgln', 'dpprgln','dphprgln','mhprgln','dppprgln']:
-    Prediction_Gammas[model] = Prediction_Gamma_Alter_Restricted
-for model in ['mgdln','dpgdln','mpgln','dppgln','dphpgln','mhpgln','dpppgln']:
-    Prediction_Gammas[model] = Prediction_Gamma_Alter
-for model in ['dppn']:
-    Prediction_Gammas[model] = object
-# for model in ['random']:
-#     Prediction_Gammas[model] = object
 
 def ResultFactory(model, path):
     class Result(Results[model], PostPredLoss, Prediction_Gammas[model]):
@@ -251,7 +211,8 @@ if __name__ == '__main__':
     args = argparser()
     # model_types = sorted(Prediction_Gammas.keys())
     # model_types = ['dphprg','dphprgln','dphpg','dppn']
-    model_types = ['dppprg','dppprgln','dpppg','dpppgln','dppn']
+    # model_types = ['dppprg','dppprgln','dpppg','dpppgln','dppn']
+    model_types = ['dppprg','dpppg','mdppprg','mdpppg']
 
     models = []
     for model_type in model_types:
