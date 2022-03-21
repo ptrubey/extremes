@@ -70,6 +70,15 @@ def sample_gamma_shape_wrapper(args):
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
+class BaseData(object):
+    def __init__(self, V, W):
+        self.V = V
+        self.W = W
+        self.VW = np.hstack((V, W))
+        self.nDat = self.V.shape[0]
+        self.nCol = self.VW.shape[1]
+        return
+
 class Samples(object):
     pi    = None
     zeta  = None
@@ -407,6 +416,7 @@ class Chain(object):
             'cats'   : self.data.Cats,
             'V'      : self.data.V,
             'W'      : self.data.W,
+            'Y'      : self.data.Y 
             }
         
         try:
@@ -559,12 +569,9 @@ class Result(object):
         self.nSigma = self.nCol + self.nCat - self.nCats - 1
         self.cats   = cats
 
-        self.V = out['V']
-        self.W = out['W']
-        try:
-            self.Y = out['Y']
-        except KeyError:
-            pass
+        self.data = BaseData(out['V'], out['W'])
+        if 'Y' in out.keys():
+            self.data.Y = out['Y']
 
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.delta = deltas

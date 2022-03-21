@@ -1,7 +1,7 @@
 import numpy as np
 import psutil
 import os
-from multiprocessing import pool, Pool, cpu_count
+from multiprocessing import Pool, cpu_count, pool as mcpool
 from itertools import repeat
 from sklearn.metrics import pairwise_distances
 from hypercube_deviance import hcdev
@@ -105,7 +105,7 @@ def postpred_loss_single(predicted, empirical):
     return bias + pvari
 
 def hypercube_distance_matrix(predictions, targets, pool = None):
-    if type(pool) is not pool.Pool:
+    if type(pool) is not mcpool.Pool:
         pool = Pool(processes = cpu_count, initializer = limit_cpu)
     res = pool.map(
             hypercube_distance_unsummed, 
@@ -114,7 +114,7 @@ def hypercube_distance_matrix(predictions, targets, pool = None):
     return np.array(list(res))
 
 def euclidean_distance_matrix(predictions, targets, pool = None):
-    if type(pool) is not pool.Pool:
+    if type(pool) is not mcpool.Pool:
         pool = Pool(processes = cpu_count, initializer = limit_cpu)
     res = pool.map(
             euclidean_distance_unsummed, 

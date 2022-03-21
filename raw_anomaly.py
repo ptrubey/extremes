@@ -102,36 +102,39 @@ class Anomaly(object):
         auc = np.array(list(map(lambda x: trapezoid(*x.T), res)))
         return auc
 
-    def __init__(self, path_x, path_y): #, path_results):
-        self.X = pd.read_csv(path_x).values
-        self.y = pd.read_csv(path_y).values.reshape(-1)
-        # self.results =
-        return
+    # def __init__(self, path_x, path_y): #, path_results):
+    #     self.X = pd.read_csv(path_x).values
+    #     self.y = pd.read_csv(path_y).values.reshape(-1)
+    #     return
+    def __init__(self, X, Y):
+        self.X = X
+        self.Y = Y
 
 if __name__ == '__main__':
-    Path = namedtuple('Path','x y')
-    paths = [
-        Path('./datasets/ad_cardio_x.csv', './datasets/ad_cardio_y.csv'),
-        Path('./datasets/ad_cover_x.csv', './datasets/ad_cover_y.csv'),
-        Path('./datasets/ad_mammography_x.csv', './datasets/ad_mammography_y.csv'),
-        Path('./datasets/ad_pima_x.csv', './datasets/ad_pima_y.csv'),
-        Path('./datasets/ad_satellite_x.csv', './datasets/ad_satellite_y.csv'),
-        ]
-    auroc = np.array([Anomaly(*path).get_auroc() for path in paths])
-    auprc = np.array([Anomaly(*path).get_auprc() for path in paths])
-    print('AuROC')
-    print(auroc)
-    print('AuPRC')
-    print(auprc)
-    colnames = ['SVM','LOF','IF']
-    rownames = ['cardio','cover','mammography','pima','satellite']
+    pass
+    # Path = namedtuple('Path','x y')
+    # paths = [
+    #     Path('./datasets/ad_cardio_x.csv', './datasets/ad_cardio_y.csv'),
+    #     Path('./datasets/ad_cover_x.csv', './datasets/ad_cover_y.csv'),
+    #     Path('./datasets/ad_mammography_x.csv', './datasets/ad_mammography_y.csv'),
+    #     Path('./datasets/ad_pima_x.csv', './datasets/ad_pima_y.csv'),
+    #     Path('./datasets/ad_satellite_x.csv', './datasets/ad_satellite_y.csv'),
+    #     ]
+    # auroc = np.array([Anomaly(*path).get_auroc() for path in paths])
+    # auprc = np.array([Anomaly(*path).get_auprc() for path in paths])
+    # print('AuROC')
+    # print(auroc)
+    # print('AuPRC')
+    # print(auprc)
+    # colnames = ['SVM','LOF','IF']
+    # rownames = ['cardio','cover','mammography','pima','satellite']
 
-    auroc_df = pd.DataFrame(auroc, columns = colnames)
-    auroc_df['data'] = rownames
-    auprc_df = pd.DataFrame(auprc, columns = colnames)
-    auroc_df['data'] = rownames
+    # auroc_df = pd.DataFrame(auroc, columns = colnames)
+    # auroc_df['data'] = rownames
+    # auprc_df = pd.DataFrame(auprc, columns = colnames)
+    # auroc_df['data'] = rownames
 
-    auroc_df.to_csv('./ad/auroc.csv')
-    auprc_df.to_csv('./ad/auprc.csv')
+    # auroc_df.to_csv('./ad/auroc.csv')
+    # auprc_df.to_csv('./ad/auprc.csv')
 
 # EOF

@@ -14,6 +14,7 @@ import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
 from projgamma import GammaPrior
+from mixed_dpppg import BaseData
 
 # from multiprocessing import Pool
 # from energy import limit_cpu
@@ -427,14 +428,11 @@ class Result(object):
         self.nCats  = cats.shape[0]
         self.nSigma = self.nCol + self.nCat - self.nCats - 1
         self.cats   = cats
+        self.data = BaseData(out['V'], out['W'])
+        if 'Y' in out.keys():
+            self.data.Y = out['Y']
         
-        self.V = out['V']
-        self.W = out['W']
-        try:
-            self.Y = out['Y']
-        except KeyError:
-            pass
-
+        
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.delta = deltas
         self.samples.eta   = etas

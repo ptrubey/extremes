@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import os
 import matplotlib.pyplot as plt
+import re
 
 from sklearn.metrics import pairwise_distances
 from multiprocessing import Pool, cpu_count
@@ -18,7 +19,6 @@ from data import Data_From_Raw
 from postpred_loss import PostPredLoss, Prediction_Gammas, Results
 from raw_anomaly import Anomaly, roc_curve, prc_curve
 from simulate_data import DataAD
-# from argparser import argparser_ad as argparser
 
 class AnomalyDetector(PostPredLoss):
     """ Implements anomaly detection algorithms; uses Linf """
@@ -234,7 +234,7 @@ def ResultFactory(model, path):
     class Result(Results[model], AnomalyDetector, Prediction_Gammas[model]):
         anomaly = None
 
-        def instantiate_raw_anomaly(self, path_x, path_y):
+        def instantiate_anomaly(self, path_x, path_y):
             self.anomaly = Anomaly(path_x, path_y)
             return
 
@@ -253,19 +253,31 @@ def plot_log_inverse_scores_knn(scores):
     plt.show()
     return
 
-def make_result(model, result_path, path_x, path_y, quantile, decluster):
+def make_result_old(model, result_path, path_x, path_y, quantile, decluster):
     result = ResultFactory(model, result_path)
     result.instantiate_raw_anomaly(path_x, path_y)
     result.instantiate_data(path_x, quantile, decluster)
     return result
 
-def make_result_ad(model, result_path, path_x, path_y):
+def make_result_ad_old(model, result_path, path_x, path_y):
     result = ResultFactory(model, result_path)
     result.instantiate_raw_anomaly(path_x, path_y)
     result.instantiate_data_ad(path_x)
     return result
 
+def make_result(path):
+    for model in Prediction_Gammas.keys():
+        if re.search(model, path):
+            break
+    else:
+        raise TypeError
+
+    result = ResultFactory(model, path)
+    result.instntiate_anomaly()
+
+
 if __name__ == '__main__':
+    pass
     # args = argparser()
     # model = os.path.split(os.path.split(args.model_path)[0])[1]
     # result = ResultFactory(model, args.model_path)
@@ -301,45 +313,45 @@ if __name__ == '__main__':
     # decluster = [False] * 5
     # results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y, quantiles, decluster)]
 
-    models = repeat('dppprg')
-    model_paths = [
-        './simulated_ad/m5_c5/dppprg/results_2_1e-1.db',
-        './simulated_ad/m5_c10/dppprg/results_2_1e-1.db',
-        './simulated_ad/m10_c5/dppprg/results_2_1e-1.db',
-        './simulated_ad/m10_c10/dppprg/results_2_1e-1.db',
-        ]
-    paths_x = [
-        './simulated_ad/ad_sim_m5_c5_x.csv',
-        './simulated_ad/ad_sim_m5_c10_x.csv',
-        './simulated_ad/ad_sim_m10_c5_x.csv',
-        './simulated_ad/ad_sim_m10_c10_x.csv',
-        ]
-    paths_y = [
-        './simulated_ad/ad_sim_m5_c5_y.csv',
-        './simulated_ad/ad_sim_m5_c10_y.csv',
-        './simulated_ad/ad_sim_m10_c5_y.csv',
-        './simulated_ad/ad_sim_m10_c10_y.csv',
-        ]
-    mixes = ['5','5','10','10']
-    cols  = ['5','10','5','10']
+    # models = repeat('dppprg')
+    # model_paths = [
+    #     './simulated_ad/m5_c5/dppprg/results_2_1e-1.db',
+    #     './simulated_ad/m5_c10/dppprg/results_2_1e-1.db',
+    #     './simulated_ad/m10_c5/dppprg/results_2_1e-1.db',
+    #     './simulated_ad/m10_c10/dppprg/results_2_1e-1.db',
+    #     ]
+    # paths_x = [
+    #     './simulated_ad/ad_sim_m5_c5_x.csv',
+    #     './simulated_ad/ad_sim_m5_c10_x.csv',
+    #     './simulated_ad/ad_sim_m10_c5_x.csv',
+    #     './simulated_ad/ad_sim_m10_c10_x.csv',
+    #     ]
+    # paths_y = [
+    #     './simulated_ad/ad_sim_m5_c5_y.csv',
+    #     './simulated_ad/ad_sim_m5_c10_y.csv',
+    #     './simulated_ad/ad_sim_m10_c5_y.csv',
+    #     './simulated_ad/ad_sim_m10_c10_y.csv',
+    #     ]
+    # mixes = ['5','5','10','10']
+    # cols  = ['5','10','5','10']
 
-    results = [make_result_ad(*x) for x in zip(models, model_paths, paths_x, paths_y)]
-    metrics = [result.get_metrics() for result in results]
-    metrics_raw = [result.get_raw_metrics() for result in results]
+    # results = [make_result_ad(*x) for x in zip(models, model_paths, paths_x, paths_y)]
+    # metrics = [result.get_metrics() for result in results]
+    # metrics_raw = [result.get_raw_metrics() for result in results]
 
-    dfs = [pd.DataFrame(metric, columns = results[0].metric_names) for metric in metrics]
-    dfs_raw = [pd.DataFrame(metric_raw, columns = results[0].raw_metric_names) for metric_raw in metrics_raw]
+    # dfs = [pd.DataFrame(metric, columns = results[0].metric_names) for metric in metrics]
+    # dfs_raw = [pd.DataFrame(metric_raw, columns = results[0].raw_metric_names) for metric_raw in metrics_raw]
 
-    for df, df_raw, nmix, ncol in zip(dfs,dfs_raw, mixes, cols):
-        df['nMix'] = nmix
-        df['nCol'] = ncol
-        df_raw['nMix'] = nmix
-        df_raw['nCol'] = ncol
+    # for df, df_raw, nmix, ncol in zip(dfs,dfs_raw, mixes, cols):
+    #     df['nMix'] = nmix
+    #     df['nCol'] = ncol
+    #     df_raw['nMix'] = nmix
+    #     df_raw['nCol'] = ncol
 
-    df = pd.concat(dfs)
-    df_raw = pd.concat(dfs_raw)
+    # df = pd.concat(dfs)
+    # df_raw = pd.concat(dfs_raw)
 
-    df.to_csv('./simulated_ad/metrics.csv', index = False)
-    df_raw.to_csv('./simulated_ad/metrics_raw.csv', index = False)
+    # df.to_csv('./simulated_ad/metrics.csv', index = False)
+    # df_raw.to_csv('./simulated_ad/metrics_raw.csv', index = False)
 
 # EOF
