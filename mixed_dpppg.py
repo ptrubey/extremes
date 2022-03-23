@@ -416,7 +416,6 @@ class Chain(object):
             'cats'   : self.data.Cats,
             'V'      : self.data.V,
             'W'      : self.data.W,
-            'Y'      : self.data.Y 
             }
         
         try:
