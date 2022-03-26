@@ -1,4 +1,4 @@
-from numpy.random import choice, gamma, beta, uniform
+from numpy.random import choice, gamma, beta, uniform, normal
 from collections import namedtuple
 from itertools import repeat, chain
 import numpy as np
@@ -12,12 +12,26 @@ from scipy.special import gammaln
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
+from cUtility import diriproc_cluster_sampler
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
 from projgamma import GammaPrior
-from mixed_dpppg import BaseData
+from mixed_dpppg import BaseData, log_post_log_zeta_1
 
 # from multiprocessing import Pool
 # from energy import limit_cpu
+
+def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
+    """
+    projected Gamma log-density for a single projection.
+    ----
+    aY     : array of Y     (n x d)
+    aAlpha : array of alpha (J x d)
+    aBeta  : array of beta  (J x d)
+    ----
+    return : array of ld    (n x J)
+    """
+    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
+    return out 
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
@@ -47,9 +61,9 @@ def update_zeta_j_wrapper(args):
             )
     return prop_zeta_j
 
-
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
+
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
@@ -189,17 +203,25 @@ class Chain(object):
 
     def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta):
         dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
-        Y = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
-        n = dmat.sum(axis = 0)
-        Ysv = (Y.T @ dmat).T          # np.einsum('nd,nj->jd', Y, dmat) 
-        lYsv = (np.log(Y).T @ dmat).T # np.einsum('nd,nj->jd', np.log(Y), dmat)
-        args = zip(
-            curr_zeta, n, Ysv, lYsv, 
-            repeat(alpha), repeat(beta),
-            )
-        # curr_zeta_j, n_j, Y_js, lY_js, alpha, beta = args
-        res = map(update_zeta_j_wrapper, args)
-        return np.array(list(res))
+        Y  = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
+        lY = np.log(Y)
+        W  = np.hstack((np.zeros(self.data.Yp.shape), self.data.W))
+
+        lp_curr = np.zeros(curr_zeta.shape)
+        lp_prop = np.zeros(curr_zeta.shape)
+
+        curr_log_zeta = np.log(curr_zeta)
+        prop_log_zeta = curr_log_zeta + normal(size = curr_log_zeta.shape, scale = 0.3)
+
+        for i in range(curr_log_zeta.shape[1]):
+            lp_curr.T[i] = log_post_log_zeta_1(curr_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat)
+            lp_prop.T[i] = log_post_log_zeta_1(prop_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat)
+        
+        lp_diff = lp_prop - lp_curr
+        keep = np.log(uniform(size = lp_curr.shape)) < lp_diff   # metropolis hastings step
+
+        log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep))
+        return np.exp(log_zeta)
 
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nCats)
@@ -239,12 +261,13 @@ class Chain(object):
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
-        scratch = np.empty(self.max_clust_count)
-        for i in range(self.nDat):
-            delta[i] = self.sample_delta_i(
-                            curr_cluster_state, cand_cluster_state, eta,
-                            log_likelihood[i], delta[i], unifs[i], scratch,
-                            )
+        delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
+        # scratch = np.empty(self.max_clust_count)
+        # for i in range(self.nDat):
+        #     delta[i] = self.sample_delta_i(
+        #                     curr_cluster_state, cand_cluster_state, eta,
+        #                     log_likelihood[i], delta[i], unifs[i], scratch,
+        #                     )
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
         delta, zeta = self.clean_delta_zeta(delta, zeta)
         self.samples.delta[self.curr_iter] = delta

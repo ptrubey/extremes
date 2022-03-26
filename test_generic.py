@@ -59,7 +59,7 @@ if __name__ == '__main__':
     ## If there's a supplied outcome, initialize it
     if os.path.exists(p.outcome):
         outcome = read_csv(p.outcome).values
-        data.load_outcome(outcome)
+        data.fill_outcome(outcome)
     
     ## Initialize Chain
     if p.model.startswith('dp') or p.model.startswith('mdp'):

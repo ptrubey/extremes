@@ -1,4 +1,4 @@
-from numpy.random import choice, gamma, beta, uniform
+from numpy.random import choice, gamma, beta, uniform, normal
 from collections import namedtuple
 from itertools import repeat, chain
 import numpy as np
@@ -14,6 +14,7 @@ import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
 from projgamma import GammaPrior
+from cUtility import diriproc_cluster_sampler
 
 # from multiprocessing import Pool
 # from energy import limit_cpu
@@ -67,6 +68,44 @@ def update_sigma_j_wrapper(args):
 
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
+
+def log_post_log_zeta_1(lzeta, Y, lY, W, alpha, beta, cmat):
+    """
+    lzeta : (J)
+    Y, lY : (n)
+    W     : (n)
+    alpha : scalar
+    beta  : scalar
+    cmat  : (n x J), bool
+    """
+    zeta = np.exp(lzeta)
+    ZW = (zeta[:, None] + W[None, :]) # (J x n) array
+    lp = np.zeros(lzeta.shape)
+    lp += np.einsum('jn,n,nj->j', ZW - 1, lY, cmat)
+    lp -= np.einsum('jn,nj->j', gammaln(ZW), cmat)
+    lp += alpha * lzeta
+    lp -= zeta * beta
+    return lp
+
+def log_post_log_zeta_k(lzeta, Y, lY, W, alpha, beta, xi, tau, cmat):
+    """
+    lzeta : (J)
+    Y, lY : (n)
+    W     : (n)
+    alpha : scalar
+    beta  : scalar
+    cmat  : (n x J), bool
+    """
+    zeta = np.exp(lzeta)
+    ZW = (zeta[:, None] + W[None, :]) # (J x n) array
+    lp = np.zeros(lzeta.shape)
+    lp += np.einsum('jn,n,nj->j', ZW - 1, lY, cmat)
+    lp -= np.einsum('jn,nj->j', gammaln(ZW), cmat)
+    lp += alpha * lzeta
+    lp -= zeta * beta
+    lp += gammaln(np.einsum('jn,nj->j', ZW, cmat) + xi)
+    lp -= (np.einsum('jn,nj->j', ZW, cmat) + xi) * np.log(np.einsum('n,nj->j', Y, cmat) + tau)
+    return lp
 
 Prior = namedtuple('Prior', 'eta alpha beta xi tau')
 
@@ -259,36 +298,68 @@ class Chain(object):
         return gamma(shape = aaa, scale = 1 / bb)
 
     def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta, xi, tau):
+        """
+        Metropolis Hastings sampler for zeta
+        """
         dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
-        Y    = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
-        n    = dmat.sum(axis = 0)
-        Ysv  = (Y.T @ dmat).T          # np.einsum('nd,nj->jd', Y, dmat) 
-        lYsv = (np.log(Y).T @ dmat).T # np.einsum('nd,nj->jd', np.log(Y), dmat)
-        args = zip(
-            curr_zeta, n, Ysv, lYsv, 
-            repeat(alpha), repeat(beta), 
-            repeat(xi), repeat(tau), repeat(self.sigma_unity),
-            )
-        # curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau, sigma_unity = args
-        res = map(update_zeta_j_wrapper, args)
-        return np.array(list(res))
+        Y  = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
+        lY = np.log(Y)
+        W  = np.hstack((np.zeros(self.data.Yp.shape), self.data.W))
+        # declaring targets for LP
+        lp_curr = np.zeros(curr_zeta.shape)
+        lp_prop = np.zeros(curr_zeta.shape)
+        # declaring current and proposal RV's
+        curr_log_zeta = np.log(curr_zeta)
+        prop_log_zeta = curr_log_zeta + normal(size = curr_log_zeta.shape, scale = 0.3)
+        # indexing xi, tau to same index as alpha, beta
+        ixi  = np.ones(alpha.shape)
+        itau = np.ones(alpha.shape)
+        ixi[~self.sigma_unity] = xi
+        itau[~self.sigma_unity] = tau
+
+        for i in range(curr_log_zeta.shape[1]):
+            if self.sigma_unity[i]:
+                lp_curr.T[i] = log_post_log_zeta_1(
+                    curr_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat,
+                    )
+                lp_prop.T[i] = log_post_log_zeta_1(
+                    prop_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat,
+                    )
+            else:
+                lp_curr.T[i] = log_post_log_zeta_k(
+                    curr_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], ixi[i], itau[i], dmat,
+                    )
+                lp_prop.T[i] = log_post_log_zeta_k(
+                    prop_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], ixi[i], itau[i], dmat,
+                    )
+        
+        lp_diff = lp_prop - lp_curr
+        keep = np.log(uniform(size = lp_curr.shape)) < lp_diff   # metropolis hastings step
+
+        log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep)) # if keep, then proposal, else current
+        return np.exp(log_zeta)
 
     def sample_sigma(self, zeta, r, rho, delta, xi, tau):
-        dmat = delta[:, None] == np.arange(delta.max() + 1)
-        Y = np.hstack((r[:, None] * self.data.Yp, rho))
-        n = dmat.sum(axis = 0)
-        # Y = r.reshape(-1, 1) * self.data.Yp
-        Ysv = (Y.T @ dmat).T # (J x d)
-        args = zip(
-            zeta, n, Ysv,
-            repeat(xi), repeat(tau), repeat(self.sigma_unity),
-            )
-        res = np.array(list(map(update_sigma_j_wrapper, args)))
-        # zeta_j, n_j, Y_js, xi, tau, sigma_unity = args
-        # res = self.pool.map(update_sigma_j_wrapper, args)
-        res[res < 1e-9] = 1e-9
-        return res
+        dmat = delta[:, None] == np.arange(delta.max() + 1)        # (n x J)
+        Y = np.hstack((r[:, None] * self.data.Yp, rho))            # (n x d)
+        W = np.hstack((np.zeros(self.data.Yp.shape), self.data.W)) # (n x d)
 
+        nZ  = zeta * dmat.sum(axis = 0)[:, None]
+        Ysv = np.einsum('nd,nj->jd', Y, dmat)
+        Wsv = np.einsum('nd,nj->jd', W, dmat)
+        
+        ixi = np.ones(zeta.shape[1])    # (d)
+        itau = np.ones(zeta.shape[1])   # (d)
+        ixi[~self.sigma_unity] = xi
+        itau[~self.sigma_unity] = tau
+
+        shape = nZ + Wsv + ixi
+        rate  = Ysv + itau
+
+        sigma = gamma(shape, scale = 1 / rate)
+        sigma.T[self.sigma_unity] = 1.
+        return sigma
+    
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.alpha[0] = 1.
@@ -339,11 +410,12 @@ class Chain(object):
         unifs   = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
         scratch = np.empty(self.max_clust_count)
-        for i in range(self.nDat):
-            delta[i] = self.sample_delta_i(
-                            curr_cluster_state, cand_cluster_state, eta,
-                            log_likelihood[i], delta[i], unifs[i], scratch,
-                            )
+        delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
+        # for i in range(self.nDat):
+        #     delta[i] = self.sample_delta_i(
+        #                     curr_cluster_state, cand_cluster_state, eta,
+        #                     log_likelihood[i], delta[i], unifs[i], scratch,
+        #                     )
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
         delta, zeta, sigma = self.clean_delta_zeta_sigma(delta, zeta, sigma)
         self.samples.delta[self.curr_iter] = delta
