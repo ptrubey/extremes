@@ -36,6 +36,32 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(-beta y)
     return out
 
+def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
+    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
+    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta))[None,:]
+    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
+    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))
+    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
+    out -= np.einsum(
+        'j,nj->nj', np.einsum('jd->j', aAlpha), np.einsum('jd,nd->nj', aBeta, aY),
+        )
+    return out
+
+def cluster_log_likelihood(aY, aW, aAlpha, aBeta, projections):
+    """
+    aY      : (n x d)  horizontal concatenation (Y and rho)
+    aW      : (n x d)
+    aAlpha  : (j x d)
+    aBeta   : (j x d)
+    projmat : (c x d)
+    """
+    alY = np.log(aY)
+    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
+    for projection in projections:
+        out += dprojgamma_log_my_mt(aY[:,projection], aAlpha[:,projection], aBeta[:, projection])
+        out += np.einsum('nd', aW[:,projection], alY[:,projection])
+    pass
+
 def update_zeta_j_wrapper(args):
     # parse arguments
     curr_zeta_j, n_j, Y_js, lY_js, alpha, beta, xi, tau, sigma_unity = args
