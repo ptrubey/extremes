@@ -8,7 +8,7 @@ import os
 import sqlite3 as sql
 import pickle
 from math import ceil, log
-from scipy.special import gammaln
+from scipy.special import gammaln, betaln
 
 import cUtility as cu
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
@@ -20,18 +20,54 @@ from mixed_dpppg import BaseData, log_post_log_zeta_1
 # from multiprocessing import Pool
 # from energy import limit_cpu
 
-def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
+def dprojresgamma_log_my_mt(aY, aAlpha):
     """
-    projected Gamma log-density for a single projection.
+    projected restricted Gamma log-density for a single projection.
     ----
     aY     : array of Y     (n x d)
     aAlpha : array of alpha (J x d)
-    aBeta  : array of beta  (J x d)
     ----
     return : array of ld    (n x J)
     """
     out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    return out 
+    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
+    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))
+    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
+    out -= np.einsum(
+        'j,n->nj', np.einsum('jd->j', aAlpha), np.einsum('nd->n', aY),
+        )
+    return out
+
+def dprgmultinom_log_mw_mt(aW, aAlpha):
+    """
+    projected restricted Gamma Multinomial distribution.
+    ---
+    aW     : array of W     (n x d)
+    aAlpha : array of alpha (J x d)
+    ---
+    return : array of ld (n x j)
+    """
+    out = np.zeros((aW.shape[0], aAlpha.shape[0]))
+    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
+    out += gammaln(np.einsum('nd->n', aW))[:,None]
+    out -= gammaln(
+        + np.einsum('nd->n', aW)[:, None] 
+        + np.einsum('jd->j', aAlpha)[None,:]
+        )
+    out += np.einsum('njd->nj', gammaln(aW[:,None,:] + aAlpha[None,:,:]))
+    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
+    out -= np.einsum('nd->n', gammaln(aW + 1))[:,None]
+    return out
+
+def dprgmultinom_log_mw_mt_(aW, aAlpha):
+    pass
+    n = np.einsum('nd->n', aW)      # (n)
+    a0 = np.einsum('jd->j', aAlpha) # (j)
+    out = np.zeros((aW.shape[0], aAlpha.shape[0]))
+    out += np.log(n)
+    out += betaln(a0[None,:], n[:,None])
+    #out -= (aW * betaln(aAlpha, aW)
+
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
@@ -223,6 +259,20 @@ class Chain(object):
         log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep))
         return np.exp(log_zeta)
 
+    def cluster_log_likelihood(self, zeta):
+        out  = np.zeros((self.nDat, self.max_clust_count))
+        out += dprojresgamma_log_my_mt(self.data.Yp, zeta.T[0:self.nCol].T)
+        zstart = self.nCol
+        wstart = 0
+        for catlen in self.data.Cats:
+            out += dprgmultinom_log_mw_mt(
+                self.data.W.T[wstart:(wstart + catlen)].T.astype(int),
+                zeta.T[zstart:(zstart + catlen)].T
+                )
+            zstart += catlen
+            wstart += catlen
+        return out
+
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.alpha[0] = 1.
@@ -245,8 +295,6 @@ class Chain(object):
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
-        curr_cluster_state = np.bincount(delta, minlength = self.max_clust_count)
-        cand_cluster_state = np.hstack((np.zeros(delta.max() + 1, dtype = bool), np.ones(m, dtype = bool)))
         alpha = self.curr_alpha
         beta  = self.curr_beta
         zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
@@ -255,19 +303,14 @@ class Chain(object):
         rho   = self.curr_rho
 
         self.curr_iter += 1
-        log_likelihood = dprodgamma_log_my_mt(
-            np.hstack((r[:,None] * self.data.Yp, rho)), zeta, self.sigma_placeholder,
-            )
+        # log_likelihood = dprodgamma_log_my_mt(
+        #     np.hstack((r[:,None] * self.data.Yp, rho)), zeta, self.sigma_placeholder,
+        #     )
+        log_likelihood = self.cluster_log_likelihood(zeta)
         # pre-generate uniforms to inverse-cdf sample cluster indices
-        unifs   = uniform(size = self.nDat)
+        unifs = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
         delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
-        # scratch = np.empty(self.max_clust_count)
-        # for i in range(self.nDat):
-        #     delta[i] = self.sample_delta_i(
-        #                     curr_cluster_state, cand_cluster_state, eta,
-        #                     log_likelihood[i], delta[i], unifs[i], scratch,
-        #                     )
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
         delta, zeta = self.clean_delta_zeta(delta, zeta)
         self.samples.delta[self.curr_iter] = delta
