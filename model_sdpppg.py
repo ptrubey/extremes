@@ -11,9 +11,11 @@ from math import ceil, log
 from scipy.special import gammaln
 
 import cUtility as cu
+from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
+
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
@@ -82,7 +84,7 @@ class Samples(object):
         self.eta   = np.empty(nSamp + 1)
         return
 
-class Chain(object):
+class Chain(DirichletProcessSampler):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]

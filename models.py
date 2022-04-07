@@ -1,22 +1,22 @@
-import remodel_dpppg as dpppg
-import remodel_dppprg as dppprg
-import remodel_dppprgln as dppprgln
-import remodel_dpppgln as dpppgln
-import mixed_dppprg as mdppprg
-import mixed_dpppg as mdpppg
+import model_sdpppg as sdpppg
+import model_sdppprg as sdppprg
+import model_sdppprgln as sdppprgln
+import model_sdpppgln as sdpppgln
+import model_mdppprg as mdppprg
+import model_mdpppg as mdpppg
 
 ## Real Data
 RealResults = {
-    'dpppg'    : dpppg.Result,
-    'dppprg'   : dppprg.Result,
-    'dpppgln'  : dpppgln.Result,
-    'dppprgln' : dppprgln.Result,
+    'sdpppg'    : sdpppg.Result,
+    'sdppprg'   : sdppprg.Result,
+    'sdpppgln'  : sdpppgln.Result,
+    'sdppprgln' : sdppprgln.Result,
     }
 RealChains = {
-    'dpppg'    : dpppg.Chain,
-    'dppprg'   : dppprg.Chain,
-    'dpppgln'  : dpppgln.Chain,
-    'dppprgln' : dppprgln.Chain,
+    'sdpppg'    : sdpppg.Chain,
+    'sdppprg'   : sdppprg.Chain,
+    'sdpppgln'  : sdpppgln.Chain,
+    'sdppprgln' : sdppprgln.Chain,
     }
 
 ## Mixed Data

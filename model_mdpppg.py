@@ -11,6 +11,7 @@ from math import ceil, log
 from scipy.special import gammaln
 
 import cUtility as cu
+from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
 from projgamma import GammaPrior
@@ -174,7 +175,7 @@ class Samples(object):
         self.eta   = np.empty(nSamp + 1)
         return
 
-class Chain(object):
+class Chain(DirichletProcessSampler):
     @property
     def curr_rho(self):
         return self.samples.rho[self.curr_iter]
