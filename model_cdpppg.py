@@ -462,19 +462,20 @@ class Result(object):
 # EOF
 
 if __name__ == '__main__':
-    from data import Data_From_Raw
-    from projgamma import GammaPrior
-    from pandas import read_csv
-    import os
+    pass
+    # from data import Data_From_Raw
+    # from projgamma import GammaPrior
+    # from pandas import read_csv
+    # import os
 
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    data.write_empirical('./test/empirical.csv')
-    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(4000)
-    model.write_to_disk('./test/results.pickle', 2000, 2)
-    res = Result('./test/results.pickle')
-    res.write_posterior_predictive('./test/postpred.csv')
+    # raw = read_csv('./datasets/ivt_nov_mar.csv')
+    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    # data.write_empirical('./test/empirical.csv')
+    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    # model.sample(4000)
+    # model.write_to_disk('./test/results.pickle', 2000, 2)
+    # res = Result('./test/results.pickle')
+    # res.write_posterior_predictive('./test/postpred.csv')
     # EOL
 
 

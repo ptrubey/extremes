@@ -236,6 +236,29 @@ class Data_From_Sphere(Data, Outcome):
             self.fill_outcome(outcome)
         return
 
+class Multinomial(Data, Outcome):
+    Cats = None  # numpy array indicating number of categories per multinomial variable
+    nCat = None  # total number of categories (sum of Cats)
+
+    def fill_multinomial(self, raw, cats = None):
+        if cats is not None:
+            self.W = raw
+            self.Cats = cats
+            self.nCat = self.Cats.sum()
+        else:
+            self.W = raw
+            self.Cats = np.array([raw.shape[1]])
+            self.nCat = self.Cats.sum()
+        
+        assert self.nCat == self.W.shape[1]
+        return
+    
+    def __init__(self, raw, values = None, index = None, outcome = 'None'):
+        self.fill_multinomial(raw)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
+        return
+
 class Categorical(Data, Outcome):
     Cats = None    # numpy array indicating number of categories per categorical variable
     nCat = None    # Total number of categories (sum of Cats)
