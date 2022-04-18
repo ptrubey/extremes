@@ -1,4 +1,5 @@
 import numpy as np
+
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 from numpy.random import choice, gamma, beta, normal, uniform
 from numpy.linalg import cholesky, slogdet, inv
@@ -11,15 +12,12 @@ import os
 import pickle
 from math import log
 
-# import pt
-from data import Data
-import cUtility as cu
+from samplers import DirichletProcessSampler
+from cUtility import generate_indices
 from cProjgamma import sample_alpha_k_mh_summary
 
 from data import euclidean_to_angular, euclidean_to_simplex, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
-# import multiprocessing as mp
-# from energy import limit_cpu
 
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
@@ -96,7 +94,8 @@ def dprodgamma_log_my_mt(aY, aAlpha):
     t, n, d = aY.shape; j = aAlpha.shape[1] # set dimensions
     ld = np.zeros((n, t, j))
     # ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta)).reshape(1, t, j)
-    ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, t, j)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, t, j)
     ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
     ld -= np.einsum('tnd->nt', aY)[:,:,None]
     # ld -= np.einsum('tnd,tjd->ntj', aY, aBeta)
@@ -283,7 +282,7 @@ class Samples_(Samples):
         self.eta   = np.empty((nSamp + 1))
         return
 
-class Chain(object):
+class Chain(DirichletProcessSampler):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
@@ -302,7 +301,15 @@ class Chain(object):
     @property
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
+
+    @property
+    def curr_cluster_count(self):
+        return self.curr_delta[0].max() + 1
     
+    def average_cluster_count(self, ns):
+        acc = self.samples.delta[(ns//2):][:,0].max(axis = 1).mean() + 1
+        return '{:.2f}'.format(acc)
+
     # Adaptive Metropolis Placeholders
     am_cov_c  = None
     am_cov_i  = None
@@ -439,7 +446,9 @@ class Chain(object):
         extant_clusters : (t x J)     (flag indicating an extant cluster)
         """
         n     = extant_clusters.sum(axis = 1) # number of clusters per temp (t)
-        lzbar = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) / n.reshape(-1,1) # (t x d)
+        assert np.all(zeta[extant_clusters] > 0)
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            lzbar = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) / n[:, None] # (t x d)
         # lzbar = np.log(zeta * extant_clusters[:,:,None]).sum(axis = 1) / n
         # _Sigma = inv((n * self.itl).reshape(-1,1,1) * Sigma_inv + self.priors.mu.SInv)
         _Sigma = inv(n[:,None,None] * Sigma_inv + self.priors.mu.SInv)
@@ -627,17 +636,6 @@ class Chain(object):
             )
         return
 
-    def sample(self, ns):
-        self.initialize_sampler(ns)
-        print_string = '\rSampling {:.1%} Completed, {} Clusters     '
-        print(print_string.format(self.curr_iter / ns, self.nDat), end = '')
-        while (self.curr_iter < ns):
-            if (self.curr_iter % 10) == 0:
-                print(print_string.format(self.curr_iter / ns, self.curr_delta[0].max() + 1), end = '')
-            self.iter_sample()
-        print('\rSampling 100% Completed                    ')
-        return
-
     def write_to_disk(self, path, nBurn, nThin = 1):
         folder = os.path.split(path)[0]
         if not os.path.exists(folder):
@@ -730,7 +728,7 @@ class Result(object):
                 + (cholesky(self.samples.Sigma[s]) @ normal(size = (self.nCol, m))).T
                 )
             prob = ljs / ljs.sum()
-            deltas = cu.generate_indices(prob, n_per_sample)
+            deltas = generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
             new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
@@ -796,18 +794,16 @@ if __name__ == '__main__':
     import time
 
     t1 = time.time()
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
+    raw = read_csv('./datasets/ivt_updated_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(4000)
-    model.write_to_disk('./test/results.db', 2000, 2)
+    model.sample(50000)
+    model.write_to_disk('./test/results.db', 20000, 30)
     res = Result('./test/results.db')
     res.write_posterior_predictive('./test/postpred.csv')
     t2 = time.time()
     print('Processing took {:.2f} hours'.format((t2-t1)/3600))
     # EOL
-
-
 
 # EOF 2
