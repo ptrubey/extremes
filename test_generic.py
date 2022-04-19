@@ -62,15 +62,15 @@ if __name__ == '__main__':
         data.fill_outcome(outcome)
     
     ## Initialize Chain
-    if p.model.startswith('dp') or p.model.startswith('mdp'):
+    if p.model[:3] in ('sdp','mdp','cdp'):
         model = Chain(
                     data, 
                     prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)), 
                     p = int(p.p), max_clust_count = int(p.maxclust),
                     )
-    elif p.model.startwith('m'):
+    elif p.model[:3] in ('sfm','mfm','cfm'):
         model = Chain(data, nMix = int(p.nMix), p = int(p.p),)
-    elif p.model.startswith('v'):
+    elif p.model[:2] in ('sv', 'mv', 'cv'):
         model = Chain(data, p = int(p.p),)
     else:
         raise ValueError
