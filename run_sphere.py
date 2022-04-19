@@ -4,7 +4,7 @@ from subprocess import Popen, PIPE, STDOUT
 
 source_path = './simulated/sphere/data_*.csv'
 dest_path   = './simulated/sphere'
-models      = ['sdpppg',] #  'sdppprg', 'sdpppgln', 'sdppprgln']
+models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
