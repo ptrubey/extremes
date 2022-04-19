@@ -13,7 +13,7 @@ class DirichletProcessSampler(object):
     
     def average_cluster_count(self, ns):
         acc = self.samples.delta[(ns//2):].max(axis = 1).mean() + 1
-        return '{:2f}'.format(acc)
+        return '{:.2f}'.format(acc)
 
     @property
     def time_elapsed(self):
