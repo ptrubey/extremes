@@ -15,24 +15,7 @@ from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
-
-def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
-    """
-    Product of Gammas log-density for multiple Y, multiple theta (not paired)
-    ----
-    aY     : array of Y     (n x d)
-    aAlpha : array of alpha (J x d)
-    aBeta  : array of beta  (J x d)
-    ----
-    return : array of ld    (n x J)
-    """
-    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
-    out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
-    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
-    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
-    return out
+from model_sdpppg import dprodgamma_log_my_mt
 
 def update_zeta_j_wrapper(args):
     # parse arguments
@@ -47,7 +30,7 @@ def update_zeta_j_wrapper(args):
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
 
-Prior = namedtuple('Prior', 'eta alpha beta xi tau')
+Prior = namedtuple('Prior', 'eta alpha beta')
 
 class Samples(object):
     zeta  = None
@@ -91,25 +74,6 @@ class Chain(DirichletProcessSampler):
     @property
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
-
-    # def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
-    #                         eta, log_likelihood_i, delta_i, p, scratch):
-    #     scratch[:] = 0        
-    #     curr_cluster_state[delta_i] -= 1
-    #     scratch += curr_cluster_state
-    #     scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
-    #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-    #         np.log(scratch, out = scratch)
-    #     scratch += log_likelihood_i
-    #     np.nan_to_num(scratch, False, -np.inf)
-    #     scratch -= scratch.max()
-    #     with np.errstate(under = 'ignore'):
-    #         np.exp(scratch, out = scratch)
-    #     np.cumsum(scratch, out = scratch)
-    #     delta_i = np.searchsorted(scratch, p * scratch[-1])
-    #     curr_cluster_state[delta_i] += 1
-    #     cand_cluster_state[delta_i] = False
-    #     return delta_i
     
     def clean_delta_zeta(self, delta, zeta):
         """
@@ -186,8 +150,6 @@ class Chain(DirichletProcessSampler):
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
-        curr_cluster_state = np.bincount(delta, minlength = self.max_clust_count)
-        cand_cluster_state = np.hstack((np.zeros(delta.max() + 1, dtype = bool), np.ones(m, dtype = bool)))
         alpha = self.curr_alpha
         beta  = self.curr_beta
         zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
@@ -199,13 +161,7 @@ class Chain(DirichletProcessSampler):
         log_likelihood = dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_placeholder)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
-        # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
-        scratch = np.empty(self.max_clust_count)
-        # for i in range(self.nDat):
-        #     delta[i] = self.sample_delta_i(
-        #                     curr_cluster_state, cand_cluster_state, eta,
-        #                     log_likelihood[i], delta[i], unifs[i], scratch,
-        #                     )
+        # Sample new cluster membership indicators 
         delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
         delta, zeta = self.clean_delta_zeta(delta, zeta)
@@ -268,8 +224,6 @@ class Chain(DirichletProcessSampler):
             prior_eta   = GammaPrior(2., 0.5),
             prior_alpha = GammaPrior(0.5, 0.5),
             prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(0.5, 0.5),
-            prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
             ):
@@ -278,7 +232,7 @@ class Chain(DirichletProcessSampler):
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
+        self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.set_projection()
         return
 
@@ -353,17 +307,19 @@ class Result(object):
         return
 
 if __name__ == '__main__':
-    from data import Data_From_Raw
-    from projgamma import GammaPrior
-    from pandas import read_csv
-    import os
+    pass
 
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(50000)
-    model.write_to_disk('./test/results.pickle', 20000, 30)
-    res = Result('./test/results.pickle')
-    res.write_posterior_predictive('./test/postpred.csv')
+    # from data import Data_From_Raw
+    # from projgamma import GammaPrior
+    # from pandas import read_csv
+    # import os
+
+    # raw = read_csv('./datasets/ivt_nov_mar.csv')
+    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    # model.sample(50000)
+    # model.write_to_disk('./test/results.pickle', 20000, 30)
+    # res = Result('./test/results.pickle')
+    # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF
