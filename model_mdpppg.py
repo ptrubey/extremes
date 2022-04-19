@@ -271,7 +271,7 @@ class Chain(DirichletProcessSampler):
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
         beta = gamma(shape = As, scale = 1 / Bs)
-        beta[beta < 1e-9] = 1e-9
+        # beta[beta < 1e-9] = 1e-9
         return beta
 
     def sample_xi(self, sigma, curr_xi):
@@ -292,7 +292,7 @@ class Chain(DirichletProcessSampler):
         As = n * xi + self.priors.tau.a
         Bs = ss + self.priors.tau.b
         tau = gamma(shape = As, scale = 1 / Bs)
-        tau[tau < 1e-9] = 1e-9
+        # tau[tau < 1e-9] = 1e-9
         return tau
 
     def sample_r(self, delta, zeta, sigma):
@@ -558,10 +558,10 @@ class Chain(DirichletProcessSampler):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_alpha = GammaPrior(4., 2.),
-            prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(4., 4.),
-            prior_tau   = GammaPrior(4., 4.),
+            prior_alpha = GammaPrior(0.5, 0.5),
+            prior_beta  = GammaPrior(0.5, 0.5),
+            prior_xi    = GammaPrior(0.5, 0.5),
+            prior_tau   = GammaPrior(0.5, 0.5),
             p           = 10,
             max_clust_count = 300,
             ):

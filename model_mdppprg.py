@@ -102,7 +102,7 @@ def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
 
 
-Prior = namedtuple('Prior', 'eta alpha beta xi tau')
+Prior = namedtuple('Prior', 'eta alpha beta')
 
 class Samples(object):
     pi    = None
@@ -396,9 +396,7 @@ class Chain(DirichletProcessSampler):
             data,
             prior_eta   = GammaPrior(2., 0.5),
             prior_alpha = GammaPrior(0.5, 0.5),
-            prior_beta  = GammaPrior(2., 2.),
-            prior_xi    = GammaPrior(0.5, 0.5),
-            prior_tau   = GammaPrior(2., 2.),
+            prior_beta  = GammaPrior(0.5, 0.5),
             p           = 10,
             max_clust_count = 300,
             ):
@@ -410,7 +408,7 @@ class Chain(DirichletProcessSampler):
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
         self.nCats = self.data.Cats.shape[0]
-        self.priors = Prior(prior_eta, prior_alpha, prior_beta, prior_xi, prior_tau)
+        self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.set_projection()
         self.categorical_considerations()
         # self.pool = Pool(processes = 8, initializer = limit_cpu())

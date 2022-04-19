@@ -10,7 +10,7 @@ import sqlite3 as sql
 from math import ceil, log
 from scipy.special import gammaln
 
-import cUtility as cu
+from cUtility import diriproc_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data
@@ -27,7 +27,8 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     return : array of ld    (n x J)
     """
     out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
     out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
     out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
     out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
@@ -91,24 +92,24 @@ class Chain(DirichletProcessSampler):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
 
-    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
-                            eta, log_likelihood_i, delta_i, p, scratch):
-        scratch[:] = 0        
-        curr_cluster_state[delta_i] -= 1
-        scratch += curr_cluster_state
-        scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
-        with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            np.log(scratch, out = scratch)
-        scratch += log_likelihood_i
-        np.nan_to_num(scratch, False, -np.inf)
-        scratch -= scratch.max()
-        with np.errstate(under = 'ignore'):
-            np.exp(scratch, out = scratch)
-        np.cumsum(scratch, out = scratch)
-        delta_i = np.searchsorted(scratch, p * scratch[-1])
-        curr_cluster_state[delta_i] += 1
-        cand_cluster_state[delta_i] = False
-        return delta_i
+    # def sample_delta_i(self, curr_cluster_state, cand_cluster_state, 
+    #                         eta, log_likelihood_i, delta_i, p, scratch):
+    #     scratch[:] = 0        
+    #     curr_cluster_state[delta_i] -= 1
+    #     scratch += curr_cluster_state
+    #     scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
+    #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
+    #         np.log(scratch, out = scratch)
+    #     scratch += log_likelihood_i
+    #     np.nan_to_num(scratch, False, -np.inf)
+    #     scratch -= scratch.max()
+    #     with np.errstate(under = 'ignore'):
+    #         np.exp(scratch, out = scratch)
+    #     np.cumsum(scratch, out = scratch)
+    #     delta_i = np.searchsorted(scratch, p * scratch[-1])
+    #     curr_cluster_state[delta_i] += 1
+    #     cand_cluster_state[delta_i] = False
+    #     return delta_i
     
     def clean_delta_zeta(self, delta, zeta):
         """
@@ -200,11 +201,12 @@ class Chain(DirichletProcessSampler):
         unifs   = uniform(size = self.nDat)
         # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
         scratch = np.empty(self.max_clust_count)
-        for i in range(self.nDat):
-            delta[i] = self.sample_delta_i(
-                            curr_cluster_state, cand_cluster_state, eta,
-                            log_likelihood[i], delta[i], unifs[i], scratch,
-                            )
+        # for i in range(self.nDat):
+        #     delta[i] = self.sample_delta_i(
+        #                     curr_cluster_state, cand_cluster_state, eta,
+        #                     log_likelihood[i], delta[i], unifs[i], scratch,
+        #                     )
+        delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
         delta, zeta = self.clean_delta_zeta(delta, zeta)
         self.samples.delta[self.curr_iter] = delta
@@ -216,18 +218,7 @@ class Chain(DirichletProcessSampler):
         self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
         self.samples.eta[self.curr_iter]   = self.sample_eta(eta, self.curr_delta)
         return
-
-    def sample(self, ns):
-        self.initialize_sampler(ns)
-        print_string = '\rSampling {:.1%} Completed, {} Clusters     '
-        print(print_string.format(self.curr_iter / ns, self.nDat), end = '')
-        while (self.curr_iter < ns):
-            if (self.curr_iter % 100) == 0:
-                print(print_string.format(self.curr_iter / ns, self.curr_delta.max() + 1), end = '')
-            self.iter_sample()
-        print('\rSampling 100% Completed                    ')
-        return
-
+    
     def write_to_disk(self, path, nBurn, nThin = 1):
         folder = os.path.split(path)[0]
         if not os.path.exists(folder):
@@ -304,7 +295,7 @@ class Result(object):
                 size = (m, self.nCol),
                 )
             prob = ljs / ljs.sum()
-            deltas = cu.generate_indices(prob, n_per_sample)
+            deltas = generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
             new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
@@ -370,8 +361,8 @@ if __name__ == '__main__':
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(4000)
-    model.write_to_disk('./test/results.pickle', 2000, 2)
+    model.sample(50000)
+    model.write_to_disk('./test/results.pickle', 20000, 30)
     res = Result('./test/results.pickle')
     res.write_posterior_predictive('./test/postpred.csv')
 
