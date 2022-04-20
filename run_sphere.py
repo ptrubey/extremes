@@ -1,7 +1,7 @@
 import sys, os, glob, re
 import numpy as np
 from subprocess import Popen, PIPE, STDOUT
-from argparse import ArgumentParser
+from argparse import ArgumentParser, BooleanOptionalAction
 
 source_path = './simulated/sphere/data_*.csv'
 dest_path   = './simulated/sphere'
@@ -10,7 +10,7 @@ models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
 
 def argparser():
     p = ArgumentParser()
-    p.add_argument('replace', default = False, action = 'store_true')
+    p.add_argument('replace', default = False, action = BooleanOptionalAction)
     return p.parse_args()
 
 if __name__ == '__main__':
@@ -35,12 +35,13 @@ if __name__ == '__main__':
         for model in models:
             out_name = 'results_{}_{}_{}.pkl'.format(model, nMix, nCol)
             out_path = os.path.join(dest_path, out_name)
-            
+
             if os.path.exists(out_path) and not p.replace:
                 pass
             else:
                 processes.append(Popen(
-                    [sys.executable, 'test_generic.py', file, out_path, model, '--sphere', 'True']
+                    [sys.executable, 'test_generic.py', file, 
+                        out_path, model, '--sphere', 'True']
                     ))
     
     for process in processes:
@@ -49,6 +50,4 @@ if __name__ == '__main__':
     rcs = np.array([process.returncode for process in processes])
     print(np.where(rcs != 0))
 
-
-    
-
+# EOF
