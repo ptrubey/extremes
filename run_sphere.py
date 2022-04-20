@@ -1,12 +1,21 @@
 import sys, os, glob, re
 import numpy as np
 from subprocess import Popen, PIPE, STDOUT
+from argparse import ArgumentParser
 
 source_path = './simulated/sphere/data_*.csv'
 dest_path   = './simulated/sphere'
 models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
 
+
+def argparser():
+    p = ArgumentParser()
+    p.add_argument('replace', default = False, action = 'store_true')
+    return p.parse_args()
+
 if __name__ == '__main__':
+    p = argparser()
+    
     files = glob.glob(source_path)
     search_string = r'data_m(\d+)_r(\d+).csv'
 
@@ -26,11 +35,13 @@ if __name__ == '__main__':
         for model in models:
             out_name = 'results_{}_{}_{}.pkl'.format(model, nMix, nCol)
             out_path = os.path.join(dest_path, out_name)
-            # cla_path = os.path.join(os.path.split(file)[0], outcome)
             
-            processes.append(Popen(
-                [sys.executable, 'test_generic.py', file, out_path, model, '--sphere', 'True']
-                ))
+            if os.path.exists(out_path) and not p.replace:
+                pass
+            else:
+                processes.append(Popen(
+                    [sys.executable, 'test_generic.py', file, out_path, model, '--sphere', 'True']
+                    ))
     
     for process in processes:
         process.wait()
