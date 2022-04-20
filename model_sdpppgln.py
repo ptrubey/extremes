@@ -849,7 +849,7 @@ class Chain(DirichletProcessSampler):
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
-            ntemps      = 10,
+            ntemps      = 5,
             stepping    = 1.3,
             ):
         self.data = data
@@ -872,7 +872,7 @@ class Chain(DirichletProcessSampler):
         self.nTemp = ntemps
         self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
         self.nSwap_per = self.nTemp // 2
-        self.swap_start = 1e20
+        self.swap_start = 100
         return
 
 class Result(object):
