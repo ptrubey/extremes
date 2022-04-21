@@ -113,7 +113,8 @@ def dprodgamma_log_my_st(aY, aAlpha, aBeta):
         log-density (t, n)
     """
     ld = np.zeros(aY.shape[:-1])
-    ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
     ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
     ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
     ld -= np.einsum('tnd,td->tn', aY, aBeta)
@@ -594,6 +595,7 @@ class Chain(DirichletProcessSampler):
             lpl += dprojgamma_log_paired_yt(
                 self.data.Yp, 
                 self.curr_zeta[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
+                np.ones(self.data.Yp.shape)
                 ).sum(axis = 1)
             lpl += np.einsum('tj,tj->t', 
                     dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
