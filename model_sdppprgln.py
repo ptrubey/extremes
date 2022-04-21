@@ -594,16 +594,12 @@ class Chain(DirichletProcessSampler):
             lpl += dprojgamma_log_paired_yt(
                 self.data.Yp, 
                 self.curr_zeta[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
-                self.curr_sigma[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
                 ).sum(axis = 1)
             lpl += np.einsum('tj,tj->t', 
                     dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
                     )
-            lpl += (dprodgamma_log_my_st(self.curr_sigma[:,:,1:], self.curr_xi, self.curr_tau) * extant_clusters).sum(axis = 1)
             lpp += dmvnormal_log_mx_st(self.curr_mu, *self.priors.mu)
             lpp += dinvwishart_log_ms(self.curr_Sigma, *self.priors.Sigma)
-            lpp += dgamma_log_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
-            lpp += dgamma_log_my(self.curr_tau, *self.priors.tau).sum(axis = 1)
             lpp += dgamma_log_my(self.curr_eta, *self.priors.eta)
 
             sw = choice(self.nTemp, 2 * self.nSwap_per, replace = False).reshape(-1,2)
@@ -614,16 +610,10 @@ class Chain(DirichletProcessSampler):
                     self.samples.r[self.curr_iter, tt[1]].copy(), self.samples.r[self.curr_iter, tt[0]].copy()
                 self.samples.zeta[self.curr_iter][tt[0]], self.samples.zeta[self.curr_iter][tt[1]] = \
                     self.samples.zeta[self.curr_iter][tt[1]].copy(), self.samples.zeta[self.curr_iter][tt[0]].copy()
-                self.samples.sigma[self.curr_iter][tt[0]], self.samples.sigma[self.curr_iter][tt[1]] = \
-                    self.samples.sigma[self.curr_iter][tt[1]].copy(), self.samples.sigma[self.curr_iter][tt[0]].copy()
                 self.samples.mu[self.curr_iter, tt[0]], self.samples.mu[self.curr_iter, tt[1]] = \
                     self.samples.mu[self.curr_iter, tt[1]].copy(), self.samples.mu[self.curr_iter, tt[0]].copy()
                 self.samples.Sigma[self.curr_iter, tt[0]], self.samples.Sigma[self.curr_iter, tt[1]] = \
                     self.samples.Sigma[self.curr_iter, tt[1]].copy(), self.samples.Sigma[self.curr_iter, tt[0]].copy()
-                self.samples.xi[self.curr_iter, tt[0]], self.samples.xi[self.curr_iter, tt[1]] = \
-                    self.samples.xi[self.curr_iter, tt[1]].copy(), self.samples.xi[self.curr_iter, tt[0]].copy()
-                self.samples.tau[self.curr_iter, tt[0]], self.samples.tau[self.curr_iter, tt[1]] = \
-                    self.samples.tau[self.curr_iter, tt[1]].copy(), self.samples.tau[self.curr_iter, tt[0]].copy()
                 self.samples.delta[self.curr_iter, tt[0]], self.samples.delta[self.curr_iter, tt[1]] = \
                     self.samples.delta[self.curr_iter, tt[1]].copy(), self.samples.delta[self.curr_iter, tt[0]].copy()
 
