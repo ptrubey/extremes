@@ -32,14 +32,14 @@ class DirichletProcessSampler(object):
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
-        print('Sampling 0% Completed', end = '')
+        print('\rSampling 0% Completed', end = '')
         
         while (self.curr_iter < ns):
             if (self.curr_iter % 100) == 0:
                 ps = self.print_string_during.format(
                     self.curr_iter / ns, self.time_elapsed, self.curr_cluster_count,
                     )
-                print(ps, end = '')
+                print(ps.ljust(80), end = '')
             self.iter_sample()
         
         ps = self.print_string_after.format(self.time_elapsed, self.average_cluster_count(ns))
