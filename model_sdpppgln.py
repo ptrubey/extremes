@@ -743,11 +743,13 @@ class Chain(DirichletProcessSampler):
         if self.curr_iter >= self.swap_start:
             lpl = np.zeros(self.nTemp)
             lpp = np.zeros(self.nTemp)
-            lpl += dprojgamma_log_paired_yt(
-                self.data.Yp, 
+            Y = np.einsum('tn,nd->tnd', self.curr_r, self.data.Yp) # (t x n x d)
+            lpl += dprodgamma_log_paired_yt(
+                Y, 
                 self.curr_zeta[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
                 self.curr_sigma[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
                 ).sum(axis = 1)
+            lpl += ((self.nCol - 1) * np.log(self.curr_r)).sum(axis = 1)
             lpl += np.einsum('tj,tj->t', 
                     dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
                     )
