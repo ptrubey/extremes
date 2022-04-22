@@ -12,10 +12,9 @@ import pickle
 from math import log
 
 from samplers import DirichletProcessSampler
-from data import Data
 from cUtility import generate_indices
 from cProjgamma import sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior
 
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
@@ -882,9 +881,9 @@ class Result(object):
         rs     = out['rs']
         etas   = out['etas']
         
-        self.V = out['V']
+        self.data = Data_From_Sphere(out['V'])
         try:
-            self.Y = out['Y']
+            self.data.fill_outcome(out['Y'])
         except KeyError:
             pass
         

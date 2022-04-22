@@ -180,10 +180,11 @@ class Prediction_Gamma_Alter_Restricted(object):
         return predicted
 
 Prediction_Gammas = {}
-for model in ['mdppprg', 'dppprg']:
+for model in ['mdppprg', 'sdppprg', 'sdppprgln']:
     Prediction_Gammas[model] = Prediction_Gamma_Restricted
-for model in ['mdpppg', 'dpppg']:
+for model in ['mdpppg', 'sdpppg', 'sdpppgln']:
     Prediction_Gammas[model] = Prediction_Gamma
+
 
 def ResultFactory(model, path):
     class Result(Results[model], PostPredLoss, Prediction_Gammas[model]):
@@ -212,7 +213,7 @@ if __name__ == '__main__':
     # model_types = sorted(Prediction_Gammas.keys())
     # model_types = ['dphprg','dphprgln','dphpg','dppn']
     # model_types = ['dppprg','dppprgln','dpppg','dpppgln','dppn']
-    model_types = ['dppprg','dpppg','mdppprg','mdpppg']
+    model_types = ['sdppprg', 'sdpppg', 'sdpppgln', 'sdppprgln', 'mdppprg', 'mdpppg']
 
     models = []
     for model_type in model_types:

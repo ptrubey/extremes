@@ -6,14 +6,13 @@ np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 import pandas as pd
 import os
 import pickle
-import sqlite3 as sql
 from math import ceil, log
 from scipy.special import gammaln
 
 from cUtility import diriproc_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
@@ -394,9 +393,9 @@ class Result(object):
         self.nDat  = deltas.shape[1]
         self.nCol  = alphas.shape[1]
 
-        self.V = out['V']
+        self.data = Data_From_Sphere(out['V'])
         try:
-            self.Y = out['Y']
+            self.data.fill_outcome(out['Y'])
         except KeyError:
             pass
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
