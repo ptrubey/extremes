@@ -41,7 +41,7 @@ if __name__ == '__main__':
     pplrs = []
 
     for i, model in enumerate(models):
-        print(('Processing Model {} of {}'.format(i, nmodels)).ljust(50), end = ' ')
+        print(('Processing Model {} of {}'.format(i + 1, nmodels)).ljust(50), end = ' ')
         pplrs.append(ppl_generation(model))
         print('Passed!')
 
