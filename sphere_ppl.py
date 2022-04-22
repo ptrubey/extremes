@@ -37,17 +37,13 @@ if __name__ == '__main__':
         for path in paths:
             models.append((model_type, path))
     
+    nmodels = len(models)
     pplrs = []
-    for model in models:
-        print(('Processing Model {}'.format(model[0])).ljust(50), end = ' ')
+
+    for i, model in enumerate(models):
+        print(('Processing Model {} of {}'.format(i, nmodels)).ljust(50), end = ' ')
         pplrs.append(ppl_generation(model))
         print('Passed!')
-        # try:
-        #     pplrs.append(ppl_generation(model))
-        #     print('Passed')
-        # except:
-        #     print('Failed')
-        #     pass
 
     df = pd.DataFrame(pplrs, columns = ('Type', 'Scenario', 'PPL_Linf','ES_Linf','PPL_Linf_F','ES_Linf_F'))
     df.to_csv(os.path.join(base_path, 'post_pred_loss_results.csv'), index = False)
