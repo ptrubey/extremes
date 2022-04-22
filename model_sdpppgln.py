@@ -15,7 +15,7 @@ from samplers import DirichletProcessSampler
 from data import Data
 from cUtility import generate_indices
 from cProjgamma import sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_simplex, euclidean_to_hypercube, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
 
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
@@ -46,23 +46,6 @@ def bincount2D_vectorized(arr, m):
 
 # Log Densities
 
-def dprodgamma_log_mt_(vY, aAlpha, aBeta, vlogConstant, out):
-    """ 
-    log density -- product of gammas -- single y (vector) against multiple thetas (array)
-    modifies out vector in-place
-
-    vY     : vector of Y    (t x d)
-    aAlpha : array of alpha (t x J x d)
-    aBeta  : array of beta  (t x J x d)
-    vlogC  : array of logC  (t x J) (normalizing constant for product of betas)
-    out    : output vector  (t x J)
-    """
-    out *= 0
-    out += vlogConstant
-    out += np.dot(np.log(vY), (aAlpha - 1).T)
-    out -= np.dot(vY, aBeta.T)
-    return
-
 def dprodgamma_log_paired_yt(aY, aAlpha, aBeta):
     """
     product of gammas log-density for paired y, theta
@@ -74,9 +57,10 @@ def dprodgamma_log_paired_yt(aY, aAlpha, aBeta):
     returns: (t x n)
     """
     ld = np.zeros(aY.shape[:-1])                             # n temps x n Y
-    ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))    # beta^alpha
-    ld -= np.einsum('tnd->tn', gammaln(aAlpha))              # gamma(alpha)
-    ld += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))    # beta^alpha
+        ld -= np.einsum('tnd->tn', gammaln(aAlpha))              # gamma(alpha)
+        ld += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
     ld -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
     return ld                                                # per-temp,Y log-density
 
@@ -95,7 +79,7 @@ def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta)).reshape(1, t, j)
         ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, t, j)
-    ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
+        ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
     ld -= np.einsum('tnd,tjd->ntj', aY, aBeta)
     return ld
 
@@ -111,9 +95,10 @@ def dprodgamma_log_my_st(aY, aAlpha, aBeta):
         log-density (t, n)
     """
     ld = np.zeros(aY.shape[:-1])
-    ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
-    ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
-    ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
+        ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
+        ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
     ld -= np.einsum('tnd,td->tn', aY, aBeta)
     return ld
 
@@ -128,9 +113,10 @@ def dprojgamma_log_paired_yt(aY, aAlpha, aBeta):
     returns: (t, n)
     """
     ld = np.zeros(aAlpha.shape[:-1])
-    ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
-    ld -= np.einsum('tnd->tn', gammaln(aAlpha))
-    ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
+        ld -= np.einsum('tnd->tn', gammaln(aAlpha))
+        ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
     ld += gammaln(np.einsum('tnd->tn', aAlpha))
     ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
     return ld
@@ -164,7 +150,6 @@ def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
     ld = np.zeros(x.shape[:-1])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld -= np.einsum('tdd->t', np.log(cov_chol)).reshape(-1,1)
-    # ld -= 0.5 * 2 * np.log(np.diag(cov_chol)).sum()
     ld -= 0.5 * np.einsum(
         'tjd,tdl,tjl->tj', 
         x - mu.reshape(-1,1,cov_chol.shape[1]), 
@@ -178,20 +163,6 @@ def dmvnormal_log_mx_st(x, mu, cov_chol, cov_inv):
     ld -= np.log(np.diag(cov_chol)).sum()
     ld -= 0.5 * np.einsum('td,dl,tl->t',x - mu, cov_inv, x - mu)
     return ld
-    
-
-# def dmvnormal_log_sxt(x, mu, cov_chol, cov_inv):
-#     """
-#     log-density of x against its prior
-#     ---
-#     x        : array of mus (t x d)
-#     mu       : prior  (d)
-#     cov_chol : prior (d x d) 
-#     cov_inv  : prior (d x d)
-#     """
-
-
-
 
 def dinvwishart_log_ms(Sigma, nu, psi):
     ld = np.zeros(Sigma.shape[0])
@@ -203,27 +174,6 @@ def dinvwishart_log_ms(Sigma, nu, psi):
             '...ii->...', np.einsum('ji,...ij->...ij', psi, inv(Sigma)),
             )
     return ld
-
-# def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sh, nj, Sigma_inv, mu, xi, tau):
-#     """
-#     log_zeta_j : (m x d)
-#     log_yj_sv  : (m x d)   [Summed over n_j]
-#     yj_sh      : (m x nj)  [Summed over d]
-#     nj         : (m)
-#     Sigma_cho  : (m x d x d)
-#     Sigma_inv  : (m x d x d)
-#     mu         : (m x d)
-#     xi         : (m x d-1)
-#     tau        : (m x d-1)
-#     """
-#     zeta_j = np.exp(log_zeta_j)
-#     ld = np.zeros(log_zeta_j.shape[0])
-#     ld += np.einsum('md,md->m', zeta_j - 1, log_yj_sv)
-#     ld -= nj * np.einsum('md->m', gammaln(zeta_j))
-#     ld += np.einsum('md->m', gammaln(nj.reshape(-1,1) * zeta_j[:,1:] + xi))
-#     ld -= np.einsum('md,md->m', nj.reshape(-1,1) * zeta_j[:,1:], np.log(yj_sh + tau))
-#     ld -= 0.5 * np.einsum('ml,mld,md->m', log_zeta_j - mu, Sigma_inv, log_zeta_j - mu)
-#     return ld
 
 def log_density_log_zeta_j(log_zeta_j, log_yj_sv, yj_sv, nj, Sigma_inv, mu, xi, tau):
     """
@@ -753,7 +703,8 @@ class Chain(DirichletProcessSampler):
             lpl += np.einsum('tj,tj->t', 
                     dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
                     )
-            lpl += (dprodgamma_log_my_st(self.curr_sigma[:,:,1:], self.curr_xi, self.curr_tau) * extant_clusters).sum(axis = 1)
+            with np.errstate(divide = 'ignore', invalid = 'ignore'):
+                lpl += np.nansum(dprodgamma_log_my_st(self.curr_sigma[:,:,1:], self.curr_xi, self.curr_tau) * extant_clusters, axis = 1)
             lpp += dmvnormal_log_mx_st(self.curr_mu, *self.priors.mu)
             lpp += dinvwishart_log_ms(self.curr_Sigma, *self.priors.Sigma)
             lpp += dgamma_log_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
@@ -957,9 +908,6 @@ class Result(object):
         self.load_data(path)
         return
 
-# EOF
-
-
 if __name__ == '__main__':
     from data import Data_From_Raw
     from projgamma import GammaPrior
@@ -976,10 +924,6 @@ if __name__ == '__main__':
     model.write_to_disk('./test/results.pkl', 20000, 30)
     res = Result('./test/results.pkl')
     res.write_posterior_predictive('./test/postpred.csv')
-    t2 = time.time()
-    print('Processing took {:.2f} hours'.format((t2-t1)/3600))
-    # EOL
-
 
 
 # EOF 2

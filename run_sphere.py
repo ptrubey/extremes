@@ -30,8 +30,6 @@ if __name__ == '__main__':
         nMix = match.group(1)
         nCol = match.group(2)
 
-        # outcome  = 'class_m{}.csv'.format(nMix)
-
         for model in models:
             out_name = 'results_{}_{}_{}.pkl'.format(model, nMix, nCol)
             out_path = os.path.join(dest_path, out_name)
@@ -39,6 +37,8 @@ if __name__ == '__main__':
             if os.path.exists(out_path) and not p.replace:
                 pass
             else:
+                # processes.append(['python','test_generic.py', file, out_path, model, 
+                #     '--sphere', 'True', '--nSamp', '30000', '--nKeep', '15000', '--nThin', '15'])
                 processes.append(Popen(
                     [sys.executable, 'test_generic.py', file, 
                         out_path, model, '--sphere', 'True', 
@@ -50,5 +50,7 @@ if __name__ == '__main__':
     
     rcs = np.array([process.returncode for process in processes])
     print(np.where(rcs != 0))
+    # for process in processes:
+    #     print(' '.join(process))
 
 # EOF
