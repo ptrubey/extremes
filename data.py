@@ -94,7 +94,7 @@ def descale_pareto(Z, P):
 
 class Outcome(object):
     def fill_outcome(self, Y):
-        self.Y = Y
+        self.Y = Y.ravel()
         return
 
 class Transformer(object):
