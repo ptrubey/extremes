@@ -14,7 +14,7 @@ from math import log
 from samplers import DirichletProcessSampler
 from cUtility import generate_indices
 from cProjgamma import sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
+from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
 
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
@@ -44,6 +44,23 @@ def bincount2D_vectorized(arr, m):
     return np.bincount(arr_offs.ravel(), minlength=arr.shape[0] * m).reshape(-1, m)
 
 # Log Densities
+
+def dprodgamma_log_mt_(vY, aAlpha, aBeta, vlogConstant, out):
+    """ 
+    log density -- product of gammas -- single y (vector) against multiple thetas (array)
+    modifies out vector in-place
+
+    vY     : vector of Y    (t x d)
+    aAlpha : array of alpha (t x J x d)
+    aBeta  : array of beta  (t x J x d)
+    vlogC  : array of logC  (t x J) (normalizing constant for product of betas)
+    out    : output vector  (t x J)
+    """
+    out *= 0
+    out += vlogConstant
+    out += np.dot(np.log(vY), (aAlpha - 1).T)
+    out -= np.dot(vY, aBeta.T)
+    return
 
 def dprodgamma_log_paired_yt(aY, aAlpha, aBeta):
     """
@@ -94,10 +111,9 @@ def dprodgamma_log_my_st(aY, aAlpha, aBeta):
         log-density (t, n)
     """
     ld = np.zeros(aY.shape[:-1])
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
-        ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
-        ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
+    ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
+    ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
+    ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
     ld -= np.einsum('tnd,td->tn', aY, aBeta)
     return ld
 
@@ -112,10 +128,9 @@ def dprojgamma_log_paired_yt(aY, aAlpha, aBeta):
     returns: (t, n)
     """
     ld = np.zeros(aAlpha.shape[:-1])
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
-        ld -= np.einsum('tnd->tn', gammaln(aAlpha))
-        ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
+    ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
+    ld -= np.einsum('tnd->tn', gammaln(aAlpha))
+    ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
     ld += gammaln(np.einsum('tnd->tn', aAlpha))
     ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
     return ld
@@ -702,8 +717,7 @@ class Chain(DirichletProcessSampler):
             lpl += np.einsum('tj,tj->t', 
                     dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
                     )
-            with np.errstate(divide = 'ignore', invalid = 'ignore'):
-                lpl += np.nansum(dprodgamma_log_my_st(self.curr_sigma[:,:,1:], self.curr_xi, self.curr_tau) * extant_clusters, axis = 1)
+            lpl += (dprodgamma_log_my_st(self.curr_sigma[:,:,1:], self.curr_xi, self.curr_tau) * extant_clusters).sum(axis = 1)
             lpp += dmvnormal_log_mx_st(self.curr_mu, *self.priors.mu)
             lpp += dinvwishart_log_ms(self.curr_Sigma, *self.priors.Sigma)
             lpp += dgamma_log_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
@@ -881,9 +895,9 @@ class Result(object):
         rs     = out['rs']
         etas   = out['etas']
         
-        self.data = Data_From_Sphere(out['V'])
+        self.V = out['V']
         try:
-            self.data.fill_outcome(out['Y'])
+            self.Y = out['Y']
         except KeyError:
             pass
         
@@ -924,4 +938,5 @@ if __name__ == '__main__':
     res.write_posterior_predictive('./test/postpred.csv')
 
 
-# EOF
+
+# EOF 2
