@@ -129,12 +129,12 @@ def dgamma_log_my(aY, alpha, beta):
         alpha : float
         beta  : float
     """
-    lp = (
-        + alpha * log(beta)
-        - gammaln(alpha)
-        + (alpha - 1) * np.log(aY)
-        - beta * aY
-        )
+    lp = np.zeros(aY.shape[0])
+    with np.errstate(divide = 'ignore',invalid = 'ignore'):
+        lp += alpha * np.log(beta)
+        lp -= gammaln(alpha)
+        lp += (alpha - 1) * np.log(aY)
+        lp -= beta * aY
     return lp
 
 def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
@@ -914,7 +914,6 @@ if __name__ == '__main__':
     import os
     import time
 
-    t1 = time.time()
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     data.write_empirical('./test/empirical.csv')
@@ -925,4 +924,4 @@ if __name__ == '__main__':
     res.write_posterior_predictive('./test/postpred.csv')
 
 
-# EOF 2
+# EOF
