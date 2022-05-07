@@ -32,9 +32,9 @@ class Samples(object):
 
 Prior = namedtuple('Prior', 'zeta sigma')
 
-def log_post_log_zeta_1(lzeta, Y, lY, W, alpha, beta, cmat):
+def log_post_log_zeta_1(lzeta, rho, lrho, W, alpha, beta, cmat):
     """
-    lzeta : (J)
+    lzeta : (1)
     Y, lY : (n)
     W     : (n)
     alpha : scalar
@@ -42,15 +42,15 @@ def log_post_log_zeta_1(lzeta, Y, lY, W, alpha, beta, cmat):
     cmat  : (n x J), bool
     """
     zeta = np.exp(lzeta)
-    ZW = (zeta[:, None] + W[None, :]) # (J x n) array
+    ZW = zeta + W # (n)
     lp = np.zeros(lzeta.shape)
-    lp += np.einsum('jn,n,nj->j', ZW - 1, lY, cmat)
-    lp -= np.einsum('jn,nj->j', gammaln(ZW), cmat)
+    lp += ((ZW - 1) * lrho).sum()
+    lp -= gammaln(ZW).sum()
     lp += alpha * lzeta
     lp -= zeta * beta
     return lp
 
-def log_post_log_zeta_k(lzeta, Y, lY, W, alpha, beta, xi, tau, cmat):
+def log_post_log_zeta_k(lzeta, rho, lrho, W, alpha, beta, xi, tau):
     """
     lzeta : (J)
     Y, lY : (n)
@@ -60,14 +60,14 @@ def log_post_log_zeta_k(lzeta, Y, lY, W, alpha, beta, xi, tau, cmat):
     cmat  : (n x J), bool
     """
     zeta = np.exp(lzeta)
-    ZW = (zeta[:, None] + W[None, :]) # (J x n) array
-    lp = np.zeros(lzeta.shape)
-    lp += np.einsum('jn,n,nj->j', ZW - 1, lY, cmat)
-    lp -= np.einsum('jn,nj->j', gammaln(ZW), cmat)
+    ZW = zeta + W # (n) array
+    lp = np.zeros(lzeta.shape) # should be 1d?
+    lp += ((ZW - 1) * lrho).sum()
+    lp -= gammaln(ZW).sum()
     lp += alpha * lzeta
     lp -= zeta * beta
-    lp += gammaln(np.einsum('jn,nj->j', ZW, cmat) + xi)
-    lp -= (np.einsum('jn,nj->j', ZW, cmat) + xi) * np.log(np.einsum('n,nj->j', Y, cmat) + tau)
+    lp += gammaln(ZW.sum() + xi)
+    lp -= (ZW.sum() + xi) * np.log(rho.sum() + tau)
     return lp
 
 class Chain(BaseSampler):
@@ -81,102 +81,65 @@ class Chain(BaseSampler):
     def curr_rho(self):
         return self.samples.r[self.curr_iter]
 
-    def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta, xi, tau):
+    def sample_zeta(self, curr_zeta, rho):
         """
         Metropolis Hastings sampler for zeta
         """
-        dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
-        Y  = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
-        lY = np.log(Y)
-        W  = np.hstack((np.zeros(self.data.Yp.shape), self.data.W))
-        # declaring targets for LP
+        lrho = np.log(rho)
         lp_curr = np.zeros(curr_zeta.shape)
         lp_prop = np.zeros(curr_zeta.shape)
         # declaring current and proposal RV's
         curr_log_zeta = np.log(curr_zeta)
         prop_log_zeta = curr_log_zeta + normal(size = curr_log_zeta.shape, scale = 0.3)
         # indexing xi, tau to same index as alpha, beta
-        ixi  = np.ones(alpha.shape)
-        itau = np.ones(alpha.shape)
-        ixi[~self.sigma_unity] = xi
-        itau[~self.sigma_unity] = tau
-
-        for i in range(curr_log_zeta.shape[1]):
-            if self.sigma_unity[i]:
-                lp_curr.T[i] = log_post_log_zeta_1(
-                    curr_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat,
+        for i in range(curr_log_zeta.shape[0]):
+            if (i == 0):
+                lp_curr[i] = log_post_log_zeta_1(
+                    curr_log_zeta[i], rho.T[i], lrho.T[i], self.data.W.T[i], 
+                    self.priors.zeta.a, self.priors.zeta.b,
                     )
-                lp_prop.T[i] = log_post_log_zeta_1(
-                    prop_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat,
+                lp_prop[i] = log_post_log_zeta_1(
+                    prop_log_zeta[i], rho.T[i], lrho.T[i], self.data.W.T[i], 
+                    self.priors.zeta.a, self.priors.zeta.b,
                     )
-            else:
-                lp_curr.T[i] = log_post_log_zeta_k(
-                    curr_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], ixi[i], itau[i], dmat,
+            else: 
+                lp_curr[i] = log_post_log_zeta_k(
+                    curr_log_zeta[i], rho.T[i], lrho.T[i], self.data.W.T[i], 
+                    self.priors.zeta.a, self.priors.zeta.b, self.priors.sigma.a, self.priors.sigma.b,
+                ) 
+                lp_prop[i] = log_post_log_zeta_k(
+                    prop_log_zeta[i], rho.T[i], lrho.T[i], self.data.W.T[i], 
+                    self.priors.zeta.a, self.priors.zeta.b, self.priors.sigma.a, self.priors.sigma.b,
                     )
-                lp_prop.T[i] = log_post_log_zeta_k(
-                    prop_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], ixi[i], itau[i], dmat,
-                    )
-        
         lp_diff = lp_prop - lp_curr
         keep = np.log(uniform(size = lp_curr.shape)) < lp_diff   # metropolis hastings step
 
         log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep)) # if keep, then proposal, else current
         return np.exp(log_zeta)
 
-    def sample_sigma(self, zeta, r, rho, delta, xi, tau):
-        dmat = delta[:, None] == np.arange(delta.max() + 1)        # (n x J)
-        Y = np.hstack((r[:, None] * self.data.Yp, rho))            # (n x d)
-        W = np.hstack((np.zeros(self.data.Yp.shape), self.data.W)) # (n x d)
+    def sample_sigma(self, zeta, rho):
+        nz = self.nDat * zeta[:1] # (d - 1)
+        rsv = rho.sum(axis = 0)[1:] # (d - 1)
+        wsv = self.data.W.sum(axis = 0)[1:] # (d - 1)
+        sigma = np.ones(zeta.shape)
 
-        nZ  = zeta * dmat.sum(axis = 0)[:, None]
-        Ysv = np.einsum('nd,nj->jd', Y, dmat)
-        Wsv = np.einsum('nd,nj->jd', W, dmat)
-        
-        ixi = np.ones(zeta.shape[1])    # (d)
-        itau = np.ones(zeta.shape[1])   # (d)
-        ixi[~self.sigma_unity] = xi
-        itau[~self.sigma_unity] = tau
-
-        shape = nZ + Wsv + ixi
-        rate  = Ysv + itau
-
-        sigma = gamma(shape, scale = 1 / rate)
-        sigma.T[self.sigma_unity] = 1.
+        shape = nz + wsv + self.priors.sigma.a
+        rate  = rsv + self.priors.sigma.b
+        sigma[1:] = gamma(shape = shape, scale = 1 / rate)
         return sigma
     
-    def sample_rho(self, delta, zeta, sigma):
-        As = np.einsum('il->i', zeta[delta])
-        Bs = np.einsum('il,il->i', self.data.Yp, sigma[delta])
-        return gamma(shape = As, scale = 1 / Bs)
-    
-    def sample_rho(self, delta, zeta, sigma):
-        """ Sampling the PG_1 gammas for categorical variables
-
-        Args:
-            delta ([type]): [description]
-            zeta ([type]): [description]
-            sigma ([type]): [description]
-        """
-        As = zeta[:, self.nCol:][delta] + self.data.W
-        Bs = sigma[:, self.nCol:][delta]
+    def sample_rho(self, zeta, sigma):
+        As = zeta[:,None] + self.data.W
+        Bs = sigma[:,None]
         rho = gamma(shape = As, scale = 1 / Bs)
-        rho[rho < 1e-9] = 1e-9
         return rho
     
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol)
-        self.samples.alpha[0] = 1.
-        self.samples.beta[0] = 1.
-        self.samples.xi[0] = 1.
-        self.samples.tau[0] = 1.
-        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol))
-        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol))
-        self.samples.eta[0] = 40.
-        self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
-        self.samples.delta[0][-1] = np.arange(self.max_clust_count - 30)[-1]
-        self.samples.r[0] = self.sample_r(
-                self.samples.delta[0], self.samples.zeta[0], self.samples.sigma[0],
-                )
+        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = self.nCol)
+        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = self.nCol)
+        self.samples.sigma[0,0] = 1.
+        self.samples.rho[0] = self.sample_rho(self.samples.zeta[0], self.samples.sigma[0])
         self.curr_iter = 0
         return
 
