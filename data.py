@@ -251,6 +251,8 @@ class Multinomial(Data, Outcome):
             self.nCat = self.Cats.sum()
         
         assert self.nCat == self.W.shape[1]
+        self.nCol = self.nCat
+        self.nDat = self.W.shape[0]
         return
     
     def __init__(self, raw, values = None, index = None, outcome = 'None'):

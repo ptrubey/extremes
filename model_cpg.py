@@ -32,7 +32,7 @@ class Samples(object):
 
 Prior = namedtuple('Prior', 'zeta sigma')
 
-def log_post_log_zeta_1(lzeta, rho, lrho, W, alpha, beta, cmat):
+def log_post_log_zeta_1(lzeta, rho, lrho, W, alpha, beta):
     """
     lzeta : (1)
     Y, lY : (n)
@@ -79,7 +79,7 @@ class Chain(BaseSampler):
         return self.samples.sigma[self.curr_iter]
     @property
     def curr_rho(self):
-        return self.samples.r[self.curr_iter]
+        return self.samples.rho[self.curr_iter]
 
     def sample_zeta(self, curr_zeta, rho):
         """
@@ -129,8 +129,8 @@ class Chain(BaseSampler):
         return sigma
     
     def sample_rho(self, zeta, sigma):
-        As = zeta[:,None] + self.data.W
-        Bs = sigma[:,None]
+        As = zeta + self.data.W
+        Bs = sigma[None, :]
         rho = gamma(shape = As, scale = 1 / Bs)
         return rho
     
@@ -246,22 +246,14 @@ class Result(object):
 # EOF
 
 if __name__ == '__main__':
-    pass
-    # from data import Data_From_Raw
-    # from projgamma import GammaPrior
-    # from pandas import read_csv
-    # import os
+    from pandas import read_csv
+    from data import Multinomial
 
-    # raw = read_csv('./datasets/ivt_nov_mar.csv')
-    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    # data.write_empirical('./test/empirical.csv')
-    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    # model.sample(4000)
-    # model.write_to_disk('./test/results.pickle', 2000, 2)
-    # res = Result('./test/results.pickle')
-    # res.write_posterior_predictive('./test/postpred.csv')
-    # EOL
+    raw = read_csv('./simulated/categorical/test.csv').values
+    data = Multinomial(raw)
+    model = Chain(data)
+    model.sample(50000)
+    model.write_to_disk('./simulated/categorical/result.pkl', 20000, 30)
+    res = Result('./simulated/categorical/result.pkl')
 
-
-
-# EOF 2
+# EOF
