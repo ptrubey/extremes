@@ -19,18 +19,16 @@ from projgamma import GammaPrior
 
 class Samples(object):
     zeta  = None
-    sigma = None
     rho   = None
     
     def __init__(self, nSamp, nDat, nCol):
         self.zeta  = np.empty((nSamp + 1, nCol))
-        self.sigma = np.empty((nSamp + 1, nCol))
         self.rho   = np.empty((nSamp +1, nDat, nCol))
         return
     
     pass
 
-Prior = namedtuple('Prior', 'zeta sigma')
+Prior = namedtuple('Prior', 'zeta')
 
 def log_post_log_zeta_1(lzeta, rho, lrho, W, alpha, beta):
     """
@@ -89,9 +87,6 @@ class Chain(BaseSampler):
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
     @property
-    def curr_sigma(self):
-        return self.samples.sigma[self.curr_iter]
-    @property
     def curr_rho(self):
         return self.samples.rho[self.curr_iter]
 
@@ -132,79 +127,36 @@ class Chain(BaseSampler):
     #     return np.exp(log_zeta)
     
     def sample_zeta(self, curr_zeta, rho):
-        # curr_zeta, n, Ys, lYs, alpha, beta, xi, tau
-        # args = zip(
-        #     curr_zeta, 
-        #     repeat(self.nDat),
-        #     rho.T,
-        #     np.log(rho).T,
-        #     repeat(self.priors.zeta.a),
-        #     repeat(self.priors.zeta.b),
-        #     repeat(self.priors.sigma.a),
-        #     repeat(self.priors.sigma.b),
-        #     )
-        # res = map(update_zeta_wrapper, args)
-        # return np.array(list(res))
         srho = rho.sum(axis = 0)
         slrho = np.log(rho).sum(axis = 0)
         prop_zeta = np.empty(curr_zeta.shape)
-        prop_zeta[0] = sample_alpha_1_mh_summary(
-            curr_zeta[0], self.nDat, srho[0], slrho[0], 
-            self.priors.zeta.a, self.priors.zeta.b
-            )
-        for i in range(1, self.nCol):
-            prop_zeta[i] = sample_alpha_k_mh_summary(
+        for i in range(self.nCol):
+            prop_zeta[i] = sample_alpha_1_mh_summary(
                 curr_zeta[i], self.nDat, srho[i], slrho[i],
-                self.priors.zeta.a, self.priors.zeta.b, 
-                self.priors.sigma.a, self.priors.sigma.b,
+                self.priors.zeta.a, self.priors.zeta.b,
                 )
         return prop_zeta
 
-    # def sample_sigma(self, zeta, rho):
-    #     nz = self.nDat * zeta[1:] # (d - 1)
-    #     rsv = rho.sum(axis = 0)[1:] # (d - 1)
-    #     wsv = self.data.W.sum(axis = 0)[1:] # (d - 1)
-    #     sigma = np.ones(zeta.shape)
-
-    #     shape = nz + wsv + self.priors.sigma.a
-    #     rate  = rsv + self.priors.sigma.b
-    #     sigma[1:] = gamma(shape = shape, scale = 1 / rate)
-    #     return sigma
-    
-    def sample_sigma(self, zeta, rho):
-        nz = self.nDat * zeta[1:]
-        rsv = rho.sum(axis = 0)[1:]
-        shape = nz + self.priors.sigma.a
-        rate  = rsv + self.priors.sigma.b
-        sigma = np.ones(zeta.shape)
-        sigma[1:] = gamma(shape = shape, scale = 1 / rate)
-        return sigma
-
-    def sample_rho(self, zeta, sigma):
+    def sample_rho(self, zeta):
         As = zeta + self.data.W
-        Bs = sigma[None, :]
-        rho = gamma(shape = As, scale = 1 / Bs)
+        rho = gamma(shape = As)
         return rho
     
     def initialize_sampler(self, ns):
         self.samples = Samples(ns, self.nDat, self.nCol)
         self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = self.nCol)
-        self.samples.sigma[0] = gamma(shape = 2., scale = 2., size = self.nCol)
-        self.samples.sigma[0,0] = 1.
-        self.samples.rho[0] = self.sample_rho(self.samples.zeta[0], self.samples.sigma[0])
+        self.samples.rho[0] = self.sample_rho(self.samples.zeta[0])
         self.curr_iter = 0
         return
 
     def iter_sample(self):
         zeta  = self.curr_zeta
-        sigma = self.curr_sigma
         rho   = self.curr_rho
 
         self.curr_iter += 1
 
         self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta, rho)
-        self.samples.sigma[self.curr_iter] = self.sample_sigma(self.curr_zeta, rho)
-        self.samples.rho[self.curr_iter] = self.sample_rho(self.curr_zeta, self.curr_sigma)
+        self.samples.rho[self.curr_iter] = self.sample_rho(self.curr_zeta)
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -215,14 +167,12 @@ class Chain(BaseSampler):
             os.remove(path)
         
         zeta = self.samples.zeta[nBurn::nThin]
-        sigma = self.samples.sigma[nBurn::nThin]
         rho   = self.samples.rho[nBurn::nThin]
 
         out = {
             'zetas'  : zeta,
-            'sigmas' : sigma,
             'rhos'   : rho,
-            'W'      : self.data.C,
+            'W'      : self.data.W,
             }
         
         try:
@@ -239,12 +189,11 @@ class Chain(BaseSampler):
             self, 
             data, 
             prior_zeta = GammaPrior(0.5, 0.5),
-            prior_sigma = GammaPrior(0.5, 0.5),
             ):
         self.data = data
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        self.priors = Prior(prior_zeta, prior_sigma)
+        self.priors = Prior(prior_zeta)
         return
     
     pass
@@ -254,8 +203,7 @@ class Result(object):
         new_gammas = []
         for s in range(self.nSamp):
             g = gamma(
-                shape = self.samples.zeta[s], 
-                scale = 1 / self.samples.sigma[s], 
+                shape = self.samples.zeta[s],
                 size = (n_per_sample, self.nCol),
                 )
             new_gammas.append(g)
@@ -274,7 +222,6 @@ class Result(object):
             out = pickle.load(file)
         
         zetas  = out['zetas']
-        sigmas = out['sigmas']
         rhos   = out['rhos']
 
         self.nSamp = zetas.shape[0]
@@ -289,10 +236,13 @@ class Result(object):
         
         self.samples = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.zeta = zetas
-        self.samples.sigma = sigmas
         self.samples.rho = rhos
         return 
 
+    def __init__(self, path):
+        self.load_data(path)
+        return
+    
     pass
 
 # EOF
@@ -304,8 +254,9 @@ if __name__ == '__main__':
     raw = read_csv('./simulated/categorical/test.csv').values
     data = Multinomial(raw)
     model = Chain(data)
-    model.sample(50000)
-    model.write_to_disk('./simulated/categorical/result.pkl', 20000, 30)
+    model.sample(200000)
+    model.write_to_disk('./simulated/categorical/result.pkl', 1, 200)
     res = Result('./simulated/categorical/result.pkl')
+    raise
 
 # EOF
