@@ -6,7 +6,7 @@ np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 import pandas as pd
 import os
 import pickle
-from math import ceil, log
+from math import log
 from scipy.special import gammaln
 
 from cUtility import diriproc_cluster_sampler, generate_indices

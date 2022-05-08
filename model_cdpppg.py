@@ -6,8 +6,7 @@ np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 import pandas as pd
 import os
 import pickle
-import sqlite3 as sql
-from math import ceil, log
+from math import log
 from scipy.special import gammaln
 
 import cUtility as cu

@@ -1,10 +1,9 @@
 import numpy as np
-
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 from numpy.random import choice, gamma, beta, normal, uniform
 from numpy.linalg import cholesky, slogdet, inv
 from scipy.stats import invwishart
-from scipy.special import gammaln, multigammaln
+from scipy.special import gammaln
 from collections import namedtuple
 from itertools import repeat
 import pandas as pd
@@ -15,7 +14,7 @@ from math import log
 from samplers import DirichletProcessSampler
 from cUtility import generate_indices
 
-from data import euclidean_to_angular, euclidean_to_hypercube, Data
+from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior
 from model_sdpppgln import bincount2D_vectorized, dprodgamma_log_my_mt, \
     dprodgamma_log_paired_yt, dgamma_log_my, dmvnormal_log_mx, dmvnormal_log_mx_st, \
