@@ -8,7 +8,7 @@ import pandas as pd
 import os
 import pickle
 import sqlite3 as sql
-from math import ceil, log
+from math import log, exp
 from scipy.special import gammaln
 
 import cUtility as cu
@@ -19,16 +19,57 @@ from projgamma import GammaPrior
 
 class Samples(object):
     zeta  = None
-    rho   = None
+    # rho   = None
     
-    def __init__(self, nSamp, nDat, nCol):
+    def __init__(self, nSamp, nCol):
+        # def __init__(self, nSamp, nDat, nCol):
         self.zeta  = np.empty((nSamp + 1, nCol))
-        self.rho   = np.empty((nSamp +1, nDat, nCol))
+        # self.rho   = np.empty((nSamp +1, nDat, nCol))
         return
     
     pass
 
 Prior = namedtuple('Prior', 'zeta')
+
+def logd_loggamma_sx_sab(x, alpha, beta):
+    logd = np.zeros(1)
+    logd += alpha * log(beta)
+    logd -= gammaln(alpha)
+    logd += alpha * x
+    logd -= beta * exp(x)
+    return logd
+
+def logd_dirichlet_multinomial_mx_sa(x, alpha):
+    """
+    x     : (n x d)
+    alpha : (d)
+    """
+    sa = alpha.sum()
+    sx = x.sum(axis = 1)
+    logd = np.zeros(x.shape[0])
+    logd += gammaln(sa)
+    logd += gammaln(sx + 1)
+    logd -= gammaln(sx + sa)
+    logd += gammaln(x + alpha).sum(axis = 1)
+    logd -= gammaln(alpha).sum()
+    logd -= gammaln(x + 1).sum(axis = 1)
+    return logd
+
+def logd_dirichlet_multinomial_mx_ma(x, alpha):
+    """ 
+    x     : (n x d)
+    alpha : (j x d)
+    """
+    sa = alpha.sum(axis = 1)
+    sx = x.sum(axis = 1)
+    logd = np.zeros((x.shape[0], alpha.shape[0]))
+    logd += gammaln(sa)[None,:]
+    logd += gammaln(sx + 1)[:,None]
+    logd -= gammaln(sx[:, None] + sa[None,:])
+    logd += gammaln(x[:,None,:] + alpha[None,:,:]).sum(axis = 2)
+    logd -= gammaln(alpha).sum(axis = 1)[None,:]
+    logd -= gammaln(x + 1).sum(axis = 1)[:, None]
+    return logd
 
 def log_post_log_zeta_1(lzeta, rho, lrho, W, alpha, beta):
     """
@@ -86,9 +127,9 @@ class Chain(BaseSampler):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
-    @property
-    def curr_rho(self):
-        return self.samples.rho[self.curr_iter]
+    # @property
+    # def curr_rho(self):
+    #     return self.samples.rho[self.curr_iter]
 
     # def sample_zeta(self, curr_zeta, rho):
     #     """
@@ -126,37 +167,64 @@ class Chain(BaseSampler):
     #     log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep)) # if keep, then proposal, else current
     #     return np.exp(log_zeta)
     
-    def sample_zeta(self, curr_zeta, rho):
-        srho = rho.sum(axis = 0)
-        slrho = np.log(rho).sum(axis = 0)
-        prop_zeta = np.empty(curr_zeta.shape)
-        for i in range(self.nCol):
-            prop_zeta[i] = sample_alpha_1_mh_summary(
-                curr_zeta[i], self.nDat, srho[i], slrho[i],
-                self.priors.zeta.a, self.priors.zeta.b,
-                )
-        return prop_zeta
+    # def sample_zeta(self, curr_zeta, rho):
+    #     srho = rho.sum(axis = 0)
+    #     slrho = np.log(rho).sum(axis = 0)
+    #     prop_zeta = np.empty(curr_zeta.shape)
+    #     for i in range(self.nCol):
+    #         prop_zeta[i] = sample_alpha_1_mh_summary(
+    #             curr_zeta[i], self.nDat, srho[i], slrho[i],
+    #             self.priors.zeta.a, self.priors.zeta.b,
+    #             )
+    #     return prop_zeta
 
-    def sample_rho(self, zeta):
-        As = zeta + self.data.W
-        rho = gamma(shape = As)
-        return rho
+    def sample_zeta(self, curr_zeta):
+        curr_log_zeta = np.log(curr_zeta)
+        eval_log_zeta = curr_log_zeta.copy()
+        prop_log_zeta = curr_log_zeta + normal(scale = 0.1, size = curr_log_zeta.shape)
+        lunifs = np.log(uniform(size = curr_log_zeta.shape))
+        logp = np.zeros(2)
+        for i in range(self.nCol):
+            logp[0] += logd_dirichlet_multinomial_mx_sa(
+                self.data.W, np.exp(eval_log_zeta),
+                ).sum()
+            logp[0] += logd_loggamma_sx_sab(
+                eval_log_zeta[i], self.priors.zeta.a, self.priors.zeta.b,
+                )
+            eval_log_zeta[i] = prop_log_zeta[i]
+            logp[1] += logd_dirichlet_multinomial_mx_sa(
+                self.data.W, np.exp(eval_log_zeta),
+                ).sum()
+            logp[0] += logd_loggamma_sx_sab(
+                eval_log_zeta[i], self.priors.zeta.a, self.priors.zeta.b,
+                )
+            if lunifs[i] < logp[1] - logp[0]:
+                pass
+            else:
+                eval_log_zeta[i] = curr_log_zeta[i] # return evaluation 
+            logp[:] = 0.
+        return np.exp(eval_log_zeta)
+
+    # def sample_rho(self, zeta):
+    #     As = zeta + self.data.W
+    #     rho = gamma(shape = As)
+    #     return rho
     
     def initialize_sampler(self, ns):
-        self.samples = Samples(ns, self.nDat, self.nCol)
+        self.samples = Samples(ns, self.nCol) # self.nDat, self.nCol)
         self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = self.nCol)
-        self.samples.rho[0] = self.sample_rho(self.samples.zeta[0])
+        # self.samples.rho[0] = self.sample_rho(self.samples.zeta[0])
         self.curr_iter = 0
         return
 
     def iter_sample(self):
-        zeta  = self.curr_zeta
-        rho   = self.curr_rho
+        zeta  = self.curr_zeta.copy()
+        # rho   = self.curr_rho
 
         self.curr_iter += 1
 
-        self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta, rho)
-        self.samples.rho[self.curr_iter] = self.sample_rho(self.curr_zeta)
+        self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta) # , rho)
+        # self.samples.rho[self.curr_iter] = self.sample_rho(self.curr_zeta)
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -167,11 +235,11 @@ class Chain(BaseSampler):
             os.remove(path)
         
         zeta = self.samples.zeta[nBurn::nThin]
-        rho   = self.samples.rho[nBurn::nThin]
+        # rho   = self.samples.rho[nBurn::nThin]
 
         out = {
             'zetas'  : zeta,
-            'rhos'   : rho,
+            # 'rhos'   : rho,
             'W'      : self.data.W,
             }
         
@@ -222,10 +290,11 @@ class Result(object):
             out = pickle.load(file)
         
         zetas  = out['zetas']
-        rhos   = out['rhos']
+        # rhos   = out['rhos']
 
         self.nSamp = zetas.shape[0]
-        self.nDat  = rhos.shape[1]
+        self.nDat = out['W'].shape[0]
+        # self.nDat  = rhos.shape[1]
         self.nCol  = zetas.shape[1]
 
         self.data = Categorical(out['W'])
@@ -234,9 +303,9 @@ class Result(object):
         except KeyError:
             pass
         
-        self.samples = Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples = Samples(self.nSamp, self.nCol) # self.nDat, self.nCol)
         self.samples.zeta = zetas
-        self.samples.rho = rhos
+        # self.samples.rho = rhos
         return 
 
     def __init__(self, path):
