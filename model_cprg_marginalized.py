@@ -21,30 +21,16 @@ class Samples(object):
     zeta  = None
     # rho   = None
     
-    # def __init__(self, nSamp, nCol):
-    def __init__(self, nSamp, nDat, nCol):
+    def __init__(self, nSamp, nCol):
+        # def __init__(self, nSamp, nDat, nCol):
         self.zeta  = np.empty((nSamp + 1, nCol))
-        self.rho   = np.empty((nSamp +1, nDat, nCol))
+        # self.rho   = np.empty((nSamp +1, nDat, nCol))
         self.logp = np.empty((nSamp + 1))
         return
     
     pass
 
 Prior = namedtuple('Prior', 'zeta')
-
-def logd_multinomial_paired(x, pi):
-    logd = np.zeros(x.shape[0])
-    logd += gammaln(x.sum(axis = 1) + 1)
-    logd -= gammaln(x + 1).sum(axis = 1)
-    logd += (x * np.log(pi)).sum(axis = 1)
-    return logd
-
-def logd_dirichlet_mx_sa(pi, alpha):
-    logd = np.zeros(pi.shape[0])
-    logd += gammaln(alpha.sum())
-    logd -= gammaln(alpha).sum()
-    logd += ((alpha - 1) * np.log(pi)).sum(axis = 1)
-    return logd
 
 def logd_loggamma_mx_sab(x, alpha, beta):
     logd = np.zeros(x.shape)
@@ -150,9 +136,9 @@ class Chain(BaseSampler):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
-    @property
-    def curr_rho(self):
-        return self.samples.rho[self.curr_iter]
+    # @property
+    # def curr_rho(self):
+    #     return self.samples.rho[self.curr_iter]
 
     # def sample_zeta(self, curr_zeta, rho):
     #     """
@@ -190,73 +176,68 @@ class Chain(BaseSampler):
     #     log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep)) # if keep, then proposal, else current
     #     return np.exp(log_zeta)
     
-    def sample_zeta(self, curr_zeta, rho):
-        srho = rho.sum(axis = 0)
-        slrho = np.log(rho).sum(axis = 0)
-        prop_zeta = np.empty(curr_zeta.shape)
-        for i in range(self.nCol):
-            prop_zeta[i] = sample_alpha_1_mh_summary(
-                curr_zeta[i], self.nDat, srho[i], slrho[i],
-                self.priors.zeta.a, self.priors.zeta.b,
-                )
-        return prop_zeta
-
-    # def sample_zeta(self, curr_zeta):
-    #     curr_log_zeta = np.log(curr_zeta)
-    #     eval_log_zeta = curr_log_zeta.copy()
-    #     prop_log_zeta = curr_log_zeta + normal(scale = 0.1, size = curr_log_zeta.shape)
-    #     lunifs = np.log(uniform(size = curr_log_zeta.shape))
-    #     logp = np.zeros(2) # (current, proposal)
+    # def sample_zeta(self, curr_zeta, rho):
+    #     srho = rho.sum(axis = 0)
+    #     slrho = np.log(rho).sum(axis = 0)
+    #     prop_zeta = np.empty(curr_zeta.shape)
     #     for i in range(self.nCol):
-    #         logp[0] += logd_dirichlet_multinomial_mx_sa(
-    #             self.data.W, np.exp(eval_log_zeta),
-    #             ).sum()
-    #         logp[0] += logd_loggamma_mx_sab(
-    #             eval_log_zeta[i], self.priors.zeta.a, self.priors.zeta.b,
+    #         prop_zeta[i] = sample_alpha_1_mh_summary(
+    #             curr_zeta[i], self.nDat, srho[i], slrho[i],
+    #             self.priors.zeta.a, self.priors.zeta.b,
     #             )
-    #         eval_log_zeta[i] = prop_log_zeta[i]
-    #         logp[1] += logd_dirichlet_multinomial_mx_sa(
-    #             self.data.W, np.exp(eval_log_zeta),
-    #             ).sum()
-    #         logp[1] += logd_loggamma_mx_sab(
-    #             eval_log_zeta[i], self.priors.zeta.a, self.priors.zeta.b,
-    #             )
-    #         if lunifs[i] < logp[1] - logp[0]:
-    #             pass # keep eval_log_zeta with updated parameter
-    #         else:
-    #             eval_log_zeta[i] = curr_log_zeta[i] # return eval_log_zeta to previous 
-    #         logp[:] = 0.
-    #     return np.exp(eval_log_zeta)
+    #     return prop_zeta
 
-    def sample_rho(self, zeta):
-        As = zeta + self.data.W
-        rho = gamma(shape = As)
-        return rho
+    def sample_zeta(self, curr_zeta):
+        curr_log_zeta = np.log(curr_zeta)
+        eval_log_zeta = curr_log_zeta.copy()
+        prop_log_zeta = curr_log_zeta + normal(scale = 0.1, size = curr_log_zeta.shape)
+        lunifs = np.log(uniform(size = curr_log_zeta.shape))
+        logp = np.zeros(2) # (current, proposal)
+        for i in range(self.nCol):
+            logp[0] += logd_dirichlet_multinomial_mx_sa(
+                self.data.W, np.exp(eval_log_zeta),
+                ).sum()
+            logp[0] += logd_loggamma_mx_sab(
+                eval_log_zeta[i], self.priors.zeta.a, self.priors.zeta.b,
+                )
+            eval_log_zeta[i] = prop_log_zeta[i]
+            logp[1] += logd_dirichlet_multinomial_mx_sa(
+                self.data.W, np.exp(eval_log_zeta),
+                ).sum()
+            logp[1] += logd_loggamma_mx_sab(
+                eval_log_zeta[i], self.priors.zeta.a, self.priors.zeta.b,
+                )
+            if lunifs[i] < logp[1] - logp[0]:
+                pass # keep eval_log_zeta with updated parameter
+            else:
+                eval_log_zeta[i] = curr_log_zeta[i] # return eval_log_zeta to previous 
+            logp[:] = 0.
+        return np.exp(eval_log_zeta)
+
+    # def sample_rho(self, zeta):
+    #     As = zeta + self.data.W
+    #     rho = gamma(shape = As)
+    #     return rho
     
     def initialize_sampler(self, ns):
-        self.samples = Samples(ns, self.nDat, self.nCol)
+        self.samples = Samples(ns, self.nCol) # self.nDat, self.nCol)
         self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = self.nCol)
-        self.samples.rho[0] = self.sample_rho(self.samples.zeta[0])
+        # self.samples.rho[0] = self.sample_rho(self.samples.zeta[0])
         self.curr_iter = 0
         return
 
     def iter_sample(self):
         zeta  = self.curr_zeta.copy()
-        rho   = self.curr_rho
+        # rho   = self.curr_rho
 
         self.curr_iter += 1
 
-        self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta, rho)
-        self.samples.rho[self.curr_iter] = self.sample_rho(self.curr_zeta)
-        
-        pis = self.curr_rho / self.curr_rho.sum(axis = 1)[:,None]
-        
+        self.samples.zeta[self.curr_iter] = self.sample_zeta(zeta) # , rho)
         self.samples.logp[self.curr_iter] = (
-            + logd_multinomial_paired(self.data.W, pis).sum()
-            + logd_dirichlet_mx_sa(pis, self.curr_zeta).sum()
-            # + logd_dirichlet_multinomial_mx_sa(self.data.W, self.curr_zeta).sum()
+            + logd_dirichlet_multinomial_mx_sa(self.data.W, self.curr_zeta).sum()
             + logd_gamma_mx_sab(self.curr_zeta, self.priors.zeta.a, self.priors.zeta.b).sum()
             )
+        # self.samples.rho[self.curr_iter] = self.sample_rho(self.curr_zeta)
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -267,11 +248,11 @@ class Chain(BaseSampler):
             os.remove(path)
         
         zeta = self.samples.zeta[nBurn::nThin]
-        rho   = self.samples.rho[nBurn::nThin]
+        # rho   = self.samples.rho[nBurn::nThin]
 
         out = {
             'zetas'  : zeta,
-            'rhos'   : rho,
+            # 'rhos'   : rho,
             'W'      : self.data.W,
             }
         
@@ -322,7 +303,7 @@ class Result(object):
             out = pickle.load(file)
         
         zetas  = out['zetas']
-        rhos   = out['rhos']
+        # rhos   = out['rhos']
 
         self.nSamp = zetas.shape[0]
         self.nDat = out['W'].shape[0]
@@ -335,9 +316,9 @@ class Result(object):
         except KeyError:
             pass
         
-        self.samples = Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples = Samples(self.nSamp, self.nCol) # self.nDat, self.nCol)
         self.samples.zeta = zetas
-        self.samples.rho = rhos
+        # self.samples.rho = rhos
         return 
 
     def __init__(self, path):
@@ -356,8 +337,10 @@ if __name__ == '__main__':
     data = Multinomial(raw)
     model = Chain(data)
     model.sample(200000)
-    model.write_to_disk('./simulated/categorical/result.pkl', 1, 200)
+    model.write_to_disk('./simulated/categorical/result.pkl', 100000, 20)
     res = Result('./simulated/categorical/result.pkl')
+    # print(model.samples.zeta)
+    print(res.samples.zeta.mean(axis = 0))
     raise
 
 # EOF
