@@ -15,6 +15,67 @@ from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data
 from projgamma import GammaPrior
 
+def logd_dirichlet_multinomial_mx_sa(aW, vAlpha):
+    """
+    log-density for Dirichlet-Multinomial;
+    calculates log-density for each observation (aW, axis 0)
+    for one set of shape parameters
+    (use for updating shape parameters per cluster)
+    ----
+    inputs:
+        aW     : (n x d)
+        aAlpha : (d)
+    outputs:
+        logd   : (n)
+    """
+    sa = vAlpha.sum()
+    sw = aW.sum(axis = 1)
+    logd = np.zeros(aW.shape[0])
+    logd += gammaln(sa)
+    logd += gammaln(sw + 1)
+    logd -= gammaln(sw + sa)
+    logd += gammaln(aW + vAlpha[None,:]).sum(axis = 1)
+    logd -= gammaln(vAlpha).sum()
+    logd -= gammaln(aW + 1).sum(axis = 1)
+    return logd
+
+def logd_dirichlet_multinomial_mx_ma(aW, aAlpha):
+    """
+    log-density for Dirichlet-Multinomial;
+    calculates log-density for each observation (aW, axis 0)
+    for each set of shape parameters (aAlpha, axis 0)
+    ----
+    inputs:
+        aW     : (n x d)
+        aAlpha : (j x d)
+    outputs:
+        logd   : (n x j)
+    """
+    sa = aAlpha.sum(axis = 1)
+    sw = aW.sum(axis = 1)
+    logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
+    logd += gammaln(sa)[None,:]
+    logd += gammaln(sw + 1)[:,None]
+    logd -= gammaln(sw[:, None] + sa[None,:])
+    logd += gammaln(aW[:,None,:] + aAlpha[None,:,:]).sum(axis = 2)
+    logd -= gammaln(aAlpha).sum(axis = 1)[None,:]
+    logd -= gammaln(aW + 1).sum(axis = 1)[:, None]
+    return logd
+
+def logd_dirichlet_multinomial_paired(x, alpha):
+    """
+    log-density for Dirichlet-Multinomial
+    calculates log-density for each observation/shape parameter pair
+    ---
+    inputs:
+        
+    """
+    sa = alpha.sum(axis = 1)
+    sx = x.sum(axis = 1)
+    logd = np.zeros(x.shape[0])
+    logd += gammaln(sa)
+    logd += gammaln(sx + 1)
+
 
 def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
     """
