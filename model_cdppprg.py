@@ -54,12 +54,14 @@ def logd_dirichlet_multinomial_mx_ma(aW, aAlpha):
     sa = aAlpha.sum(axis = 1)
     sw = aW.sum(axis = 1)
     logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
-    logd += gammaln(sa)[None,:]
-    logd += gammaln(sw + 1)[:,None]
-    logd -= gammaln(sw[:, None] + sa[None,:])
-    logd += gammaln(aW[:,None,:] + aAlpha[None,:,:]).sum(axis = 2)
-    logd -= gammaln(aAlpha).sum(axis = 1)[None,:]
-    logd -= gammaln(aW + 1).sum(axis = 1)[:, None]
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += gammaln(sa)[None,:]
+        logd += gammaln(sw + 1)[:,None]
+        logd -= gammaln(sw[:, None] + sa[None,:])
+        logd += gammaln(aW[:,None,:] + aAlpha[None,:,:]).sum(axis = 2)
+        logd -= gammaln(aAlpha).sum(axis = 1)[None,:]
+        logd -= gammaln(aW + 1).sum(axis = 1)[:, None]
+    np.nan_to_num(logd, False, -np.inf)
     return logd
 
 def logd_dirichlet_multinomial_paired(aW, aAlpha):
@@ -89,7 +91,7 @@ def logd_CDM_mx_sa(aW, vAlpha, spheres):
     return logd
 
 def logd_CDM_mx_ma(aW, aAlpha, spheres):
-    logd = np.zeros(aW.shape[0], aAlpha.shape[0])
+    logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
     for sphere in spheres:
         logd += logd_dirichlet_multinomial_mx_ma(aW.T[sphere].T, aAlpha.T[sphere].T)
     return logd
@@ -164,7 +166,7 @@ def update_zeta_j_wrapper(args):
     for i in range(curr_zeta.shape[0]):
         prop_log_zeta[i] += offset[i]
         logp += logd_CDM_mx_ma(Ws, np.exp(np.vstack((curr_log_zeta, prop_log_zeta))),spheres).sum(axis = 0)
-        logp += logd_loggamma_mx(np.vstack((curr_log_zeta[i], prop_log_zeta[i])), alpha[i], beta[i])
+        logp += logd_loggamma_mx(np.vstack((curr_log_zeta[i], prop_log_zeta[i])), alpha[i], beta[i]).ravel()
         if lunifs[i] < logp[1] - logp[0]: # if accept, then set current to new value
             curr_log_zeta[i] = prop_log_zeta[i]
         else:                             # otherwise, set proposal to current
@@ -296,16 +298,16 @@ class Chain(DirichletProcessSampler):
 
         self.curr_iter += 1
         # calculate log-likelihood under extant and candidate clusters
-        log_likelihood = logd_CDM_mx_ma(self.data.aW, zeta, self.spheres)
+        log_likelihood = logd_CDM_mx_ma(self.data.W, zeta, self.spheres)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs = uniform(size = self.nDat)
         # sample new cluster membership indicators)
         delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
         # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
-        delta, zeta, sigma = self.clean_delta_zeta(delta, zeta, sigma)
+        delta, zeta = self.clean_delta_zeta(delta, zeta)
         self.samples.delta[self.curr_iter] = delta
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
-                zeta, self.curr_r, self.curr_delta, alpha, beta,
+                zeta, self.curr_delta, alpha, beta,
                 )
         self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
         self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
@@ -337,6 +339,7 @@ class Chain(DirichletProcessSampler):
             'nCol'   : self.nCol,
             'nDat'   : self.nDat,
             'W'      : self.data.W,
+            'cats'   : self.data.Cats,
             'spheres': self.data.spheres,
             }
         
@@ -348,10 +351,6 @@ class Chain(DirichletProcessSampler):
         with open(path, 'wb') as file:
             pickle.dump(out, file)
 
-        return
-
-    def set_projection(self):
-        self.data.Yp = (self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)).T
         return
 
     def __init__(
@@ -368,8 +367,11 @@ class Chain(DirichletProcessSampler):
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
+        self.spheres = self.data.spheres
+        # su = np.array([sphere[0] for sphere in self.spheres])
+        # self.sigma_unity = np.zeros(self.nCol, dtype = int)
+        # self.sigma_unity[su] = 1
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
-        self.set_projection()
         return
 
 class Result(object):
@@ -384,19 +386,10 @@ class Result(object):
                 scale = 1. / self.samples.beta[s],
                 size = (m, self.nCol),
                 )
-            new_sigmas = np.hstack((
-                np.ones((m, 1)),
-                gamma(
-                    shape = self.samples.xi[s],
-                    scale = self.samples.tau[s],
-                    size = (m, self.nCol - 1),
-                    ),
-                ))
             prob = ljs / ljs.sum()
             deltas = generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
-            sigma = np.vstack((self.samples.sigma[s], new_sigmas))[deltas]
-            new_gammas.append(gamma(shape = zeta, scale = 1 / sigma))
+            new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10):
@@ -422,61 +415,45 @@ class Result(object):
         deltas = out['deltas']
         etas   = out['etas']
         zetas  = out['zetas']
-        sigmas = out['sigmas']
         alphas = out['alphas']
         betas  = out['betas']
-        xis    = out['xis']
-        taus   = out['taus']
-        rs     = out['rs']
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
         self.nCol  = alphas.shape[1]
 
-        self.V = out['V']
+        self.data = Multinomial(out['W'], out['cats'])
+        self.spheres = out['spheres']
         try:
-            self.Y = out['Y']
+            self.data.fill_outcome(out['Y'])
         except KeyError:
             pass
+        
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
         self.samples.eta   = etas
         self.samples.alpha = alphas
         self.samples.beta  = betas
-        self.samples.xi    = xis
-        self.samples.tau   = taus
         self.samples.zeta  = [
             zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)
             ]
-        self.samples.sigma = [
-            sigmas[np.where(sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)
-            ]
-        self.samples.r     = rs
         return
 
     def __init__(self, path):
         self.load_data(path)
         return
 
-# EOF
-
 if __name__ == '__main__':
-    pass
-    # from data import Data_From_Raw
-    # from projgamma import GammaPrior
-    # from pandas import read_csv
-    # import os
-
-    # raw = read_csv('./datasets/ivt_nov_mar.csv')
-    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    # data.write_empirical('./test/empirical.csv')
-    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    # model.sample(4000)
-    # model.write_to_disk('./test/results.pickle', 2000, 2)
-    # res = Result('./test/results.pickle')
-    # res.write_posterior_predictive('./test/postpred.csv')
+    from data import Multinomial
+    from pandas import read_csv
+    import os
+    raw = read_csv('./simulated/categorical/test.csv').values
+    data = Multinomial(raw,np.array([2,2], dtype = int))
+    model = Chain(data)
+    model.sample(50000)
+    model.write_to_disk('./simulated/categorical/results.pkl', 20000, 30)
+    res = Result('./simulated/categorical/results.pkl')
+    res.write_posterior_predictive('./simulated/categorical/postpred.csv')
     # EOL
-
-
 
 # EOF 2

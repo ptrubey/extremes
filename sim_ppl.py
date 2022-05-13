@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 import sqlite3 as sql
 import os
-import data
 import glob
 from numpy.random import gamma, choice
 from collections import namedtuple
@@ -46,18 +45,20 @@ if __name__ == '__main__':
     args = argparser()
     paths = glob.glob(os.path.join(args.path,'sim_*'))
     # model_types = ['dphpg','dphprg','dphprgln','dppn','vhpg']
-    model_types = ['dpppg','dppprg','dpppgln','dppprgln','dppn','vppg']
+    # model_types = ['dpppg','dppprg','dpppgln','dppprgln','dppn','vppg']
+    model_types = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
     models = []
-    gens   = []
+    # gens   = []
 
     for path in paths:
         for model_type in model_types:
-            mm = glob.glob(os.path.join(path, model_type, 'results*.db'))
+            mm = glob.glob(os.path.join(path, 'results_{}*.pkl'.format(model_type)))
+            # mm = glob.glob(os.path.join(path, model_type, 'results*.db'))
             for m in mm:
                 models.append((model_type, m))
-        gg = glob.glob(os.path.join(path, 'data.db'))
-        for g in gg:
-            gens.append(g)
+        # gg = glob.glob(os.path.join(path, 'data.db'))
+        # for g in gg:
+            # gens.append(g)
 
     pplrs = []
     for model in models:

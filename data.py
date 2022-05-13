@@ -239,33 +239,59 @@ class Data_From_Sphere(Data, Outcome):
 class Multinomial(Data, Outcome):
     Cats = None  # numpy array indicating number of categories per multinomial variable
     nCat = None  # total number of categories (sum of Cats)
+    spheres = None # For each variable, np.array(int) that identifies which 
+                   #    columns are associated with that var.
 
     def fill_multinomial(self, raw, cats = None):
-        if cats is not None:
-            self.W = raw
-            self.Cats = cats
-            self.nCat = self.Cats.sum()
-        else:
-            self.W = raw
-            self.Cats = np.array([raw.shape[1]])
-            self.nCat = self.Cats.sum()
+        if cats is None:
+            cats = np.array([raw.shape[1]])
+        self.W = raw
+        self.Cats = cats
+        self.nCat = self.Cats.sum()
+        arr = np.hstack([np.ones(cat, dtype = int) * i for i, cat in enumerate(self.Cats)])
+        self.spheres = [np.where(arr == i)[0] for i in range(arr.max() + 1)]
         
         assert self.nCat == self.W.shape[1]
         self.nCol = self.nCat
         self.nDat = self.W.shape[0]
         return
     
-    def __init__(self, raw, values = None, index = None, outcome = 'None'):
-        self.fill_multinomial(raw)
+    def __init__(self, raw, cats, index = None, outcome = 'None'):
+        if index is None:
+            index = np.arange(raw.shape[0])
+        self.fill_multinomial(raw[index], cats)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
 
-class Categorical(Data, Outcome):
+class Categorical(Multinomial, Outcome):
     Cats = None    # numpy array indicating number of categories per categorical variable
     nCat = None    # Total number of categories (sum of Cats)
 
     def fill_categorical(self, raw, values, index):
+        # If values are supplied, verify that all values in data
+        # are represented in supplied.
+        if values is not None:
+            assert len(values) == raw.shape[1]
+            for i in range(raw.shape[1]):
+                assert len(set(raw.T[i]).difference(set(values[i]))) == 0
+        else:
+            values = [np.unique(raw.T[i]) for i in range(raw.shape[1])]
+        
+        if index is None:
+            index = np.arange(raw.shape[0])
+
+        dummies = []
+        cats = []
+        for i in range(raw.shape[1]):
+            dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
+            cats.append(len(values[i]))
+        W = np.vstack(dummies).T[index]
+        self.fill_multinomial(W, np.array(cats))
+        return
+    
+    # deprecated--will be deleted
+    def fill_categorical_old(self, raw, values, index):
         # If values are supplied, verify that all values in data
         # are represented in supplied.
         if values is not None:

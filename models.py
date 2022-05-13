@@ -4,6 +4,7 @@ import model_sdppprgln as sdppprgln
 import model_sdpppgln as sdpppgln
 import model_mdppprg as mdppprg
 import model_mdpppg as mdpppg
+import model_cdppprg as cdppprg
 
 ## Real Data
 RealResults = {
@@ -29,7 +30,16 @@ MixedChains = {
     'mdpppg'   : mdpppg.Chain,
     }
 
-Results = {**MixedResults, **RealResults}
-Chains  = {**MixedChains,  **RealChains}
+## Categorical Data
+CategoricalResults = {
+    'cdppprg'  : cdppprg.Result,
+    }
+CategoricalChains = {
+    'cdppprg'  : cdppprg.Chain,
+    }
+
+
+Results = {**MixedResults, **RealResults, **CategoricalResults}
+Chains  = {**MixedChains,  **RealChains,  **CategoricalChains}
 
 # EOF

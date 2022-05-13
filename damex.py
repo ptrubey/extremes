@@ -3,10 +3,7 @@ import pandas as pd
 from argparser import argparser_damex as argparser
 from collections import defaultdict
 from models import Results
-from models_mpi import Results as Results_mpi
 from data import Data_From_Raw
-
-ResultDict = {**Results, **Results_mpi}
 
 class DAMEX_Vanilla(object):
     """ Implements the DAMEX algorithm of Goix et al """
