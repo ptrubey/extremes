@@ -356,7 +356,7 @@ class Chain(DirichletProcessSampler):
     def __init__(
             self,
             data,
-            prior_eta   = GammaPrior(2., 0.5),
+            prior_eta   = GammaPrior(2., 1.),
             prior_alpha = GammaPrior(0.5, 0.5),
             prior_beta  = GammaPrior(2., 2.),
             p           = 10,
@@ -443,17 +443,26 @@ class Result(object):
         self.load_data(path)
         return
 
-if __name__ == '__main__':
-    from data import Multinomial
-    from pandas import read_csv
-    import os
-    raw = read_csv('./simulated/categorical/test.csv').values
-    data = Multinomial(raw,np.array([2,2], dtype = int))
-    model = Chain(data)
-    model.sample(50000)
-    model.write_to_disk('./simulated/categorical/results.pkl', 20000, 30)
-    res = Result('./simulated/categorical/results.pkl')
-    res.write_posterior_predictive('./simulated/categorical/postpred.csv')
-    # EOL
+def argparser():
+    from argparse import ArgumentParser
+    p = ArgumentParser()
+    p.add_argument('in_path')
+    p.add_argument('out_path')
+    p.add_argument('cats')
+    p.add_argument('--nSamp', default = 20000)
+    p.add_argument('--nKeep', default = 10000)
+    p.add_argument('--nThin', default = 5)
+    return p.parse_args()
 
-# EOF 2
+if __name__ == '__main__':
+    p = argparser()
+    from data import Multinomial
+    from pandas import read_csv 
+    import os
+    raw = read_csv(p.in_path).values
+    data = Multinomial(raw, np.array(eval(p.cats), dtype = int))
+    model = Chain(data)
+    model.sample(p.nSamp)
+    model.write_to_disk(p.out_path, p.nKeep, p.nThin)
+
+# EOF
