@@ -8,7 +8,9 @@ import os
 import pickle
 from math import log, exp
 from scipy.special import gammaln
+from multiprocessing import Pool
 
+from energy import limit_cpu
 from cUtility import diriproc_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
@@ -274,7 +276,7 @@ class Chain(DirichletProcessSampler):
         Ws = [self.data.W[delta == i] for i in range(delta.max() + 1)]
         # curr_zeta, Ws, alpha, beta, spheres = args
         args = zip(curr_zeta, Ws, repeat(alpha), repeat(beta), repeat(self.data.spheres))
-        res = map(update_zeta_j_wrapper, args)
+        res = self.pool.map(update_zeta_j_wrapper, args)
         return np.array(list(res))
     
     def initialize_sampler(self, ns):
@@ -372,6 +374,7 @@ class Chain(DirichletProcessSampler):
         # self.sigma_unity = np.zeros(self.nCol, dtype = int)
         # self.sigma_unity[su] = 1
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
+        self.pool = Pool(processes = 8, initializer =  limit_cpu)
         return
 
 class Result(object):
