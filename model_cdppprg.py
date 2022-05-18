@@ -86,22 +86,74 @@ def logd_dirichlet_multinomial_paired(aW, aAlpha):
     logd -= gammaln(aW + 1).sum(axis = 1)
     return logd
 
-def logd_CDM_mx_sa(aW, vAlpha, spheres):
+def logd_CDM_mx_sa_old(aW, vAlpha, spheres):
     logd = np.zeros(aW.shape[0])
     for sphere in spheres:
         logd += logd_dirichlet_multinomial_mx_sa(aW.T[sphere].T, vAlpha[sphere])
     return logd
 
-def logd_CDM_mx_ma(aW, aAlpha, spheres):
+def logd_CDM_mx_ma_old(aW, aAlpha, spheres):
     logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
     for sphere in spheres:
         logd += logd_dirichlet_multinomial_mx_ma(aW.T[sphere].T, aAlpha.T[sphere].T)
     return logd
 
-def logd_CDM_paired(aW, aAlpha, spheres):
+def logd_CDM_paired_old(aW, aAlpha, spheres):
     logd = np.zeros(aW.shape[0])
     for sphere in spheres:
         logd += logd_dirichlet_multinomial_paired(aW.T[sphere].T, aAlpha.T[sphere].T)
+    return logd
+
+def logd_CDM_mx_sa(aW, vAlpha, sphere_mat):
+    sa = np.einsum('d,cd->c', vAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros(aW.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += gammaln(sa).sum()
+        logd += np.einsum('nc->n', gammaln(sw + 1))
+        logd -= np.einsum('nc->n', gammaln(sw + sa[None,:]))
+        logd += np.einsum('nd->n', gammaln(aW + vAlpha[None,:]))
+        logd -= gammaln(vAlpha).sum()
+        logd -= np.einsum('nd->n', gammaln(aW + 1))
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def logd_CDM_mx_ma(aW, aAlpha, sphere_mat):
+    """
+    Log-density of concatenated Dirichlet-Multinomial distribution
+    ---
+    Inputs: 
+        aW         (n x d)
+        aAlpha     (j x d)
+        sphere_mat (c x d)
+    Output:
+        logd (n x j)
+    """
+    sa = np.einsum('jd,cd->jc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('jc->j', gammaln(sa))[None,:]
+        logd += np.einsum('nc->n', gammaln(sw + 1))[:,None]
+        logd -= np.einsum('njc->nj', gammaln(sw[:,None,:] + sa[None,:,:]))
+        logd += np.einsum('njd->nj', gammaln(aW[:,None,:] + aAlpha[None,:,:]))
+        logd -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[:,None]
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def logd_CDM_paired(aW, aAlpha, sphere_mat):
+    sa = np.einsum('nd,cd->nc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros(aW.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('nc->n', gammaln(sa))
+        logd += np.einsum('nc->n', gammaln(sw + 1))
+        logd -= np.einsum('nc->n', gammaln(sw + sa))
+        logd += np.einsum('nd->n', gammaln(aW + aAlpha))
+        logd -= np.einsum('nd->n', gammaln(aAlpha))
+        logd -= np.einsum('nd->n', gammaln(aW + 1))
+    np.nan_to_num(logd, False, -np.inf)
     return logd
 
 def logd_loggamma_single(x, a, b):
@@ -130,17 +182,17 @@ def update_zeta_j_wrapper_old(args):
             beta      (d)
             spheres   (tuple of integer arrays)
     """
-    curr_zeta, Ws, alpha, beta, spheres = args
+    curr_zeta, Ws, alpha, beta, sphere_mat = args
     curr_log_zeta = np.log(curr_zeta)
     prop_log_zeta = curr_log_zeta + normal(scale = 0.3, size = curr_zeta.shape)
     eval_log_zeta = curr_log_zeta.copy()
     lunifs = np.log(uniform(size = curr_zeta.shape))
     logp = np.zeros(2)
     for i in range(curr_zeta.shape[0]):
-        logp[0] += logd_CDM_mx_sa(Ws, np.exp(eval_log_zeta), spheres).sum()
+        logp[0] += logd_CDM_mx_sa(Ws, np.exp(eval_log_zeta), sphere_mat).sum()
         logp[0] += logd_loggamma_single(eval_log_zeta[i], alpha[i], beta[i])
         eval_log_zeta[i] = prop_log_zeta[i]
-        logp[1] += logd_CDM_mx_sa(Ws, np.exp(eval_log_zeta), spheres).sum()
+        logp[1] += logd_CDM_mx_sa(Ws, np.exp(eval_log_zeta), sphere_mat).sum()
         logp[1] += logd_loggamma_single(eval_log_zeta[i], alpha[i], beta[i])
         if lunifs[i] < logp[1] - logp[0]:
             pass
@@ -153,13 +205,13 @@ def update_zeta_j_wrapper(args):
     """
     Args:
         args (tuple):
-            curr_zeta (d)
-            Ws        (n x d)
-            alpha     (d)
-            beta      (d)
-            spheres   (tuple of integer arrays)
+            curr_zeta  (d)
+            Ws         (n x d)
+            alpha      (d)
+            beta       (d)
+            sphere_mat (tuple of integer arrays)
     """
-    curr_zeta, Ws, alpha, beta, spheres = args
+    curr_zeta, Ws, alpha, beta, sphere_mat = args
     curr_log_zeta = np.log(curr_zeta)
     prop_log_zeta = curr_log_zeta.copy()
     offset = normal(scale = 0.3, size = curr_zeta.shape)
@@ -167,7 +219,7 @@ def update_zeta_j_wrapper(args):
     logp = np.zeros(2)
     for i in range(curr_zeta.shape[0]):
         prop_log_zeta[i] += offset[i]
-        logp += logd_CDM_mx_ma(Ws, np.exp(np.vstack((curr_log_zeta, prop_log_zeta))),spheres).sum(axis = 0)
+        logp += logd_CDM_mx_ma(Ws, np.exp(np.vstack((curr_log_zeta, prop_log_zeta))), sphere_mat).sum(axis = 0)
         logp += logd_loggamma_mx(np.vstack((curr_log_zeta[i], prop_log_zeta[i])), alpha[i], beta[i]).ravel()
         if lunifs[i] < logp[1] - logp[0]: # if accept, then set current to new value
             curr_log_zeta[i] = prop_log_zeta[i]
@@ -275,7 +327,7 @@ class Chain(DirichletProcessSampler):
     def sample_zeta(self, curr_zeta, delta, alpha, beta):
         Ws = [self.data.W[delta == i] for i in range(delta.max() + 1)]
         # curr_zeta, Ws, alpha, beta, spheres = args
-        args = zip(curr_zeta, Ws, repeat(alpha), repeat(beta), repeat(self.data.spheres))
+        args = zip(curr_zeta, Ws, repeat(alpha), repeat(beta), repeat(self.sphere_mat))
         res = self.pool.map(update_zeta_j_wrapper, args)
         return np.array(list(res))
     
@@ -300,7 +352,7 @@ class Chain(DirichletProcessSampler):
 
         self.curr_iter += 1
         # calculate log-likelihood under extant and candidate clusters
-        log_likelihood = logd_CDM_mx_ma(self.data.W, zeta, self.spheres)
+        log_likelihood = logd_CDM_mx_ma(self.data.W, zeta, self.sphere_mat)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs = uniform(size = self.nDat)
         # sample new cluster membership indicators)
@@ -370,6 +422,9 @@ class Chain(DirichletProcessSampler):
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
         self.spheres = self.data.spheres
+        self.sphere_mat = np.zeros((len(self.spheres), self.nCol))
+        for i, sphere in enumerate(self.spheres):
+            self.sphere_mat[i][sphere] = True
         # su = np.array([sphere[0] for sphere in self.spheres])
         # self.sigma_unity = np.zeros(self.nCol, dtype = int)
         # self.sigma_unity[su] = 1
@@ -427,6 +482,10 @@ class Result(object):
 
         self.data = Multinomial(out['W'], out['cats'])
         self.spheres = out['spheres']
+        self.sphere_mat = np.zeros((len(self.spheres), self.nCol))
+        for i, sphere in enumerate(self.spheres):
+            self.sphere_mat[i][sphere] = True
+        
         try:
             self.data.fill_outcome(out['Y'])
         except KeyError:
