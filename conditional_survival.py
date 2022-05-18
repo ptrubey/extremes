@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
-import glob, os
-from collections import defaultdict
+import multiprocessing as mp
+import os
 from itertools import repeat
+
 from energy import limit_cpu
 from data import Data_From_Raw, scale_pareto, descale_pareto
-# from argparser import argparser_cs as argparser
-import models, models_mpi
+from models import Results 
 
 def condsurv_at_w(args):
     """args = (new_dims, new_vec, given_dims, given_vec, postpred)"""
@@ -133,8 +133,6 @@ class Conditional_Survival(object):
 
     pass
 
-Results = {**models.Results, **models_mpi.Results}
-
 def ResultFactory(model_type, fitted_path, raw_path):
     class Result(Results[model_type], Conditional_Survival):
         pass
@@ -144,20 +142,8 @@ def ResultFactory(model_type, fitted_path, raw_path):
     return result
 
 if __name__ == '__main__':
-    # args = argparser()
-    # model_types = sorted(Results.keys())
-    # models = []
-    # for model_type in model_types:
-    #     mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
-    #     for m in mm:
-    #           models.append((model_type, m))
-
-    # for model in models:
-    #     pass
-    # fitted_path = "./output/dphprg/results_2_1e-1.db"
     fitted_path = "./output/dppprg/results_2_1e-1.db"
     raw_path    = "./datasets/ivt_nov_mar.csv"
-    # model_type  = "dphprg"
     model_type = 'dppprg'
 
     r = ResultFactory(model_type, fitted_path, raw_path)

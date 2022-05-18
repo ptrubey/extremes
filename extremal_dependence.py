@@ -3,14 +3,8 @@ import glob
 import numpy as np
 import pandas as pd
 from collections import namedtuple
-from multiprocessing import Pool
-
-import models as mvan
-import models_mpi as mmpi
-from argparser import argparser_ppl as argparser
+from models import Results
 from cUtility import find_neighbors, cluster_size_summary
-
-Results = {**mvan.Results, **mmpi.Results}
 
 def chi_ij(Vs):
     return ((Vs / Vs.mean(axis = 0)).min(axis = 1)).mean()
