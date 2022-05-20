@@ -295,7 +295,7 @@ class Chain(DirichletProcessSampler):
         return delta, zeta[keep]
 
     def sample_zeta_new(self, alpha, beta, m):
-        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCol))
+        return gamma(shape = alpha, scale = 1/beta, size = (m, self.nCat))
 
     def sample_alpha(self, zeta, curr_alpha):
         n    = zeta.shape[0]
@@ -332,10 +332,10 @@ class Chain(DirichletProcessSampler):
         return np.array(list(res))
     
     def initialize_sampler(self, ns):
-        self.samples = Samples(ns, self.nDat, self.nCol)
+        self.samples = Samples(ns, self.nDat, self.nCat)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
-        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCol))
+        self.samples.zeta[0] = gamma(shape = 2., scale = 2., size = (self.max_clust_count - 30, self.nCat))
         self.samples.eta[0] = 40.
         self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
         self.samples.delta[0][-1] = np.arange(self.max_clust_count - 30)[-1]
@@ -390,7 +390,7 @@ class Chain(DirichletProcessSampler):
             'betas'  : betas,
             'deltas' : deltas,
             'etas'   : etas,
-            'nCol'   : self.nCol,
+            'nCat'   : self.nCat,
             'nDat'   : self.nDat,
             'W'      : self.data.W,
             'cats'   : self.data.Cats,
@@ -419,14 +419,14 @@ class Chain(DirichletProcessSampler):
         self.data = data
         self.max_clust_count = max_clust_count
         self.p = p
-        self.nCol = self.data.nCol
+        self.nCat = self.data.nCat
         self.nDat = self.data.nDat
         self.spheres = self.data.spheres
-        self.sphere_mat = np.zeros((len(self.spheres), self.nCol))
+        self.sphere_mat = np.zeros((len(self.spheres), self.nCat))
         for i, sphere in enumerate(self.spheres):
             self.sphere_mat[i][sphere] = True
         # su = np.array([sphere[0] for sphere in self.spheres])
-        # self.sigma_unity = np.zeros(self.nCol, dtype = int)
+        # self.sigma_unity = np.zeros(self.nCat, dtype = int)
         # self.sigma_unity[su] = 1
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.pool = Pool(processes = 8, initializer =  limit_cpu)
@@ -442,7 +442,7 @@ class Result(object):
             new_zetas = gamma(
                 shape = self.samples.alpha[s],
                 scale = 1. / self.samples.beta[s],
-                size = (m, self.nCol),
+                size = (m, self.nCat),
                 )
             prob = ljs / ljs.sum()
             deltas = generate_indices(prob, n_per_sample)
@@ -461,7 +461,7 @@ class Result(object):
     def write_posterior_predictive(self, path, n_per_sample = 1):
         thetas = pd.DataFrame(
                 self.generate_posterior_predictive_angular(n_per_sample),
-                columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
+                columns = ['theta_{}'.format(i) for i in range(1, self.nCat)],
                 )
         thetas.to_csv(path, index = False)
         return
@@ -478,11 +478,11 @@ class Result(object):
 
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
-        self.nCol  = alphas.shape[1]
+        self.nCat  = alphas.shape[1]
 
         self.data = Multinomial(out['W'], out['cats'])
         self.spheres = out['spheres']
-        self.sphere_mat = np.zeros((len(self.spheres), self.nCol))
+        self.sphere_mat = np.zeros((len(self.spheres), self.nCat))
         for i, sphere in enumerate(self.spheres):
             self.sphere_mat[i][sphere] = True
         
@@ -491,7 +491,7 @@ class Result(object):
         except KeyError:
             pass
         
-        self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples       = Samples(self.nSamp, self.nDat, self.nCat)
         self.samples.delta = deltas
         self.samples.eta   = etas
         self.samples.alpha = alphas
@@ -517,7 +517,23 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    p = argparser()
+    # p = argparser()
+
+    class Heap(object):
+        def __init__(self, **kwargs):
+            self.__dict__.update(**kwargs)
+            return
+
+    d = {
+        'in_path'  : './simulated/categorical/test22.csv',
+        'out_path' : './simulated/categorical/results_test22.pkl',
+        'cats'     : '[2,2]',
+        'nSamp'    : 20000,
+        'nKeep'    : 10000,
+        'nThin'    : 5,
+        }
+    p = Heap(**d)
+
     from data import Multinomial
     from pandas import read_csv 
     import os

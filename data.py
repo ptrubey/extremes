@@ -252,7 +252,6 @@ class Multinomial(Data, Outcome):
         self.spheres = [np.where(arr == i)[0] for i in range(arr.max() + 1)]
         
         assert self.nCat == self.W.shape[1]
-        self.nCol = self.nCat
         self.nDat = self.W.shape[0]
         return
     
@@ -321,8 +320,16 @@ class Categorical(Multinomial, Outcome):
             self.fill_outcome(outcome)
         return
 
-class MixedData(Data_From_Raw, Data_From_Sphere, Categorical, Outcome):
-    def __init__(self, raw, cat_vars, sphere = False,
+class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
+    def __init__(self, raw_sphere, raw_multinomial, cats = None, outcome = 'None'):
+        self.fill_sphere(raw_sphere)
+        self.fill_multinomial(raw_multinomial, cats)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
+        return
+
+class MixedData(MixedDataBase, Data_From_Raw, Categorical, Outcome):
+    def __init__(self, raw, cat_vars = [], sphere = False,
             decluster = False, quantile = 0.95, values = None,
             outcome = 'None',
             ):

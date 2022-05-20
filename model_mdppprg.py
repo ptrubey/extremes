@@ -1,3 +1,4 @@
+from re import M
 from numpy.random import choice, gamma, beta, uniform, normal
 from collections import namedtuple
 from itertools import repeat, chain
@@ -15,91 +16,60 @@ from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from cUtility import diriproc_cluster_sampler
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
 from projgamma import GammaPrior
-from model_mdpppg import BaseData, log_post_log_zeta_1
+from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_loggamma_mx
+from model_sdpppg import dprodgamma_log_my_mt
 
-# from multiprocessing import Pool
-# from energy import limit_cpu
+from multiprocessing import Pool
+from energy import limit_cpu
 
-def dprojresgamma_log_my_mt(aY, aAlpha):
-    """
-    projected restricted Gamma log-density for a single projection.
-    ----
-    aY     : array of Y     (n x d)
-    aAlpha : array of alpha (J x d)
-    ----
-    return : array of ld    (n x J)
-    """
-    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
-    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))
-    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
-    out -= np.einsum(
-        'j,n->nj', np.einsum('jd->j', aAlpha), np.einsum('nd->n', aY),
-        )
-    return out
+def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
+    """ Update routine for zeta on categorical/multinomial data """
+    curr_log_zeta = np.log(curr_zeta)
+    prop_log_zeta = curr_log_zeta.copy()
+    offset = normal(scale = 0.3, size = curr_zeta.shape)
+    lunifs = np.log(uniform(size = curr_zeta.shape))
+    logp = np.zeros(2)
+    for i in range(curr_zeta.shape[0]):
+        prop_log_zeta[i] += offset[i]
+        logp += logd_CDM_mx_ma(
+            Ws, 
+            np.exp(np.vstack((curr_log_zeta, prop_log_zeta))), 
+            catmat,
+            ).sum(axis = 0)
+        logp += logd_loggamma_mx(
+            np.vstack((curr_log_zeta[i], prop_log_zeta[i])), 
+            alpha[i], beta[i],
+            ).ravel()
+        if lunifs[i] < logp[1] - logp[0]:
+            curr_log_zeta[i] = prop_log_zeta[i]
+        else:
+            prop_log_zeta[i] = curr_log_zeta[i]
+        logp[:] = 0.
+    return np.exp(curr_log_zeta)
 
-def dprgmultinom_log_mw_mt(aW, aAlpha):
-    """
-    projected restricted Gamma Multinomial distribution.
-    ---
-    aW     : array of W     (n x d)
-    aAlpha : array of alpha (J x d)
-    ---
-    return : array of ld (n x j)
-    """
-    out = np.zeros((aW.shape[0], aAlpha.shape[0]))
-    out += gammaln(np.einsum('jd->j', aAlpha))[None,:]
-    out += gammaln(np.einsum('nd->n', aW))[:,None]
-    out -= gammaln(
-        + np.einsum('nd->n', aW)[:, None] 
-        + np.einsum('jd->j', aAlpha)[None,:]
-        )
-    out += np.einsum('njd->nj', gammaln(aW[:,None,:] + aAlpha[None,:,:]))
-    out -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
-    out -= np.einsum('nd->n', gammaln(aW + 1))[:,None]
-    return out
-
-def dprgmultinom_log_mw_mt_(aW, aAlpha):
-    pass
-    n = np.einsum('nd->n', aW)      # (n)
-    a0 = np.einsum('jd->j', aAlpha) # (j)
-    out = np.zeros((aW.shape[0], aAlpha.shape[0]))
-    out += np.log(n)
-    out += betaln(a0[None,:], n[:,None])
-    #out -= (aW * betaln(aAlpha, aW)
-
-
-def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
-    """
-    Product of Gammas log-density for multiple Y, multiple theta (not paired)
-    ----
-    aY     : array of Y     (n x d)
-    aAlpha : array of alpha (J x d)
-    aBeta  : array of beta  (J x d)
-    ----
-    return : array of ld    (n x J)
-    """
-    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
-    out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
-    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
-    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(-beta y)
-    return out
+def update_zeta_j_sph(curr_zeta, n, sY, slY, alpha, beta):
+    """ Update routine for zeta on spherical data """
+    prop_zeta = np.empty(curr_zeta.shape)
+    for l in range(curr_zeta.shape):
+        prop_zeta[l] = sample_alpha_1_mh_summary(
+            curr_zeta[l], n, sY[l], slY[l], alpha[l], beta[l]
+            )
+    return prop_zeta
 
 def update_zeta_j_wrapper(args):
     # parse arguments
-    curr_zeta_j, n_j, Y_js, lY_js, alpha, beta = args
+    curr_zeta_j, nj, sYj, slYj, Ws, alpha, beta, ncol, catmat = args
     prop_zeta_j = np.empty(curr_zeta_j.shape)
-    # iterate through zeta sampling
-    for i in range(curr_zeta_j.shape[0]):
-        prop_zeta_j[i] = sample_alpha_1_mh_summary(
-            curr_zeta_j[i], n_j, Y_js[i], lY_js[i], alpha[i], beta[i]
-            )
+    prop_zeta_j[:ncol] = update_zeta_j_sph(
+        curr_zeta_j[:ncol], nj, sYj, slYj, alpha[:ncol], beta[:ncol]
+        )
+    prop_zeta_j[ncol:] = update_zeta_j_cat(
+        curr_zeta_j[ncol:], Ws, alpha[ncol:], beta[ncol:], catmat
+        )
     return prop_zeta_j
 
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
-
 
 Prior = namedtuple('Prior', 'eta alpha beta')
 
@@ -132,9 +102,6 @@ class Samples(object):
 
 class Chain(DirichletProcessSampler):
     @property
-    def curr_rho(self):
-        return self.samples.rho[self.curr_iter]
-    @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
     @property
@@ -153,34 +120,19 @@ class Chain(DirichletProcessSampler):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
 
-    def sample_delta_i(self, curr_cluster_state, cand_cluster_state, eta, 
-                                        log_likelihood_i, delta_i, p, scratch):
-        scratch[:] = 0
-        curr_cluster_state[delta_i] -= 1
-        scratch += curr_cluster_state
-        scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + 1e-9))
-        with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            np.log(scratch, out = scratch)
-        # scratch += np.log(curr_cluster_state + cand_cluster_state * eta / cand_cluster_state.sum())
-        scratch += log_likelihood_i
-        np.nan_to_num(scratch, False, -np.inf)
-        scratch -= scratch.max()
-        with np.errstate(under = 'ignore'):
-            np.exp(scratch, out = scratch)
-        np.cumsum(scratch, out = scratch)
-        delta_i = np.searchsorted(scratch, p * scratch[-1])
-        curr_cluster_state[delta_i] += 1
-        cand_cluster_state[delta_i] = False
-        return delta_i
-    
     def clean_delta_zeta(self, delta, zeta):
         """
-        delta : cluster indicator vector (n)
-        zeta  : cluster parameter matrix (J* x d)
+        Find populated clusters, re-index them, 
+        keep only parameters associated with extant clusters
+        ---
+        inputs:
+            delta : cluster indicator vector (n)
+            zeta  : cluster parameter matrix (J x d)
+        outputs:
+            delta : cluster indicator vector (n)
+            zeta  : cluster parameter matrix (J* x d)
         """
-        # which clusters are populated
-        # keep = np.bincounts(delta) > 0 
-        # reindex those clusters
+        # Find populated clusters, re-index them
         keep, delta[:] = np.unique(delta, return_inverse = True)
         # return new indices, cluster parameters associated with populated clusters
         return delta, zeta[keep]
@@ -206,28 +158,12 @@ class Chain(DirichletProcessSampler):
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
         beta = gamma(shape = As, scale = 1/Bs)
-        beta[beta < 1e-9] = 1e-9
         return beta
 
     def sample_r(self, delta, zeta):
-        # As = zeta[delta][:, :self.nCol].sum(axis = 1)
-        # Bs = (self.data.Yp * sigma[delta][:, :self.nCol]).sum(axis = 1)
-        As = np.einsum('il->i', zeta[:,:self.nCol][delta])
+        As = np.einsum('il->i', zeta[delta].T[:self.nCol].T)
         Bs = np.einsum('il->i', self.data.Yp)
         return gamma(shape = As, scale = 1/Bs)
-
-    def sample_rho(self, delta, zeta):
-        """ Sampling the PG_1 gammas for categorical variables
-
-        Args:
-            delta ([type]): [description]
-            zeta ([type]): [description]
-        """
-        As = zeta[:, self.nCol:][delta] + self.data.W
-        Bs = 1.
-        rho = gamma(shape = As, scale = 1 / Bs)
-        rho[rho < 1e-9] = 1e-9
-        return rho
 
     def sample_eta(self, curr_eta, delta):
         g = beta(curr_eta + 1, self.nDat)
@@ -237,40 +173,31 @@ class Chain(DirichletProcessSampler):
         aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
         return gamma(shape = aaa, scale = 1 / bb)
 
-    def sample_zeta(self, curr_zeta, r, rho, delta, alpha, beta):
-        dmat = delta[:,None] == np.arange(delta.max() + 1) # n x J
-        Y  = np.hstack((r[:, None] * self.data.Yp, rho)) # n x D
-        lY = np.log(Y)
-        W  = np.hstack((np.zeros(self.data.Yp.shape), self.data.W))
+    def sample_zeta(self, curr_zeta, r, delta, alpha, beta):
+        nclust = delta.max() + 1
+        dmat = delta[:,None] == np.arange(nclust) # n x J
 
-        lp_curr = np.zeros(curr_zeta.shape)
-        lp_prop = np.zeros(curr_zeta.shape)
+        Y  = r[:, None] * self.data.Yp
+        n = dmat.sum(axis = 0)
+        Ysv = (Y.T @ dmat).T
+        lYsv = (np.log(Y).T @ dmat).T
+        Ws = [self.data.W[delta == j] for j in range(nclust)]
+        args = zip(
+            curr_zeta.T[:self.nCol].T, n, Ysv, lYsv, Ws,
+            repeat(alpha), repeat(beta), repeat(self.cat_mat)
+            )
+        res = self.pool.map(update_zeta_j_wrapper, args)
+        return np.array(list(res))
 
-        curr_log_zeta = np.log(curr_zeta)
-        prop_log_zeta = curr_log_zeta + normal(size = curr_log_zeta.shape, scale = 0.3)
-
-        for i in range(curr_log_zeta.shape[1]):
-            lp_curr.T[i] = log_post_log_zeta_1(curr_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat)
-            lp_prop.T[i] = log_post_log_zeta_1(prop_log_zeta.T[i], Y.T[i], lY.T[i], W.T[i], alpha[i], beta[i], dmat)
-        
-        lp_diff = lp_prop - lp_curr
-        keep = np.log(uniform(size = lp_curr.shape)) < lp_diff   # metropolis hastings step
-
-        log_zeta = (prop_log_zeta * keep) + (curr_log_zeta * (~keep))
-        return np.exp(log_zeta)
-
-    def cluster_log_likelihood(self, zeta):
-        out  = np.zeros((self.nDat, self.max_clust_count))
-        out += dprojresgamma_log_my_mt(self.data.Yp, zeta.T[0:self.nCol].T)
-        zstart = self.nCol
-        wstart = 0
-        for catlen in self.data.Cats:
-            out += dprgmultinom_log_mw_mt(
-                self.data.W.T[wstart:(wstart + catlen)].T.astype(int),
-                zeta.T[zstart:(zstart + catlen)].T
-                )
-            zstart += catlen
-            wstart += catlen
+    def cluster_log_likelihood(self, r, zeta):
+        out = np.zeros((self.nDat, self.max_clust_count))
+        # out += dprojresgamma_log_my_mt(self.data.Yp, zeta.T[:self.nCol].T)
+        out += dprodgamma_log_my_mt(
+            r[:, None] * self.data.Yp, 
+            zeta.T[:self.nCol].T, 
+            np.ones((self.nDat, self.nCol)),
+            )
+        out += logd_CDM_mx_ma(self.data.W, zeta.T[self.nCol:].T, self.sphere_mat)
         return out
 
     def initialize_sampler(self, ns):
@@ -287,9 +214,7 @@ class Chain(DirichletProcessSampler):
         self.samples.r[0] = self.sample_r(
                 self.samples.delta[0], self.samples.zeta[0],
                 )
-        self.samples.rho[0] = (self.CatMat / self.data.Cats).sum(axis = 1)
         self.curr_iter = 0
-        self.sigma_placeholder = np.ones((self.max_clust_count, self.nCol + self.nCat))
         return
 
     def iter_sample(self):
@@ -300,20 +225,17 @@ class Chain(DirichletProcessSampler):
         zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
         eta   = self.curr_eta
         r     = self.curr_r
-        rho   = self.curr_rho
 
         self.curr_iter += 1
-        # log_likelihood = dprodgamma_log_my_mt(
-        #     np.hstack((r[:,None] * self.data.Yp, rho)), zeta, self.sigma_placeholder,
-        #     )
-        log_likelihood = self.cluster_log_likelihood(zeta)
-        # pre-generate uniforms to inverse-cdf sample cluster indices
+        # generate log-likelihood, uniforms to inverse-cdf sample cluster indices
+        log_likelihood = self.cluster_log_likelihood(r, zeta)
         unifs = uniform(size = self.nDat)
-        # provide a cluster index probability placeholder, so it's not being re-allocated for every sample
+        # Sample cluster indices
         delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
-        # clean indices (clear out dropped clusters, unused candidate clusters, and re-index)
+        # clean indices (clear out dropped/unused clusters, and re-index)
         delta, zeta = self.clean_delta_zeta(delta, zeta)
         self.samples.delta[self.curr_iter] = delta
+        # do rest of sampling
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta)
         self.samples.rho[self.curr_iter]   = self.sample_rho(self.curr_delta, zeta)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
@@ -410,7 +332,7 @@ class Chain(DirichletProcessSampler):
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.set_projection()
         self.categorical_considerations()
-        # self.pool = Pool(processes = 8, initializer = limit_cpu())
+        self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
 
 class Result(object):
