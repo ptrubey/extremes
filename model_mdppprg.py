@@ -14,7 +14,7 @@ import cUtility as cu
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from cUtility import diriproc_cluster_sampler
-from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedData
+from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
 from projgamma import GammaPrior
 from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_loggamma_mx
 from model_sdpppg import dprodgamma_log_my_mt
@@ -50,7 +50,7 @@ def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
 def update_zeta_j_sph(curr_zeta, n, sY, slY, alpha, beta):
     """ Update routine for zeta on spherical data """
     prop_zeta = np.empty(curr_zeta.shape)
-    for l in range(curr_zeta.shape):
+    for l in range(curr_zeta.shape[0]):
         prop_zeta[l] = sample_alpha_1_mh_summary(
             curr_zeta[l], n, sY[l], slY[l], alpha[l], beta[l]
             )
@@ -74,13 +74,9 @@ def sample_gamma_shape_wrapper(args):
 Prior = namedtuple('Prior', 'eta alpha beta')
 
 class Samples(object):
-    pi    = None
     zeta  = None
-    sigma = None
     alpha = None
     beta  = None
-    xi    = None
-    tau   = None
     delta = None
     r     = None
     eta   = None
@@ -92,7 +88,6 @@ class Samples(object):
         nCats: number of categorical variables        
         """
         self.zeta  = [None] * (nSamp + 1)
-        self.rho   = np.empty((nSamp + 1, nDat, nCat))
         self.alpha = np.empty((nSamp + 1, nCol + nCat))
         self.beta  = np.empty((nSamp + 1, nCol + nCat))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
@@ -183,10 +178,13 @@ class Chain(DirichletProcessSampler):
         lYsv = (np.log(Y).T @ dmat).T
         Ws = [self.data.W[delta == j] for j in range(nclust)]
         args = zip(
-            curr_zeta.T[:self.nCol].T, n, Ysv, lYsv, Ws,
-            repeat(alpha), repeat(beta), repeat(self.cat_mat)
+            curr_zeta, n, Ysv, lYsv, Ws,
+            repeat(alpha), repeat(beta), 
+            repeat(self.nCol), repeat(self.CatMat),
             )
-        res = self.pool.map(update_zeta_j_wrapper, args)
+        # res = self.pool.map(update_zeta_j_wrapper, args)
+        # curr_zeta_j, nj, sYj, slYj, Ws, alpha, beta, ncol, catmat
+        res = map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
     def cluster_log_likelihood(self, r, zeta):
@@ -195,9 +193,9 @@ class Chain(DirichletProcessSampler):
         out += dprodgamma_log_my_mt(
             r[:, None] * self.data.Yp, 
             zeta.T[:self.nCol].T, 
-            np.ones((self.nDat, self.nCol)),
+            self.sigma_placeholder,
             )
-        out += logd_CDM_mx_ma(self.data.W, zeta.T[self.nCol:].T, self.sphere_mat)
+        out += logd_CDM_mx_ma(self.data.W, zeta.T[self.nCol:].T, self.CatMat)
         return out
 
     def initialize_sampler(self, ns):
@@ -215,6 +213,7 @@ class Chain(DirichletProcessSampler):
                 self.samples.delta[0], self.samples.zeta[0],
                 )
         self.curr_iter = 0
+        self.sigma_placeholder = np.ones((self.max_clust_count, self.nCol))
         return
 
     def iter_sample(self):
@@ -237,24 +236,12 @@ class Chain(DirichletProcessSampler):
         self.samples.delta[self.curr_iter] = delta
         # do rest of sampling
         self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta)
-        self.samples.rho[self.curr_iter]   = self.sample_rho(self.curr_delta, zeta)
         self.samples.zeta[self.curr_iter]  = self.sample_zeta(
-                zeta, self.curr_r, self.curr_rho, self.curr_delta, alpha, beta,
+                zeta, self.curr_r, self.curr_delta, alpha, beta,
                 )
         self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
         self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
         self.samples.eta[self.curr_iter]   = self.sample_eta(eta, self.curr_delta)
-        return
-
-    def sample(self, ns):
-        self.initialize_sampler(ns)
-        print_string = '\rSampling {:.1%} Completed, {} Clusters     '
-        print(print_string.format(self.curr_iter / ns, self.nDat), end = '')
-        while (self.curr_iter < ns):
-            if (self.curr_iter % 100) == 0:
-                print(print_string.format(self.curr_iter / ns, self.curr_delta.max() + 1), end = '')
-            self.iter_sample()
-        print('\rSampling 100% Completed                    ')
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -268,7 +255,6 @@ class Chain(DirichletProcessSampler):
             np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
             for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
             ])
-        rhos   = self.samples.rho[nBurn::nThin].reshape(-1, self.nCat)
         alphas = self.samples.alpha[nBurn :: nThin]
         betas  = self.samples.beta[nBurn :: nThin]
         deltas = self.samples.delta[nBurn :: nThin]
@@ -279,7 +265,6 @@ class Chain(DirichletProcessSampler):
             'zetas'  : zetas,
             'alphas' : alphas,
             'betas'  : betas,
-            'rhos'   : rhos,
             'rs'     : rs,
             'deltas' : deltas,
             'etas'   : etas,
@@ -309,7 +294,7 @@ class Chain(DirichletProcessSampler):
     def categorical_considerations(self):
         """ Builds the CatMat """
         cats = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(self.data.Cats)))
-        self.CatMat = cats[:, None] == np.arange(len(self.data.Cats))
+        self.CatMat = (cats[:, None] == np.arange(len(self.data.Cats))).T
         return
     
     def __init__(
@@ -332,7 +317,7 @@ class Chain(DirichletProcessSampler):
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.set_projection()
         self.categorical_considerations()
-        self.pool = Pool(processes = 8, initializer = limit_cpu())
+        # self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
 
 class Result(object):
@@ -404,20 +389,18 @@ class Result(object):
         alphas = out['alphas']
         betas  = out['betas']
         rs     = out['rs']
-        rhos   = out['rhos']
         cats   = out['cats']
         
+        self.data = MixedDataBase(out['V'], out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
-        self.nCat   = rhos.shape[1]
-        self.nCol   = alphas.shape[1] - self.nCat
+        self.nCat   = self.data.nCat
+        self.nCol   = self.data.nCol
         self.nCats  = cats.shape[0]
-        self.nSigma = self.nCol + self.nCat - self.nCats - 1
         self.cats   = cats
-        self.data = BaseData(out['V'], out['W'])
-        if 'Y' in out.keys():
-            self.data.Y = out['Y']
         
+        if 'Y' in out.keys():
+            self.data.fill_outcome(out['Y'])
         
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats)
         self.samples.delta = deltas
@@ -426,7 +409,6 @@ class Result(object):
         self.samples.beta  = betas
         self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
         self.samples.r     = rs
-        self.samples.rho   = rhos.reshape(self.nSamp, self.nDat, self.nCat)
         return
 
     def __init__(self, path):
@@ -440,7 +422,12 @@ if __name__ == '__main__':
     import os
 
     raw = read_csv('./datasets/ad2_cover_x.csv')
-    data = MixedData(raw, cat_vars = np.array([0,3], dtype = int), decluster = False, quantile = 0.999)
+    data = MixedData(
+        raw, 
+        cat_vars = np.array([0,3], dtype = int), 
+        decluster = False, 
+        quantile = 0.999,
+        )
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
     model.sample(4000)
     model.write_to_disk('./test/results.pickle', 2000, 2)

@@ -425,9 +425,6 @@ class Chain(DirichletProcessSampler):
         self.sphere_mat = np.zeros((len(self.spheres), self.nCat))
         for i, sphere in enumerate(self.spheres):
             self.sphere_mat[i][sphere] = True
-        # su = np.array([sphere[0] for sphere in self.spheres])
-        # self.sigma_unity = np.zeros(self.nCat, dtype = int)
-        # self.sigma_unity[su] = 1
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.pool = Pool(processes = 8, initializer =  limit_cpu)
         return

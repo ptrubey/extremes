@@ -289,31 +289,6 @@ class Categorical(Multinomial, Outcome):
         self.fill_multinomial(W, np.array(cats))
         return
     
-    # deprecated--will be deleted
-    def fill_categorical_old(self, raw, values, index):
-        # If values are supplied, verify that all values in data
-        # are represented in supplied.
-        if values is not None:
-            assert len(values) == raw.shape[1]
-            for i in range(raw.shape[1]):
-                assert len(set(raw.T[i]).difference(set(values[i]))) == 0
-        else:
-            values = [np.unique(raw.T[i]) for i in range(raw.shape[1])]
-        
-        if index is None:
-            index = np.arange(raw.shape[0])
-
-        dummies = []
-        cats = []
-        for i in range(raw.shape[1]):
-            dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
-            cats.append(len(values[i]))
-        self.W = np.vstack(dummies).T[index]
-        self.nCat = self.W.shape[1]
-        self.Cats = np.array(cats)
-        assert self.Cats.sum() == self.nCat
-        return
-    
     def __init__(self, raw, values = None, index = None, outcome = 'None'):
         self.fill_categorical(raw, values, index)
         if type(outcome) is np.ndarray:
