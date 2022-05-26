@@ -444,12 +444,12 @@ if __name__ == '__main__':
 
     p = argparser()
     # d = {
-    #     'in_data_path'    : './ad/cardio/data.csv',
-    #     'in_outcome_path' : './ad/cardio/outcome.csv',
-    #     'out_path' : './ad/cardio/results_mdppprg.pkl',
-    #     'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
+    #     'in_data_path'    : './ad/cover/data.csv',
+    #     'in_outcome_path' : './ad/cover/outcome.csv',
+    #     'out_path' : './ad/cover/results_mdppprg.pkl',
+    #     'cat_vars' : '[9,10,11,12]',
     #     'decluster' : 'False',
-    #     'quantile' : 0.95,
+    #     'quantile' : 0.998,
     #     'nSamp' : 30000,
     #     'nKeep' : 10000,
     #     'nThin' : 10,
@@ -464,7 +464,7 @@ if __name__ == '__main__':
         raw, 
         cat_vars = np.array(eval(p.cat_vars), dtype = int), 
         decluster = eval(p.decluster), 
-        quantile = p.quantile,
+        quantile = float(p.quantile),
         outcome = out,
         )
     data.fill_outcome(out)
