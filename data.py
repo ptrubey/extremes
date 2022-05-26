@@ -93,8 +93,10 @@ def descale_pareto(Z, P):
     return raw
 
 class Outcome(object):
+    I = None
+
     def fill_outcome(self, Y):
-        self.Y = Y.ravel()
+        self.Y = Y.ravel()[self.I]
         return
 
 class Transformer(object):
@@ -178,7 +180,7 @@ class Data_From_Raw(Data, Outcome):
         if decluster:
             I = cluster_max_row_ids(R)
         else:
-            I = np.where(R > 1)
+            I = np.where(R > 1)[0]
         return V[I], R[I], I
 
     @staticmethod
@@ -228,6 +230,7 @@ class Data_From_Sphere(Data, Outcome):
         self.nDat, self.nCol = self.V.shape
         self.A = euclidean_to_angular(self.V)
         self.S = euclidean_to_simplex(self.V)
+        self.I = np.arange(self.nDat)
         return
 
     def __init__(self, raw, outcome = 'None'):
@@ -242,10 +245,13 @@ class Multinomial(Data, Outcome):
     spheres = None # For each variable, np.array(int) that identifies which 
                    #    columns are associated with that var.
 
-    def fill_multinomial(self, raw, cats = None):
+    def fill_multinomial(self, raw, cats = None, index = None):
         if cats is None:
             cats = np.array([raw.shape[1]])
-        self.W = raw
+        if index is None:
+            index = np.arange(raw.shape[0])
+        self.I = index
+        self.W = raw[index]
         self.Cats = cats
         self.nCat = self.Cats.sum()
         arr = np.hstack([np.ones(cat, dtype = int) * i for i, cat in enumerate(self.Cats)])
@@ -258,7 +264,7 @@ class Multinomial(Data, Outcome):
     def __init__(self, raw, cats, index = None, outcome = 'None'):
         if index is None:
             index = np.arange(raw.shape[0])
-        self.fill_multinomial(raw[index], cats)
+        self.fill_multinomial(raw, cats, index)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
@@ -285,8 +291,8 @@ class Categorical(Multinomial, Outcome):
         for i in range(raw.shape[1]):
             dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
             cats.append(len(values[i]))
-        W = np.vstack(dummies).T[index]
-        self.fill_multinomial(W, np.array(cats))
+        W = np.vstack(dummies).T
+        self.fill_multinomial(W, np.array(cats), index)
         return
     
     def __init__(self, raw, values = None, index = None, outcome = 'None'):

@@ -177,14 +177,14 @@ class Chain(DirichletProcessSampler):
         Ysv = (Y.T @ dmat).T
         lYsv = (np.log(Y).T @ dmat).T
         Ws = [self.data.W[delta == j] for j in range(nclust)]
+        # curr_zeta_j, nj, sYj, slYj, Ws, alpha, beta, ncol, catmat
         args = zip(
             curr_zeta, n, Ysv, lYsv, Ws,
             repeat(alpha), repeat(beta), 
             repeat(self.nCol), repeat(self.CatMat),
             )
-        # res = self.pool.map(update_zeta_j_wrapper, args)
-        # curr_zeta_j, nj, sYj, slYj, Ws, alpha, beta, ncol, catmat
-        res = map(update_zeta_j_wrapper, args)
+        res = self.pool.map(update_zeta_j_wrapper, args)
+        # res = map(update_zeta_j_wrapper, args)
         return np.array(list(res))
 
     def cluster_log_likelihood(self, r, zeta):
@@ -317,7 +317,7 @@ class Chain(DirichletProcessSampler):
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.set_projection()
         self.categorical_considerations()
-        # self.pool = Pool(processes = 8, initializer = limit_cpu())
+        self.pool = Pool(processes = 8, initializer = limit_cpu())
         return
 
 class Result(object):
@@ -415,23 +415,58 @@ class Result(object):
         self.load_data(path)
         return
 
+def argparser():
+    from argparse import ArgumentParser
+    p = ArgumentParser()
+    p.add_argument('in_path')
+    p.add_argument('out_path')
+    p.add_argument('cat_vars')
+    p.add_argument('--decluster', default = 'False')
+    p.add_argument('--quantile', default = 0.95)
+    p.add_argument('--nSamp', default = 30000)
+    p.add_argument('--nKeep', default = 10000)
+    p.add_argument('--nThin', default = 10)
+    p.add_argument('--eta_alpha', default = 2.)
+    p.add_argument('--eta_beta', default = 1.)
+    return p.parse_args()
+
+class Heap(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(**kwargs)
+        return
+
 if __name__ == '__main__':
     from data import MixedData
     from projgamma import GammaPrior
     from pandas import read_csv
     import os
 
-    raw = read_csv('./datasets/ad2_cover_x.csv')
+    # p = argparser()
+    d = {
+        'in_path'  : './ad/cardio/data.csv',
+        'out_path' : './ad/cardio/results_mdppprg.pkl',
+        'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
+        'decluster' : 'False',
+        'quantile' : 0.95,
+        'nSamp' : 30000,
+        'nKeep' : 10000,
+        'nThin' : 10,
+        'eta_alpha' : 2.,
+        'eta_beta' : 1.,
+        }
+    p = Heap(**d)
+
+    raw = read_csv(p.in_path).values
     data = MixedData(
         raw, 
-        cat_vars = np.array([0,3], dtype = int), 
-        decluster = False, 
-        quantile = 0.999,
+        cat_vars = np.array(eval(p.cat_vars), dtype = int), 
+        decluster = eval(p.decluster), 
+        quantile = p.quantile,
         )
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(4000)
-    model.write_to_disk('./test/results.pickle', 2000, 2)
-    res = Result('./test/results.pickle')
-    res.write_posterior_predictive('./test/postpred.csv')
+    model.sample(p.nSamp)
+    model.write_to_disk(p.out_path, p.nKeep, p.nThin)
+    res = Result(p.out_path)
+    # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF

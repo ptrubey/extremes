@@ -514,22 +514,22 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    # p = argparser()
+    p = argparser()
 
-    class Heap(object):
-        def __init__(self, **kwargs):
-            self.__dict__.update(**kwargs)
-            return
+    # class Heap(object):
+    #     def __init__(self, **kwargs):
+    #         self.__dict__.update(**kwargs)
+    #         return
 
-    d = {
-        'in_path'  : './simulated/categorical/test22.csv',
-        'out_path' : './simulated/categorical/results_test22.pkl',
-        'cats'     : '[2,2]',
-        'nSamp'    : 20000,
-        'nKeep'    : 10000,
-        'nThin'    : 5,
-        }
-    p = Heap(**d)
+    # d = {
+    #     'in_path'  : './simulated/categorical/test22.csv',
+    #     'out_path' : './simulated/categorical/results_test22.pkl',
+    #     'cats'     : '[2,2]',
+    #     'nSamp'    : 20000,
+    #     'nKeep'    : 10000,
+    #     'nThin'    : 5,
+    #     }
+    # p = Heap(**d)
 
     from data import Multinomial
     from pandas import read_csv 
