@@ -418,9 +418,10 @@ class Result(object):
 def argparser():
     from argparse import ArgumentParser
     p = ArgumentParser()
-    p.add_argument('in_path')
+    p.add_argument('in_data_path')
     p.add_argument('out_path')
     p.add_argument('cat_vars')
+    p.add_argument('--in_outcome_path', default = False)
     p.add_argument('--decluster', default = 'False')
     p.add_argument('--quantile', default = 0.95)
     p.add_argument('--nSamp', default = 30000)
@@ -441,28 +442,32 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    # p = argparser()
-    d = {
-        'in_path'  : './ad/cardio/data.csv',
-        'out_path' : './ad/cardio/results_mdppprg.pkl',
-        'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
-        'decluster' : 'False',
-        'quantile' : 0.95,
-        'nSamp' : 30000,
-        'nKeep' : 10000,
-        'nThin' : 10,
-        'eta_alpha' : 2.,
-        'eta_beta' : 1.,
-        }
-    p = Heap(**d)
+    p = argparser()
+    # d = {
+    #     'in_data_path'    : './ad/cardio/data.csv',
+    #     'in_outcome_path' : './ad/cardio/outcome.csv',
+    #     'out_path' : './ad/cardio/results_mdppprg.pkl',
+    #     'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
+    #     'decluster' : 'False',
+    #     'quantile' : 0.95,
+    #     'nSamp' : 30000,
+    #     'nKeep' : 10000,
+    #     'nThin' : 10,
+    #     'eta_alpha' : 2.,
+    #     'eta_beta' : 1.,
+    #     }
+    # p = Heap(**d)
 
-    raw = read_csv(p.in_path).values
+    raw = read_csv(p.in_data_path).values
+    out = read_csv(p.in_outcome_path).values
     data = MixedData(
         raw, 
         cat_vars = np.array(eval(p.cat_vars), dtype = int), 
         decluster = eval(p.decluster), 
         quantile = p.quantile,
+        outcome = out,
         )
+    data.fill_outcome(out)
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
