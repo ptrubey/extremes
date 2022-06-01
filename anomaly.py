@@ -125,7 +125,33 @@ class Anomaly(object):
         except AttributeError:
             Y = euclidean_to_hypercube(Y1)
             return hypercube_distance_matrix(self.generate_posterior_predictive_gammas(), Y, self.pool)
-
+    @cached_property
+    def hypercube_distance_real(self):
+        Vnew = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
+        return hypercube_distance_matrix(Vnew, self.data.V, self.pool)
+    @cached_property
+    def sphere_distance_latent(self):
+        pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1) # (n, s, d)
+        pi_new = self.generate_posterior_predictive_spheres() # (s,d)
+        return euclidean_distance_matrix(pi_new, pi_con, self.pool)
+    @cached_property
+    def euclidean_distance_latent(self):
+        R = self.generate_conditional_posterior_predictive_radii() # (s,n)
+        Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
+        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:], # (s,n,d2)
+        Y_con = np.concatenate((Y1,Y2), axis = 2)
+        Y_new = self.generate_posterior_predictive_gammas()
+        return euclidean_distance_matrix(Y_new, Y_con, self.pool)
+    @cached_property
+    def hypercube_distance_latent(self):
+        R = self.generate_conditional_posterior_predictive_radii() # (s,n)
+        Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
+        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:], # (s,n,d2)
+        Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
+        V_con = np.array(list(map(euclidean_to_hypercube, Y_con)))
+        V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
+        return hypercube_distance_matrix(V_new, V_con, self.pool)
+    
     ## Classic Anomaly Metrics:
     def isolation_forest(self):
         """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
@@ -144,7 +170,6 @@ class Anomaly(object):
                     print("Where's the data?")
                     raise
         return raw.max() - raw + 1
-    
     def local_outlier_factor(self, k = 20):
         """ Implements Local Outlier Factor.  k specifies the number of neighbors to fit to. """
         try:
@@ -160,7 +185,6 @@ class Anomaly(object):
                     raise
         raw = lof.negative_outlier_factor_.copy()
         return raw.max() - raw + 1
-    
     def one_class_svm(self):
         try:
             svm = OneClassSVM(gamma = 'auto').fit(self.data.VW)
@@ -177,7 +201,7 @@ class Anomaly(object):
                     print('Where\'s the data?')
                     raise 
         return raw.max() - raw + 1
-    
+
     ## Extreme Anomaly Metrics:
     def average_euclidean_distance_to_postpred(self, **kwargs):
         return self.euclidean_distance.mean(axis = 1)
@@ -255,7 +279,36 @@ class Anomaly(object):
         else:
             raise ValueError('requested kernel not available')
         pass
-    
+    def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
+        """ computes mean kde for  """
+        h = self.sphere_distance_latent.mean()
+        # sphere_distance_latent (n,s,s)
+        if kernel == 'gaussian':
+            return 1 / (np.exp(-(self.sphere_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+        elif kernel == 'laplace':
+            return 1 / np.exp(-np.abs(self.sphere_distance_latent / h)).mean(axis = (1,2))
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+    def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
+        h = self.euclidean_distance_latent.mean()
+        if kernel == 'gaussian':
+            return 1 / (np.exp(-(self.euclidean_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+        elif kernel == 'laplace':
+            return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+    def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
+        h = self.euclidean_distance_latent.mean()
+        if kernel == 'gaussian':
+            return 1 / (np.exp(-(self.euclidean_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+        elif kernel == 'laplace':
+            return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+
     ## Classification Performance Metrics:
     def get_auroc(self, scores):
         """ 

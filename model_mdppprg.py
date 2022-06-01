@@ -71,6 +71,11 @@ def update_zeta_j_wrapper(args):
 def sample_gamma_shape_wrapper(args):
     return sample_alpha_k_mh_summary(*args)
 
+def category_matrix(cats):
+    catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
+    CatMat = (catvec[:, None] == np.arange(len(cats))).T
+    return CatMat
+
 Prior = namedtuple('Prior', 'eta alpha beta')
 
 class Samples(object):
@@ -293,8 +298,9 @@ class Chain(DirichletProcessSampler):
     
     def categorical_considerations(self):
         """ Builds the CatMat """
-        cats = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(self.data.Cats)))
-        self.CatMat = (cats[:, None] == np.arange(len(self.data.Cats))).T
+        self.CatMat = category_matrix(self.data.Cats)
+        # cats = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(self.data.Cats)))
+        # self.CatMat = (cats[:, None] == np.arange(len(self.data.Cats))).T
         return
     
     def __init__(
@@ -362,6 +368,14 @@ class Result(object):
         hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
         return euclidean_to_angular(hyp)
 
+    def generate_posterior_predictive_spheres(self):
+        rhos = self.generate_posterior_predictive_gammas() # (s,D)
+        CatMat = category_matrix(self.data.Cats) # (C,d)
+        shro = rhos[:,self.nCol:] @ CatMat.T # (s,C)
+        nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)
+        pis = rhos / nrho
+        return pis
+
     def write_posterior_predictive(self, path, n_per_sample = 1):
         colnames_y = ['Y_{}'.format(i) for i in range(self.nCol)]
         colnames_p = [
@@ -378,6 +392,40 @@ class Result(object):
                 )
         thetas.to_csv(path, index = False)
         return
+
+    def generate_conditional_posterior_predictive_radii(self):
+        """ r | zeta, V ~ Gamma(r | sum(zeta), sum(V)) """
+        # As = np.einsum('il->i', zeta[delta].T[:self.nCol].T)
+        # Bs = np.einsum('il->i', self.data.Yp)
+        shapes = np.array([
+            zeta[delta]
+            for delta, zeta
+            in zip(self.samples.delta, self.samples.zeta)
+            ]).sum(axis = 2)
+        rates = self.data.V.sum(axis = 1)[None,:]
+        rs = gamma(shape = shapes, scale = 1 / rates)
+        return rs
+
+    def generate_conditional_posterior_predictive_gammas(self):
+        """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
+        zetas = np.array([
+            zeta[delta]
+            for delta, zeta 
+            in zip(self.samples.delta, self.samples.zeta)
+            ]) # (s,n,d)
+        W = np.hstack((np.zeros((self.nDat, self.nCol)), self.data.W)) # (n,d)
+        return gamma(shape = zetas + W[None,:,:])
+
+    def generate_conditional_posterior_predictive_spheres(self):
+        """ pi | zeta, delta = normalized rho
+        currently discarding generated Y's, keeping latent pis
+        """
+        rhos = self.generate_conditional_posterior_predictive_gammas() # (s,n,D)
+        CatMat = category_matrix(self.data.Cats) # (C,d)
+        shro = rhos[:,:,self.nCol:] @ CatMat.T # (s,n,C)
+        nrho = np.einsum('snc,cd->snd', shro, CatMat) # (s,n,d)
+        pis = rhos / nrho
+        return pis
 
     def load_data(self, path):        
         with open(path, 'rb') as file:
