@@ -1,3 +1,4 @@
+from re import L
 from numpy.random import choice, gamma, beta, uniform, normal
 from collections import namedtuple
 from itertools import repeat
@@ -9,6 +10,7 @@ import pickle
 from math import log, exp
 from scipy.special import gammaln
 from multiprocessing import Pool
+from contextlib import nullcontext
 
 from energy import limit_cpu
 from cUtility import diriproc_cluster_sampler, generate_indices
@@ -118,6 +120,20 @@ def logd_CDM_mx_sa(aW, vAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
+def pt_logd_CDM_mx_sa(aW, aAlpha, sphere_mat):
+    sa = np.einsum('td,cd->tc', aAlpha, sphere_mat) # (t,c)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)     # (n,c)
+    logd = np.zeros((aAlpha.shape[0], aW.shape[0])) # (t,n)
+    with np.errstate(divide = 'ignore',  invalid = 'ignore'):
+        logd += np.einsum('', gammaln(sa))[:,None] # (t,)
+        logd += np.einsum('nc->n', gammaln(sw + 1))[None,:] # (,n) 
+        logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa[:,None,:])) # (t,n)
+        logd += np.einsum('tnd->tn', gammaln(aW[None,:,:] + aAlpha[:,None,:])) # (t,n)
+        logd -= np.einsum('td,t', gammaln(aAlpha))[:,None] # (t,)
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[None,:]
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
 def logd_CDM_mx_ma(aW, aAlpha, sphere_mat):
     """
     Log-density of concatenated Dirichlet-Multinomial distribution
@@ -142,6 +158,28 @@ def logd_CDM_mx_ma(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
+def pt_logd_CDM_mx_ma(aW, aAlpha, sphere_mat):
+    """
+    inputs:
+        aW:         (n,d)
+        aAlpha:     (t,j,d)
+        sphere_mat: (c,d)
+    output:
+        logd:       (n,t,j)
+    """
+    sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros((aW.shape[0], aAlpha.shape[0], aAlpha.shape[1]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
+        logd += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
+        logd -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+        logd += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+        logd -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+        logd -= np.einsum('tnd->nt', gammaln(aW + 1))[:,:,None]
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
 def logd_CDM_paired(aW, aAlpha, sphere_mat):
     sa = np.einsum('nd,cd->nc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
@@ -154,6 +192,30 @@ def logd_CDM_paired(aW, aAlpha, sphere_mat):
         logd -= np.einsum('nd->n', gammaln(aAlpha))
         logd -= np.einsum('nd->n', gammaln(aW + 1))
     np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def pt_logd_CDM_paired(aW, aAlpha, sphere_mat):
+    """
+    returns log-likelihood per temperature
+    inputs:
+        aW         : (n,d)
+        aAlpha     : (t,n,d)
+        sphere_mat : (c,d)
+    outputs:
+        logd       : (t,n)
+    """
+    sa = np.einsum('tnd,cd->tnc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc')
+    logd = np.zeros((aAlpha.shape[0], aW.shape[0]))
+    # with np.errstate(divide = 'ignore', invalid = 'ignore'):
+    with nullcontext():
+        logd += np.einsum('tnc->tn', gammaln(sa))
+        logd += np.einsum('nc->n', gammaln(sw + 1))[None,:]
+        logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa))
+        logd += np.einsum('tnd->tn', gammaln(aW[None,:,:] + aAlpha))
+        logd -= np.einsum('tnd->tn', gammaln(aAlpha))
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[None,:]
+    # np.nan_to_num(logd, False, -np.inf)
     return logd
 
 def logd_loggamma_single(x, a, b):
@@ -170,6 +232,28 @@ def logd_loggamma_mx(x, a, b):
     logd -= gammaln(a)
     logd += a * x
     logd -= b * np.exp(x)
+    return logd
+
+def pt_logd_loggamma(x, a, b):
+    """
+    Log-density of log-gamma distribution at multiple temperatures
+    inputs:
+        x : (t,j,d) # (m,d)
+        a : (t,d)   # (m,d)
+        b : (t,d)   # (m,d)
+    output:
+        out : (t,j) # (m)
+    """
+    logd = np.empty((x.shape[0]))
+    logd += np.einsum('md,md->m', a, np.log(b))
+    logd -= np.einsum('md->m', gammaln(a))
+    logd += np.einsum('md,md->m', a, x)
+    logd -= np.einsum('md,md->m', b, np.exp(x))
+    # logd = np.empty((x.shape[0], x.shape[1]))
+    # logd += np.einsum('td,td->t', a, np.log(b))
+    # logd -= np.einsum('td->t', gammaln(a))
+    # logd += np.einsum('tjd,td->tj', a, x)
+    # logd -= np.einsum('td,tjd->tj', b, np.exp(x))
     return logd
 
 def update_zeta_j_wrapper_old(args):

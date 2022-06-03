@@ -1,5 +1,6 @@
-from re import M
+from re import M, S
 from numpy.random import choice, gamma, beta, uniform, normal
+from numpy.linalg import cholesky
 from collections import namedtuple
 from itertools import repeat, chain
 import numpy as np
@@ -16,11 +17,16 @@ from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from cUtility import diriproc_cluster_sampler
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
 from projgamma import GammaPrior
-from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_loggamma_mx
+from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_loggamma_mx, \
+                        pt_logd_CDM_mx_ma, pt_logd_CDM_mx_sa, pt_logd_CDM_paired, pt_logd_loggamma
 from model_sdpppg import dprodgamma_log_my_mt
-
+from model_sdpppgln import bincount2D_vectorized, dgamma_log_my, cluster_covariance_mat, \
+                        dprodgamma_log_paired_yt, dprojgamma_log_paired_yt
 from multiprocessing import Pool
 from energy import limit_cpu
+
+
+
 
 def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
     """ Update routine for zeta on categorical/multinomial data """
@@ -119,7 +125,53 @@ class Chain(DirichletProcessSampler):
     @property
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
+    @property
+    def curr_cluster_count(self):
+        return self.curr_delta[0].max() + 1
+    def average_cluster_count(self, ns):
+        acc = self.samples.delta[(ns//2):][:,0].max(axis = 1).mean() + 1
+        return '{:.2f}'.format(acc)
 
+    # Adaptive Metropolis Placeholders
+    am_cov_c  = None
+    am_cov_i  = None
+    am_mean_c = None
+    am_mean_i = None
+    am_n_c    = None
+    am_alpha  = None
+    max_clust_count = None
+
+    def sample_delta(self, r, delta, zeta, eta):
+        Y = r[:,:,None] * self.data.Yp[None,:,:]
+        curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
+        cand_cluster_state = (curr_cluster_state == 0)
+        log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
+        log_likelihood += dprodgamma_log_my_mt(Y, zeta[:,:,:self.nCol], self.sigma_ph1)
+        log_likelihood += pt_logd_CDM_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.sphere_mat)
+        tidx = np.arange(self.nTemp)
+        p = uniform(size = (self.nDat, self.nTemp))
+        p += tidx[None,:]
+        scratch = np.empty(curr_cluster_state.shape)
+        for i in range(self.nDat):
+            curr_cluster_state[tidx, delta.T[i]] -= 1
+            scratch[:] = 0
+            scratch += curr_cluster_state
+            scratch += cand_cluster_state * (eta / cand_cluster_state.sum(axis = 1) + 1e-9)[None,:]
+            with np.errstate(divide = 'ignore', invalid = 'ignore'):
+                np.log(scratch, out = scratch)
+            scratch += log_likelihood[i]
+            np.nan_to_num(scratch, False, -np.inf)
+            scratch -= scratch.max(axis = 1)[:,None]
+            with np.errstate(under = 'ignore'):
+                np.exp(scratch, out = scratch)
+            np.cumsum(scratch, axis = 1, out = scratch)
+            scratch /= scratch.T[-1][:,None]
+            scratch += tidx[:,None]
+            delta.T[i] = np.searchsorted(scratch.ravel(), p[i]) % self.max_clust_count
+            curr_cluster_state[tidx, delta.T[i]] += 1
+            cand_cluster_state[tidx, delta.T[i]] = False
+        return
+    
     def clean_delta_zeta(self, delta, zeta):
         """
         Find populated clusters, re-index them, 
@@ -133,12 +185,91 @@ class Chain(DirichletProcessSampler):
             zeta  : cluster parameter matrix (J* x d)
         """
         # Find populated clusters, re-index them
-        keep, delta[:] = np.unique(delta, return_inverse = True)
+        # keep, delta[:] = np.unique(delta, return_inverse = True)
+        for t in range(self.nTemp):
+            keep, delta[t] = np.unique(delta[t], return_inverse = True)
+            zeta[t][:keep.shape[0]] = zeta[t,keep]
         # return new indices, cluster parameters associated with populated clusters
-        return delta, zeta[keep]
+        # return delta, zeta[keep]
+        return
 
-    def sample_zeta_new(self, alpha, beta, m):
-        return gamma(shape = alpha, scale = 1 / beta, size = (m, self.nCol + self.nCat))
+    def sample_zeta_new(self, alpha, beta):
+        # return gamma(shape = alpha, scale = 1 / beta, size = (m, self.nCol + self.nCat))
+        # out = np.empty((self.nTemp, self.max_clust_count, self.nCol + self.nCat))
+        # np.einsum(
+        #     'tzy,tjy->tjz', 
+        #     np.triu(Sigma_chol),
+        #     normal(size = out.shape),
+        #     out = out,
+        #     )
+        # out += mu[:,None,:]
+        # np.exp(out, out = out)
+        out = gamma(
+            shape = alpha[:,None,:], 
+            scale = 1 / beta[:,None,:], 
+            size = (self.nTemp, self.max_clust_count, self.nCol + self.nCat),
+            )
+        return out
+
+    def am_covariance_matrices(self, delta, index):
+        cluster_covariance_mat(
+            self.am_cov_c, self.am_mean_c, self.am_n_c, delta,
+            self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.temp),
+            )
+        return self.am_cov_c[index]
+
+    def sample_zeta(self, zeta, delta, r, alpha, beta):
+        """
+        zeta      : (t x J x D)
+        delta     : (t x n)
+        r         : (t x n)
+        mu        : (t x D)
+        Sigma_cho : (t x D x D)
+        Sigma_inv : (t x D x D)
+        """
+        Y = r[:,:,None] * self.data.Yp[None,:,:]
+        lY = np.log(Y)
+        curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
+        cand_cluster_state = (curr_cluster_state == 0)
+        delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
+
+        idx = np.where(~cand_cluster_state)
+        covs = self.am_covariance_matrices(delta, idx)
+        lzcurr = np.log(zeta)
+        lzcand = lzcurr.copy()
+        lzcand[idx] += np.einsum('mpq,mq->mp', cholesky(covs), normal(size = (idx[0].shape[0], self.nCol)))
+        zcand = np.exp(zeta)
+        
+        z1_shape = [self.nTemp, self.nDat, self.nCol]
+        z2_shape = [self.nTemp, self.nDat, self.nCat]
+        self.am_alpha[:] = -np.inf
+        self.am_alpha[idx] = 0.
+        self.am_alpha[idx] += dprojgamma_log_paired_yt(
+            self.data.Yp,
+            zcand[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
+            self.sigma_ph2,
+            )
+        self.am_alpha[idx] += logd_CDM_paired(
+            self.data.W,
+            zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
+            self.CatMat,
+            )
+        self.am_alpha[idx] -= dprodgamma_log_paired_yt(
+            self.data.Yp,
+            zeta[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
+            self.sigma_ph2,
+            )
+        self.am_alpha[idx] -= logd_CDM_paired(
+            self.data.W,
+            zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
+            self.CatMat,
+            )
+        self.am_alpha[idx] *= self.itl[idx[0]]
+        self.am_alpha[idx] += pt_logd_loggamma(lzcand[idx], alpha[idx[0]], beta[idx[0]])
+        self.am_alpha[idx] -= pt_logd_loggamma(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
+        keep = np.where(np.log(uniform(size = self.am_alpha.shape)) < self.am_alpha)
+        zeta[keep] = np.exp(lzcand[keep])
+        return zeta
 
     def sample_alpha(self, zeta, curr_alpha):
         n = zeta.shape[0]
