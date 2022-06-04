@@ -22,11 +22,9 @@ from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_
 from model_sdpppg import dprodgamma_log_my_mt
 from model_sdpppgln import bincount2D_vectorized, dgamma_log_my, cluster_covariance_mat, \
                         dprodgamma_log_paired_yt, dprojgamma_log_paired_yt
+from projgamma import logd_prodgamma_my_mt
 from multiprocessing import Pool
 from energy import limit_cpu
-
-
-
 
 def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
     """ Update routine for zeta on categorical/multinomial data """
@@ -142,11 +140,11 @@ class Chain(DirichletProcessSampler):
     max_clust_count = None
 
     def sample_delta(self, r, delta, zeta, eta):
-        Y = r[:,:,None] * self.data.Yp[None,:,:]
+        # Y = r[:,:,None] * self.data.Yp[None,:,:]
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_cluster_state = (curr_cluster_state == 0)
         log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        log_likelihood += dprodgamma_log_my_mt(Y, zeta[:,:,:self.nCol], self.sigma_ph1)
+        log_likelihood += logd_prodgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
         log_likelihood += pt_logd_CDM_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.sphere_mat)
         tidx = np.arange(self.nTemp)
         p = uniform(size = (self.nDat, self.nTemp))
@@ -326,7 +324,7 @@ class Chain(DirichletProcessSampler):
     def cluster_log_likelihood(self, r, zeta):
         out = np.zeros((self.nDat, self.max_clust_count))
         # out += dprojresgamma_log_my_mt(self.data.Yp, zeta.T[:self.nCol].T)
-        out += dprodgamma_log_my_mt(
+        out += logd_prodgamma_my_mt(
             r[:, None] * self.data.Yp, 
             zeta.T[:self.nCol].T, 
             self.sigma_placeholder,

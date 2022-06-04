@@ -15,9 +15,8 @@ from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from cUtility import diriproc_cluster_sampler
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
-from projgamma import GammaPrior
-from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_loggamma_mx
-from model_sdpppg import dprodgamma_log_my_mt
+from projgamma import GammaPrior, logd_cumdirmultinom_mx_ma, logd_prodgamma_my_mt, logd_cumdirmultinom_mx_sa, logd_cumdirmultinom_paired, logd_loggamma_mx_st
+
 
 from multiprocessing import Pool
 from energy import limit_cpu
@@ -31,13 +30,13 @@ def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
     logp = np.zeros(2)
     for i in range(curr_zeta.shape[0]):
         prop_log_zeta[i] += offset[i]
-        logp += logd_CDM_mx_ma(
+        logp += logd_cumdirmultinom_mx_ma(
             Ws, 
             np.exp(np.vstack((curr_log_zeta, prop_log_zeta))), 
             catmat,
             ).sum(axis = 0)
-        logp += logd_loggamma_mx(
-            np.vstack((curr_log_zeta[i], prop_log_zeta[i])), 
+        logp += logd_loggamma_mx_st(
+            np.hstack((curr_log_zeta[i], prop_log_zeta[i])), 
             alpha[i], beta[i],
             ).ravel()
         if lunifs[i] < logp[1] - logp[0]:
@@ -195,12 +194,12 @@ class Chain(DirichletProcessSampler):
     def cluster_log_likelihood(self, r, zeta):
         out = np.zeros((self.nDat, self.max_clust_count))
         # out += dprojresgamma_log_my_mt(self.data.Yp, zeta.T[:self.nCol].T)
-        out += dprodgamma_log_my_mt(
+        out += logd_prodgamma_my_mt(
             r[:, None] * self.data.Yp, 
             zeta.T[:self.nCol].T, 
             self.sigma_placeholder,
             )
-        out += logd_CDM_mx_ma(self.data.W, zeta.T[self.nCol:].T, self.CatMat)
+        out += logd_cumdirmultinom_mx_ma(self.data.W, zeta.T[self.nCol:].T, self.CatMat)
         return out
 
     def initialize_sampler(self, ns):
@@ -490,21 +489,21 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    p = argparser()
-    # d = {
-    #     'in_data_path'    : './ad/cover/data.csv',
-    #     'in_outcome_path' : './ad/cover/outcome.csv',
-    #     'out_path' : './ad/cover/results_mdppprg.pkl',
-    #     'cat_vars' : '[9,10,11,12]',
-    #     'decluster' : 'False',
-    #     'quantile' : 0.998,
-    #     'nSamp' : 50000,
-    #     'nKeep' : 20000,
-    #     'nThin' : 30,
-    #     'eta_alpha' : 2.,
-    #     'eta_beta' : 1.,
-    #     }
-    # p = Heap(**d)
+    # p = argparser()
+    d = {
+        'in_data_path'    : './ad/cover/data.csv',
+        'in_outcome_path' : './ad/cover/outcome.csv',
+        'out_path' : './ad/cover/results_mdppprg.pkl',
+        'cat_vars' : '[9,10,11,12]',
+        'decluster' : 'False',
+        'quantile' : 0.998,
+        'nSamp' : 50000,
+        'nKeep' : 20000,
+        'nThin' : 30,
+        'eta_alpha' : 2.,
+        'eta_beta' : 1.,
+        }
+    p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values

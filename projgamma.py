@@ -1,15 +1,16 @@
 """ Functions relating to density of Projected Gamma.  All functions are
 parameterized such that E(x) = alpha / beta (treat beta as rate parameter). """
-
 import numpy as np
 np.seterr(under = 'ignore', over = 'raise')
-from numpy.linalg import norm
+from numpy.linalg import norm, slogdet, inv
 from math import cos, sin, log, acos, exp
 from scipy.stats import gamma, uniform, norm as normal
-from scipy.special import gammaln
+from scipy.special import gammaln, multigammaln
 from functools import lru_cache
-from genpareto import gpd_fit
 from collections import namedtuple
+from contextlib import nullcontext
+
+from genpareto import gpd_fit
 from slice import univariate_slice_sample, skip_univariate_slice_sample
 
 # Tuples for storing priors
@@ -18,123 +19,403 @@ GammaPrior     = namedtuple('GammaPrior', 'a b')
 DirichletPrior = namedtuple('DirichletPrior', 'a')
 BetaPrior      = namedtuple('BetaPrior', 'a b')
 
-def to_angular(hyp):
-    """ Convert data to angular representation. """
-    n, k  = hyp.shape
-    theta = np.empty((n, k - 1))
-    hyp = np.maximum(hyp, 1e-7)
-    for i in range(k - 1):
-        theta[:,i] = np.arccos(hyp[:,i] / (norm(hyp[:,i:], axis = 1)))
-    return theta
-
 ## Functions related to projected gamma density
 
-def logdprojgamma(coss, sins, sinp, alpha, beta):
-    """ Log-density of projected gamma.  Inputs have already been
-    pre-formatted for use.
-    coss = matrix of cos(theta), last col = 1  (n x k)
-    sins = matrix of sin(theta), first col = 1 (n x k)
-    sinp = cumulative product of sins, by column (n x k)
-    alpha = vector of shape parameters for underlying gamma distributions
-    beta  = vector of rate parameters for underlying gamma distributions
+def logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     """
-    Yl = coss * sinp
-    k = Yl.shape[0]
-    A = alpha.sum()
-    B = (beta * Yl).sum(axis = 1)
-    asinv = np.cumsum(alpha[1:][::-1])[::-1]
-    lp = (
-        + gammaln(A)
-        - A * log(B)
-        + (alpha * log(beta) - gammaln(alpha)).sum()
-        + (log(coss[:,:(k-1)]) * (alpha[:(k-1)] - 1)).sum(axis = 1)
-        + (log(sins[:,1:]) * (asinv - 1)).sum(axis = 1)
-        )
-    return lp
-
-def logdprojgamma_pre_single(lcoss, lsins, Yl, alpha, beta):
-    A = alpha.sum()
-    B = (Yl * beta).sum()
-    k = Yl.shape[0]
-    asinv = np.cumsum(alpha[1:][::-1])[::-1]
-    lp = (
-        + gammaln(A)
-        - A * log(B)
-        + (alpha * np.log(beta) - gammaln(alpha)).sum()
-        + (lcoss[:(k-1)] * (alpha[:(k-1)] - 1)).sum()
-        + (lsins[1:] * (asinv - 1)).sum()
-        )
-    return lp
-
-def logdprojgamma_pre(lcoss, lsins, Yl, alpha, beta):
-    """ Log-density of projected gamma.  Inputs have been pre-computed as
-    much as possible.
-    lcoss = log(matrix of cos(theta), last col = 1  (n x k))
-    lsins = log(matrix of sin(theta), first col = 1 (n x k))
-    Yl    = latent Y matrix--projection of direction vector onto unit hypersphere
-           in Euclidean space. (n * k)
-    alpha = vector of shape parameters for underlying gamma distributions
-    beta  = vector of rate parameters for underlying gamma distributions
+    Product of Gammas log-density for multiple Y, multiple theta (not paired)
+    ----
+    aY     : array of Y     (n x d)
+    aAlpha : array of alpha (J x d)
+    aBeta  : array of beta  (J x d)
+    ----
+    return : array of ld    (n x J)
     """
-    # if only a single row, then send it down the single chute.
-    if len(Yl.shape) == 1:
-        return np.array([logdprojgamma_pre_single(lcoss, lsins, Yl, alpha, beta)])
+    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
+        out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
+        out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
+        out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
+    np.nan_to_num(out, False, -np.inf)
+    return out
 
-    # otherwise continue on, calculate logdprojgamma for all
-    A = alpha.sum()
-    B = (Yl * beta).sum(axis = 1)
-    k = lcoss.shape[1]
-    asinv = np.cumsum(alpha[1:][::-1])[::-1]
-    lp = (
-        + gammaln(A)
-        - A * np.log(B)
-        + (alpha * np.log(beta) - gammaln(alpha)).sum()
-        + (lcoss[:,:(k - 1)] * (alpha[:(k - 1)] - 1)).sum(axis = 1)
-        + (lsins[:,1:] * (asinv - 1)).sum(axis = 1)
-        )
+def pt_logd_prodgamma_my_mt(aY, aAlpha, aBeta):
+    """
+    product of gammas log-density for multiple y, multiple theta 
+    ----
+    aY     : array of Y     (t x n x d) [Y in R^d]
+    aAlpha : array of alpha (t x J x d)
+    aBeta  : array of beta  (t x J x d)
+    ----
+    returns: (n x t x J)
+    """
+    t, n, d = aY.shape; j = aAlpha.shape[1] # set dimensions
+    ld = np.zeros((n, t, j))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta)).reshape(1, t, j)
+        ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, t, j)
+        ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
+    ld -= np.einsum('tnd,tjd->ntj', aY, aBeta)
+    return ld
+
+def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
+    """
+    product of gammas log-density for paired y, theta
+    ----
+    aY     : array of Y     (t x n x d) [Y in R^d]
+    aAlpha : array of alpha (t x n x d)
+    aBeta  : array of beta  (t x n x d)
+    ----
+    returns: (t x n)
+    """
+    out = np.zeros(aY.shape[:-1])                             # n temps x n Y
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))    # beta^alpha
+        out -= np.einsum('tnd->tn', gammaln(aAlpha))              # gamma(alpha)
+        out += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
+        out -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
+    
+    return out                                                # per-temp,Y log-density
+
+def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
+    """
+    Log-density for product of Gammas 
+        for Multiple Y, single theta (per temperature)
+    ----
+    Inputs:
+        aY      (t, n, d)
+        aAlpha  (t, d)
+        aBeta   (t, d)
+    Returns:
+        log-density (t, n)
+    """
+    ld = np.zeros(aY.shape[:-1])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
+        ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
+        ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
+    ld -= np.einsum('tnd,td->tn', aY, aBeta)
+    return ld
+
+def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
+    # def dprojgamma_log_my_mt(aY, aAlpha, aBeta):
+    """
+    projected gamma log-density (proportional) 
+        for multiple Y, multiple theta (per temperature)
+    ----
+    Inputs:
+        aY     : array of Y     (n, d)    [Y in S_p^{d-1}]
+        aAlpha : array of alpha (t, j, d)
+        aBeta  : array of beta  (t, j, d)
+    Returns:
+        log-density (n, t, j)
+    """
+    t,n,d = aY.shape; j = aAlpha.shape[1] # set dimensions
+    ld = np.zeros((n,t,j))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
+        ld -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+        ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
+        ld += gammaln(np.einsum('tjd->tj', aAlpha))[None,:,:]
+        ld -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
+    np.nan_to_num(ld, False, -np.inf)
+    return ld
+
+def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
+    # def dprojgamma_log_paired_yt(aY, aAlpha, aBeta):
+    """
+    projected gamma log-density (proportional) for paired y, theta
+    ----
+    aY     : array of Y     (n, d) [Y in S_p^{d-1}]
+    aAlpha : array of alpha (t, n, d)
+    aBeta  : array of beta  (t, n, d)
+    ----
+    returns: (t, n)
+    """
+    ld = np.zeros(aAlpha.shape[:-1])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
+        ld -= np.einsum('tnd->tn', gammaln(aAlpha))
+        ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
+    ld += gammaln(np.einsum('tnd->tn', aAlpha))
+    ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
+    return ld
+
+def logd_gamma_my(aY, alpha, beta):
+    """
+    log-density of Gamma distribution
+
+    Args:
+        aY    : (n x d)
+        alpha : float
+        beta  : float
+    Returns: 
+        ld    : (n x d)
+    """
+    lp = np.zeros(aY.shape)
+    with np.errstate(divide = 'ignore',invalid = 'ignore'):
+        lp += alpha * np.log(beta)
+        lp -= gammaln(alpha)
+        lp += (alpha - 1) * np.log(aY)
+        lp -= beta * aY
     return lp
 
-def dprojgamma(theta, alpha, beta, logd = False):
-    k = len(alpha)
-    assert all(len(theta) == k - 1, len(beta) == k)
+def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
+    # def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
+    """ 
+    multivariate normal log-density for multiple x, single theta per temp
+    ------
+    x        : array of alphas    (t x j x d)
+    mu       : array of mus       (t x d)
+    cov_chol : array of cov chols (t x d x d)
+    cov_inv  : array of cov mats  (t x d x d)    
+    """
+    ld = np.zeros(x.shape[:-1])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld -= np.einsum('tdd->t', np.log(cov_chol)).reshape(-1,1)
+    ld -= 0.5 * np.einsum(
+        'tjd,tdl,tjl->tj', 
+        x - mu.reshape(-1,1,cov_chol.shape[1]), 
+        cov_inv, 
+        x - mu.reshape(-1,1,cov_chol.shape[1]),
+        )
+    return ld
 
-    coss = np.vstack((np.cos(theta).T, 1)).T
-    sins = np.vstack((1,np.sin(theta).T)).T
-    sinp = np.cumprod(sins, axis = 1)
+def logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
+    #dmvnormal_log_mx_st(x, mu, cov_chol, cov_inv):
+    ld = np.zeros(x.shape[:-1])
+    ld -= np.log(np.diag(cov_chol)).sum()
+    ld -= 0.5 * np.einsum('td,dl,tl->t',x - mu, cov_inv, x - mu)
+    return ld
 
-    ld = logdprojgamma(coss, sins, sinp, alpha, beta)
+def logd_invwishart_ms(Sigma, nu, psi):
+    # def dinvwishart_log_ms(Sigma, nu, psi):
+    ld = np.zeros(Sigma.shape[0])
+    ld += 0.5 * nu * slogdet(psi)[1]
+    ld -= multigammaln(nu / 2, psi.shape[-1])
+    ld -= 0.5 * nu * psi.shape[-1] * log(2.)
+    ld -= 0.5 * (nu + Sigma.shape[-1] + 1) * slogdet(Sigma)[1]
+    ld -= 0.5 * np.einsum(
+            '...ii->...', np.einsum('ji,...ij->...ij', psi, inv(Sigma)),
+            )
+    return ld
 
-    if logd:
-        return ld
-    else:
-        return exp(ld)
+def logd_dirmultinom_mx_sa(aW, vAlpha):
+    # def logd_dirichlet_multinomial_mx_sa(aW, vAlpha):
+    """
+    log-density for Dirichlet-Multinomial;
+    calculates log-density for each observation (aW, axis 0)
+    for one set of shape parameters
+    (use for updating shape parameters per cluster)
+    ----
+    inputs:
+        aW     : (n x d)
+        aAlpha : (d)
+    outputs:
+        logd   : (n)
+    """
+    sa = vAlpha.sum()
+    sw = aW.sum(axis = 1)
+    logd = np.zeros(aW.shape[0])
+    logd += gammaln(sa)
+    logd += gammaln(sw + 1)
+    logd -= gammaln(sw + sa)
+    logd += gammaln(aW + vAlpha[None,:]).sum(axis = 1)
+    logd -= gammaln(vAlpha).sum()
+    logd -= gammaln(aW + 1).sum(axis = 1)
+    return logd
 
-def dprojgamma_trig(s_theta, c_theta, alpha, beta, logd = False):
-    coss = np.vstack((c_theta.T, 1)).T
-    sins = np.vstack((1, s_theta.T)).T
-    sinp = np.cumprod(sins, axis = 1)
+def logd_dirmultinom_paired(aW, aAlpha):
+    """
+    log-density for Dirichlet-Multinomial
+    calculates log-density for each observation/shape parameter pair
+    ---
+    inputs:
+        aW     : (n x d)
+        aAlpha : (n x d)
+    """
+    sa = aAlpha.sum(axis = 1)
+    sw = aW.sum(axis = 1)
+    logd = np.zeros(aW.shape[0])
+    logd += gammaln(sa)
+    logd += gammaln(sw + 1)
+    logd -= gammaln(sw + sa)
+    logd += gammaln(aW + aAlpha).sum(axis = 1)
+    logd -= gammaln(aAlpha).sum(axis = 1)
+    logd -= gammaln(aW + 1).sum(axis = 1)
+    return logd
 
-    ld = logdprojgamma(coss, sins, sinp, alpha, beta)
+def logd_cumdirmultinom_mx_sa(aW, vAlpha, sphere_mat):
+    sa = np.einsum('d,cd->c', vAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros(aW.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += gammaln(sa).sum()
+        logd += np.einsum('nc->n', gammaln(sw + 1))
+        logd -= np.einsum('nc->n', gammaln(sw + sa[None,:]))
+        logd += np.einsum('nd->n', gammaln(aW + vAlpha[None,:]))
+        logd -= gammaln(vAlpha).sum()
+        logd -= np.einsum('nd->n', gammaln(aW + 1))
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
 
-    if logd:
-        return ld
-    else:
-        return exp(ld)
+def pt_logd_cumdirmultinom_mx_sa(aW, aAlpha, sphere_mat):
+    sa = np.einsum('td,cd->tc', aAlpha, sphere_mat) # (t,c)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)     # (n,c)
+    logd = np.zeros((aAlpha.shape[0], aW.shape[0])) # (t,n)
+    with np.errstate(divide = 'ignore',  invalid = 'ignore'):
+        logd += np.einsum('', gammaln(sa))[:,None] # (t,)
+        logd += np.einsum('nc->n', gammaln(sw + 1))[None,:] # (,n) 
+        logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa[:,None,:])) # (t,n)
+        logd += np.einsum('tnd->tn', gammaln(aW[None,:,:] + aAlpha[:,None,:])) # (t,n)
+        logd -= np.einsum('td,t', gammaln(aAlpha))[:,None] # (t,)
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[None,:]
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
 
-def dprojgamma_latent(Y, alpha, beta):
-    pass
+def logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
+    """
+    Log-density of concatenated Dirichlet-Multinomial distribution
+    ---
+    Inputs: 
+        aW         (n x d)
+        aAlpha     (j x d)
+        sphere_mat (c x d)
+    Output:
+        logd (n x j)
+    """
+    sa = np.einsum('jd,cd->jc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('jc->j', gammaln(sa))[None,:]
+        logd += np.einsum('nc->n', gammaln(sw + 1))[:,None]
+        logd -= np.einsum('njc->nj', gammaln(sw[:,None,:] + sa[None,:,:]))
+        logd += np.einsum('njd->nj', gammaln(aW[:,None,:] + aAlpha[None,:,:]))
+        logd -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[:,None]
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
 
-## Function for sampling from projected gamma
+def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
+    """
+    inputs:
+        aW:         (n,d)
+        aAlpha:     (t,j,d)
+        sphere_mat: (c,d)
+    output:
+        logd:       (n,t,j)
+    """
+    sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros((aW.shape[0], aAlpha.shape[0], aAlpha.shape[1]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
+        logd += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
+        logd -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+        logd += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+        logd -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+        logd -= np.einsum('tnd->nt', gammaln(aW + 1))[:,:,None]
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
 
-def rprojgamma(alpha, beta):
-    gammas = gamma(alpha, scale = 1/beta).rvs()
-    thetas = to_angular(gammas)
-    return thetas
+def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
+    sa = np.einsum('nd,cd->nc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    logd = np.zeros(aW.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('nc->n', gammaln(sa))
+        logd += np.einsum('nc->n', gammaln(sw + 1))
+        logd -= np.einsum('nc->n', gammaln(sw + sa))
+        logd += np.einsum('nd->n', gammaln(aW + aAlpha))
+        logd -= np.einsum('nd->n', gammaln(aAlpha))
+        logd -= np.einsum('nd->n', gammaln(aW + 1))
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def pt_logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
+    """
+    returns log-likelihood per temperature
+    inputs:
+        aW         : (n,d)
+        aAlpha     : (t,n,d)
+        sphere_mat : (c,d)
+    outputs:
+        logd       : (t,n)
+    """
+    sa = np.einsum('tnd,cd->tnc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc')
+    logd = np.zeros((aAlpha.shape[0], aW.shape[0]))
+    # with np.errstate(divide = 'ignore', invalid = 'ignore'):
+    with nullcontext():
+        logd += np.einsum('tnc->tn', gammaln(sa))
+        logd += np.einsum('nc->n', gammaln(sw + 1))[None,:]
+        logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa))
+        logd += np.einsum('tnd->tn', gammaln(aW[None,:,:] + aAlpha))
+        logd -= np.einsum('tnd->tn', gammaln(aAlpha))
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[None,:]
+    # np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def logd_loggamma_sx(x, a, b):
+    logd = 0.
+    logd += a * log(b)
+    logd -= gammaln(a)
+    logd += a * x
+    logd -= b * exp(x)
+    return logd
+
+def logd_loggamma_mx_st(x, a, b):
+    logd = np.zeros(x.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += a * np.log(b)
+        logd -= gammaln(a)
+        logd += a * x
+        logd -= b * np.exp(x)
+    return logd
+
+def logd_loggamma_paired(x, a, b):
+    """
+    Log-density of log-gamma distribution at multiple temperatures
+    inputs:
+        x   : (m,d)
+        a   : (m,d)
+        b   : (m,d)
+    output:
+        out : (m)
+    """
+    logd = np.empty((x.shape[0]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('md,md->m', a, np.log(b))
+        logd -= np.einsum('md->m', gammaln(a))
+        logd += np.einsum('md,md->m', a, x)
+        logd -= np.einsum('md,md->m', b, np.exp(x))
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def pt_logd_loggamma_mx_st(x, a, b):
+    """
+    Log-density of log-gamma distribution at multiple temperatures
+    inputs:
+        x : (t,j,d)
+        a : (t,d)
+        b : (t,d)
+    output:
+        out : (t,j)
+    """
+    logd = np.empty((x.shape[0], x.shape[1]))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += np.einsum('td,td->t', a, np.log(b))
+        logd -= np.einsum('td->t', gammaln(a))
+        logd += np.einsum('tjd,td->tj', a, x)
+        logd -= np.einsum('td,tjd->tj', b, np.exp(x))
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
 
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
 
-# @lru_cache(maxsize = 32)
 def log_post_log_alpha_1(log_alpha_1, y_1, prior):
     """ Log posterior for log-alpha_1 assuming a gamma distribution,
     with beta assumed to be 1. """
@@ -170,7 +451,6 @@ def sample_alpha_1_slice(curr_alpha_1, y_1, prior, increment_size = 2.):
     f = lambda log_alpha_1: log_post_log_alpha_1(log_alpha_1, y_1, prior)
     return exp(univariate_slice_sample(f, log(curr_alpha_1), increment_size))
 
-#@lru_cache(maxsize = 128)
 def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
     """ Log posterior for log-alpha assuming a gamma distribution,
     beta integrated out of the posterior. """
@@ -211,15 +491,5 @@ def sample_beta_fc(alpha, y, prior):
     aa = len(y) * alpha + prior.a
     bb = sum(y) + prior.b
     return gamma.rvs(aa, scale = 1. / bb)
-
-def density_projgamma_hypercube(y, alpha, beta):
-    ld = (
-        + gammaln(alpha.sum())
-        - alpha.sum() * np.log(beta * y).sum()
-        + (alpha * np.log(beta)).sum()
-        - gammaln(alpha).sum()
-        + ((alpha - 1) * np.log(y)).sum()
-        )
-    return exp(ld)
 
 # EOF

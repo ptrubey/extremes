@@ -13,8 +13,8 @@ from cUtility import diriproc_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
-from projgamma import GammaPrior
-from model_sdpppg import dprodgamma_log_my_mt
+from projgamma import GammaPrior, logd_prodgamma_my_mt
+# from model_sdpppg import dprodgamma_log_my_mt
 
 def update_zeta_j_wrapper(args):
     # parse arguments
@@ -157,7 +157,7 @@ class Chain(DirichletProcessSampler):
 
         self.curr_iter += 1
         # Log-density for product of Gammas
-        log_likelihood = dprodgamma_log_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_placeholder)
+        log_likelihood = logd_prodgamma_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_placeholder)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
         # Sample new cluster membership indicators 
@@ -308,17 +308,17 @@ class Result(object):
 if __name__ == '__main__':
     pass
 
-    # from data import Data_From_Raw
-    # from projgamma import GammaPrior
-    # from pandas import read_csv
-    # import os
+    from data import Data_From_Raw
+    from projgamma import GammaPrior
+    from pandas import read_csv
+    import os
 
-    # raw = read_csv('./datasets/ivt_nov_mar.csv')
-    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    # model.sample(50000)
-    # model.write_to_disk('./test/results.pickle', 20000, 30)
-    # res = Result('./test/results.pickle')
+    raw = read_csv('./datasets/ivt_nov_mar.csv')
+    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    model.sample(5000)
+    model.write_to_disk('./test/results.pickle', 3000, 2)
+    res = Result('./test/results.pickle')
     # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF

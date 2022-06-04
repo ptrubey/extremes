@@ -15,6 +15,19 @@ DirichletProcessSampler assumes the existence of:
 import time
 import numpy as np
 
+def bincount2D_vectorized(arr, m):
+    """
+    code from stackoverflow:
+        https://stackoverflow.com/questions/46256279    
+    Args:
+        arr : (np.ndarray(int)) -- matrix of cluster assignments by temperature (t x n)
+        m   : (int)             -- maximum number of clusters
+    Returns:
+        (np.ndarray(int)): matrix of cluster counts by temperature (t x J)
+    """
+    arr_offs = arr + np.arange(arr.shape[0])[:,None] * m
+    return np.bincount(arr_offs.ravel(), minlength=arr.shape[0] * m).reshape(-1, m)
+
 class BaseSampler(object):
     print_string_during = '\rSampling {:.1%} Completed in {}'
     print_string_after = '\rSampling 100% Completed in {}'

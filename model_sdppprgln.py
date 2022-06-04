@@ -1,7 +1,7 @@
 import numpy as np
 np.seterr(divide='raise', over = 'raise', under = 'ignore', invalid = 'raise')
 from numpy.random import choice, gamma, beta, normal, uniform
-from numpy.linalg import cholesky, slogdet, inv
+from numpy.linalg import cholesky, inv
 from scipy.stats import invwishart
 from scipy.special import gammaln
 from collections import namedtuple
@@ -9,16 +9,16 @@ from itertools import repeat
 import pandas as pd
 import os
 import pickle
-from math import log
 
-from samplers import DirichletProcessSampler
+from samplers import DirichletProcessSampler, bincount2D_vectorized
 from cUtility import generate_indices
 
 from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
-from projgamma import GammaPrior
-from model_sdpppgln import bincount2D_vectorized, dprodgamma_log_my_mt, \
-    dprodgamma_log_paired_yt, dgamma_log_my, dmvnormal_log_mx, dmvnormal_log_mx_st, \
-    dinvwishart_log_ms, cluster_covariance_mat
+from projgamma import GammaPrior, logd_gamma_my, logd_invwishart_ms,    \
+    logd_mvnormal_mx_st, pt_logd_mvnormal_mx_st,                        \
+    pt_logd_prodgamma_my_mt, pt_logd_prodgamma_paired
+    
+from model_sdpppgln import cluster_covariance_mat
 
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
@@ -128,7 +128,7 @@ class Chain(DirichletProcessSampler):
         # Y = np.einsum('tn,nd->tnd', r, self.data.Yp)           # (t, n, d)
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count) # (t, J)
         cand_cluster_state = (curr_cluster_state == 0)         # (t, J)
-        log_likelihood = dprodgamma_log_my_mt(Y, zeta, self.sigma_ph1)  # (n, t, J)
+        log_likelihood = pt_logd_prodgamma_my_mt(Y, zeta, self.sigma_ph1)  # (n, t, J)
         # Parallel Tempering
         log_likelihood *= self.itl.reshape(1,-1,1)
         tidx = np.arange(self.nTemp)                          # (t)
@@ -385,18 +385,18 @@ class Chain(DirichletProcessSampler):
             lpl = np.zeros(self.nTemp)
             lpp = np.zeros(self.nTemp)
             Y = np.einsum('tn,nd->tnd', self.curr_r, self.data.Yp) # (t x n x d)
-            lpl += dprodgamma_log_paired_yt(
+            lpl += pt_logd_prodgamma_paired(
                 Y, 
                 self.curr_zeta[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat, self.nCol),
                 self.sigma_ph2,
                 ).sum(axis = 1)
             lpl += ((self.nCol - 1) * np.log(self.curr_r)).sum(axis = 1)
             lpl += np.einsum('tj,tj->t', 
-                    dmvnormal_log_mx(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
+                    pt_logd_mvnormal_mx_st(np.log(self.curr_zeta), mu, Sigma_cho, Sigma_inv), extant_clusters,
                     )
-            lpp += dmvnormal_log_mx_st(self.curr_mu, *self.priors.mu)
-            lpp += dinvwishart_log_ms(self.curr_Sigma, *self.priors.Sigma)
-            lpp += dgamma_log_my(self.curr_eta, *self.priors.eta)
+            lpp += logd_mvnormal_mx_st(self.curr_mu, *self.priors.mu)
+            lpp += logd_invwishart_ms(self.curr_Sigma, *self.priors.Sigma)
+            lpp += logd_gamma_my(self.curr_eta, *self.priors.eta)
 
             sw = choice(self.nTemp, 2 * self.nSwap_per, replace = False).reshape(-1,2)
             sw_alpha = (self.itl[sw.T[1]] - self.itl[sw.T[0]]) * (lpl[sw.T[0]] - lpl[sw.T[1]]) + (lpp[sw.T[0]] - lpp[sw.T[1]])

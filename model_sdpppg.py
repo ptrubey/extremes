@@ -1,3 +1,9 @@
+"""
+Model description for Dirichlet-process Mixture of Projected Gammas on unit p-sphere
+---
+PG is unrestricted (allow betas to vary)
+Centering distribution is product of Gammas
+"""
 from numpy.random import choice, gamma, beta, uniform
 from collections import namedtuple
 from itertools import repeat
@@ -13,25 +19,7 @@ from cUtility import diriproc_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
-from projgamma import GammaPrior
-
-def dprodgamma_log_my_mt(aY, aAlpha, aBeta):
-    """
-    Product of Gammas log-density for multiple Y, multiple theta (not paired)
-    ----
-    aY     : array of Y     (n x d)
-    aAlpha : array of alpha (J x d)
-    aBeta  : array of beta  (J x d)
-    ----
-    return : array of ld    (n x J)
-    """
-    out = np.zeros((aY.shape[0], aAlpha.shape[0]))
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
-    out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
-    out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
-    out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
-    return out
+from projgamma import GammaPrior, logd_prodgamma_my_mt
 
 def update_zeta_j_wrapper(args):
     # parse arguments
@@ -238,7 +226,7 @@ class Chain(DirichletProcessSampler):
 
         self.curr_iter += 1
         # normalizing constant for product of Gammas
-        log_likelihood = dprodgamma_log_my_mt(r.reshape(-1,1) * self.data.Yp, zeta, sigma)
+        log_likelihood = logd_prodgamma_my_mt(r.reshape(-1,1) * self.data.Yp, zeta, sigma)
         # pre-generate uniforms to inverse-cdf sample cluster indices
         unifs   = uniform(size = self.nDat)
         # Sample new cluster membership indicators 
