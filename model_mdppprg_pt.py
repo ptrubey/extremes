@@ -1,4 +1,5 @@
 from re import M, S
+from termios import CINTR
 from numpy.random import choice, gamma, beta, uniform, normal
 from numpy.linalg import cholesky
 from collections import namedtuple
@@ -14,15 +15,11 @@ from scipy.special import gammaln, betaln
 import cUtility as cu
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
-from cUtility import diriproc_cluster_sampler
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
-from projgamma import GammaPrior
-from model_cdppprg import logd_CDM_mx_ma, logd_CDM_mx_sa, logd_CDM_paired, logd_loggamma_mx, \
-                        pt_logd_CDM_mx_ma, pt_logd_CDM_mx_sa, pt_logd_CDM_paired, pt_logd_loggamma
-from model_sdpppg import dprodgamma_log_my_mt
-from model_sdpppgln import bincount2D_vectorized, dgamma_log_my, cluster_covariance_mat, \
-                        dprodgamma_log_paired_yt, dprojgamma_log_paired_yt
-from projgamma import logd_prodgamma_my_mt
+from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
+from projgamma import pt_logd_prodgamma_my_st, logd_gamma_my,  pt_logd_loggamma_mx_st,  \
+    pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,                     \
+    pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
 from multiprocessing import Pool
 from energy import limit_cpu
 
@@ -35,12 +32,12 @@ def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
     logp = np.zeros(2)
     for i in range(curr_zeta.shape[0]):
         prop_log_zeta[i] += offset[i]
-        logp += logd_CDM_mx_ma(
+        logp += pt_logd_cumdirmultinom_mx_ma(
             Ws, 
             np.exp(np.vstack((curr_log_zeta, prop_log_zeta))), 
             catmat,
             ).sum(axis = 0)
-        logp += logd_loggamma_mx(
+        logp += pt_logd_loggamma_mx_st(
             np.vstack((curr_log_zeta[i], prop_log_zeta[i])), 
             alpha[i], beta[i],
             ).ravel()
@@ -87,21 +84,36 @@ class Samples(object):
     alpha = None
     beta  = None
     delta = None
-    r     = None
     eta   = None
+    lzhist = None
 
-    def __init__(self, nSamp, nDat, nCol, nCat, nCats):
+    def __init__(self, nSamp, nDat, nCol, nCat, nTemp):
         """
         nCol: number of 
         nCat: number of categorical columns
         nCats: number of categorical variables        
         """
         self.zeta  = [None] * (nSamp + 1)
-        self.alpha = np.empty((nSamp + 1, nCol + nCat))
-        self.beta  = np.empty((nSamp + 1, nCol + nCat))
-        self.delta = np.empty((nSamp + 1, nDat), dtype = int)
-        self.r     = np.empty((nSamp + 1, nDat))
-        self.eta   = np.empty(nSamp + 1)
+        self.alpha = np.empty((nSamp + 1, nTemp, nCol + nCat))
+        self.beta  = np.empty((nSamp + 1, nTemp, nCol + nCat))
+        self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
+        self.eta   = np.empty((nSamp + 1, nTemp))
+        self.lzhist = np.empty((nSamp + 1, nTemp, nDat, nCol + nCat))
+        return
+
+def Samples_(object):
+    zeta  = None
+    alpha = None
+    beta  = None
+    delta = None
+    eta   = None
+
+    def __init__(self, nSamp, nDat, nCol, nCat):
+        self.zeta = [None] * (nSamp)
+        self.alpha = np.empty((nSamp, nCol + nCat))
+        self.beta  = np.empty((nSamp, nCol + nCat))
+        self.delta = np.empty((nSamp, nDat))
+        self.eta   = np.empty((nSamp))
         return
 
 class Chain(DirichletProcessSampler):
@@ -114,9 +126,6 @@ class Chain(DirichletProcessSampler):
     @property
     def curr_beta(self):
         return self.samples.beta[self.curr_iter]
-    @property
-    def curr_r(self):
-        return self.samples.r[self.curr_iter]
     @property
     def curr_delta(self):
         return self.samples.delta[self.curr_iter]
@@ -136,16 +145,14 @@ class Chain(DirichletProcessSampler):
     am_mean_c = None
     am_mean_i = None
     am_n_c    = None
-    am_alpha  = None
     max_clust_count = None
 
     def sample_delta(self, r, delta, zeta, eta):
-        # Y = r[:,:,None] * self.data.Yp[None,:,:]
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_cluster_state = (curr_cluster_state == 0)
         log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        log_likelihood += logd_prodgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
-        log_likelihood += pt_logd_CDM_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.sphere_mat)
+        log_likelihood += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
+        log_likelihood += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.sphere_mat)
         tidx = np.arange(self.nTemp)
         p = uniform(size = (self.nDat, self.nTemp))
         p += tidx[None,:]
@@ -169,7 +176,7 @@ class Chain(DirichletProcessSampler):
             curr_cluster_state[tidx, delta.T[i]] += 1
             cand_cluster_state[tidx, delta.T[i]] = False
         return
-    
+
     def clean_delta_zeta(self, delta, zeta):
         """
         Find populated clusters, re-index them, 
@@ -183,25 +190,12 @@ class Chain(DirichletProcessSampler):
             zeta  : cluster parameter matrix (J* x d)
         """
         # Find populated clusters, re-index them
-        # keep, delta[:] = np.unique(delta, return_inverse = True)
         for t in range(self.nTemp):
             keep, delta[t] = np.unique(delta[t], return_inverse = True)
             zeta[t][:keep.shape[0]] = zeta[t,keep]
-        # return new indices, cluster parameters associated with populated clusters
-        # return delta, zeta[keep]
         return
 
     def sample_zeta_new(self, alpha, beta):
-        # return gamma(shape = alpha, scale = 1 / beta, size = (m, self.nCol + self.nCat))
-        # out = np.empty((self.nTemp, self.max_clust_count, self.nCol + self.nCat))
-        # np.einsum(
-        #     'tzy,tjy->tjz', 
-        #     np.triu(Sigma_chol),
-        #     normal(size = out.shape),
-        #     out = out,
-        #     )
-        # out += mu[:,None,:]
-        # np.exp(out, out = out)
         out = gamma(
             shape = alpha[:,None,:], 
             scale = 1 / beta[:,None,:], 
@@ -216,7 +210,7 @@ class Chain(DirichletProcessSampler):
             )
         return self.am_cov_c[index]
 
-    def sample_zeta(self, zeta, delta, r, alpha, beta):
+    def sample_zeta(self, zeta, delta, alpha, beta):
         """
         zeta      : (t x J x D)
         delta     : (t x n)
@@ -225,157 +219,286 @@ class Chain(DirichletProcessSampler):
         Sigma_cho : (t x D x D)
         Sigma_inv : (t x D x D)
         """
-        Y = r[:,:,None] * self.data.Yp[None,:,:]
-        lY = np.log(Y)
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_cluster_state = (curr_cluster_state == 0)
         delta_ind_mat = delta[:,:,None] == range(self.max_clust_count)
-
         idx = np.where(~cand_cluster_state)
         covs = self.am_covariance_matrices(delta, idx)
+        
+        am_alpha = np.zeros((self.nTemp, self.max_clust_count))
+        am_alpha[:] = -np.inf
+        am_alpha[idx] = 0.
+        
+        zcurr = zeta
         lzcurr = np.log(zeta)
         lzcand = lzcurr.copy()
-        lzcand[idx] += np.einsum('mpq,mq->mp', cholesky(covs), normal(size = (idx[0].shape[0], self.nCol)))
-        zcand = np.exp(zeta)
-        
-        z1_shape = [self.nTemp, self.nDat, self.nCol]
-        z2_shape = [self.nTemp, self.nDat, self.nCat]
-        self.am_alpha[:] = -np.inf
-        self.am_alpha[idx] = 0.
-        self.am_alpha[idx] += dprojgamma_log_paired_yt(
-            self.data.Yp,
-            zcand[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
-            self.sigma_ph2,
+        lzcand[idx] += np.einsum(
+            'mpq,mq->mp', 
+            cholesky(covs), normal(size = (idx[0].shape[0], self.nCol)),
             )
-        self.am_alpha[idx] += logd_CDM_paired(
-            self.data.W,
-            zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
-            self.CatMat,
-            )
-        self.am_alpha[idx] -= dprodgamma_log_paired_yt(
-            self.data.Yp,
-            zeta[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
-            self.sigma_ph2,
-            )
-        self.am_alpha[idx] -= logd_CDM_paired(
-            self.data.W,
-            zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
-            self.CatMat,
-            )
-        self.am_alpha[idx] *= self.itl[idx[0]]
-        self.am_alpha[idx] += pt_logd_loggamma(lzcand[idx], alpha[idx[0]], beta[idx[0]])
-        self.am_alpha[idx] -= pt_logd_loggamma(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
-        keep = np.where(np.log(uniform(size = self.am_alpha.shape)) < self.am_alpha)
+        zcand = np.exp(lzcurr)
+        am_alpha += np.einsum('ntj,tnj->tj', self.log_likelihood(zcand), delta_ind_mat)
+        am_alpha -= np.einsum('ntj,tnj->tj', self.log_likelihood(zcurr), delta_ind_mat)
+        with np.errstate(invalid = 'ignore'):
+            am_alpha *= self.itl[:,None]
+        am_alpha[idx] += pt_logd_loggamma_mx_st(lzcand[idx], alpha[idx[0]], beta[idx[0]])
+        am_alpha[idx] -= pt_logd_loggamma_mx_st(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
+        keep = np.where(np.log(uniform(size = am_alpha.shape)) < am_alpha)
+        # self.am_alpha[:] = -np.inf
+        # self.am_alpha[idx] = 0.
+        # self.am_alpha[idx] += logd_projgamma_paired_yt(
+        #     self.data.Yp,
+        #     zcand[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
+        #     self.sigma_ph2,
+        #     )
+        # self.am_alpha[idx] += pt_logd_cumdirmultinom_paired(
+        #     self.data.W,
+        #     zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
+        #     self.CatMat,
+        #     )
+        # self.am_alpha[idx] -= pt_logd_projgamma_paired_yt(
+        #     self.data.Yp,
+        #     zeta[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
+        #     self.sigma_ph2,
+        #     )
+        # self.am_alpha[idx] -= pt_logd_cumdirmultinom_paired(
+        #     self.data.W,
+        #     zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
+        #     self.CatMat,
+        #     )
+        # self.am_alpha[idx] *= self.itl[idx[0]]
         zeta[keep] = np.exp(lzcand[keep])
         return zeta
 
-    def sample_alpha(self, zeta, curr_alpha):
-        n = zeta.shape[0]
-        zs = zeta.sum(axis = 0)
-        lzs = np.log(zeta).sum(axis = 0)
+    def sample_alpha(self, zeta, curr_alpha, extant_clusters):
+        """
+        Args:
+            zeta       : (t,j,d)
+            curr_alpha : (t,d)
+            extant_clusters : (t,j)
+        Returns:
+            new_alpha  : (t,d)
+        """
+        assert np.all(zeta[extant_clusters] > 0)
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            sz = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
+            slz = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) # (t,d)
+        n = np.ones((self.nTemp, self.nCol + self.nCat)) # (t,d)
+        n *= extant_clusters.sum(axis = 1)[:,None]       # (t,d)
         args = zip(
-            curr_alpha, repeat(n), zs, lzs,
+            curr_alpha.ravel(), n.ravel(), sz.ravel(), slz.ravel(),   # (t x d)
             repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
             repeat(self.priors.beta.a), repeat(self.priors.beta.b),
             )
         res = map(sample_gamma_shape_wrapper, args)
-        return np.array(list(res))
+        return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
 
-    def sample_beta(self, zeta, alpha):
-        n  = zeta.shape[0]
-        zs = zeta.sum(axis = 0)
+    def sample_beta(self, zeta, alpha, extant_clusters):
+        """
+        Args:
+            zeta  : (t,j,d)
+            alpha : (t,d)
+            extant_clusters : (t,j)
+        Returns:
+            beta  : (t,d)
+        """
+        n = np.ones((self.nTemp, self.nCol + self.nCat))
+        n *= extant_clusters.sum(axis = 1)[:,None]                 # (t,d)
+        zs = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
         As = n * alpha + self.priors.beta.a
         Bs = zs + self.priors.beta.b
-        beta = gamma(shape = As, scale = 1/Bs)
-        return beta
-
-    def sample_r(self, delta, zeta):
-        As = np.einsum('il->i', zeta[delta].T[:self.nCol].T)
-        Bs = np.einsum('il->i', self.data.Yp)
-        return gamma(shape = As, scale = 1/Bs)
+        return gamma(shape = As, scale = 1 / Bs)
 
     def sample_eta(self, curr_eta, delta):
+        """
+        curr_eta : (t)
+        delta    : (t x n)
+        """
         g = beta(curr_eta + 1, self.nDat)
-        aa = self.priors.eta.a + delta.max() + 1
-        bb = self.priors.beta.b - log(g)
+        aa = self.priors.eta.a + delta.max(axis = 1) + 1
+        bb = self.priors.eta.b - np.log(g)
         eps = (aa - 1) / (self.nDat  * bb + aa - 1)
-        aaa = choice((aa, aa - 1), 1, p = (eps, 1 - eps))
+        id = uniform(self.nTemp) > eps
+        aaa = aa * id + (aa - 1) * (1 - id)
         return gamma(shape = aaa, scale = 1 / bb)
 
-    def sample_zeta(self, curr_zeta, r, delta, alpha, beta):
-        nclust = delta.max() + 1
-        dmat = delta[:,None] == np.arange(nclust) # n x J
+    def log_likelihood(self, zeta):
+        out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
+        out += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_placeholder)
+        out += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
+        return out
+    
+    def log_tempering_likelihood(self):
+        out = np.zeros(self.nTemp)
+        out += pt_logd_projgamma_paired_yt(
+            self.data.Yp, 
+            self.curr_zeta[:,:,:self.nCol][
+                self.temp_unravel, 
+                self.curr_delta.ravel(),
+                ].reshape(self.nTemp, self.nDat, self.nCol),
+            self.sigma_ph1,
+            ).sum(axis = 1)
+        out += pt_logd_cumdirmultinom_paired_yt(
+            self.data.W, 
+            self.curr_zeta[:,:,self.nCol:][
+                self.temp_unravel,
+                self.curr_delta.ravel(),
+                ].reshape(self.nTemp, self.nDat, self.nCat),
+            ).sum(axis = 1)
+        return out
 
-        Y  = r[:, None] * self.data.Yp
-        n = dmat.sum(axis = 0)
-        Ysv = (Y.T @ dmat).T
-        lYsv = (np.log(Y).T @ dmat).T
-        Ws = [self.data.W[delta == j] for j in range(nclust)]
-        # curr_zeta_j, nj, sYj, slYj, Ws, alpha, beta, ncol, catmat
-        args = zip(
-            curr_zeta, n, Ysv, lYsv, Ws,
-            repeat(alpha), repeat(beta), 
-            repeat(self.nCol), repeat(self.CatMat),
+    def log_tempering_prior(self):
+        out = np.zeros(self.nTemp)
+        extant_clusters = np.where(
+            bincount2D_vectorized(self.curr_delta, self.max_clust_count) > 0,
             )
-        res = self.pool.map(update_zeta_j_wrapper, args)
-        # res = map(update_zeta_j_wrapper, args)
-        return np.array(list(res))
-
-    def cluster_log_likelihood(self, r, zeta):
-        out = np.zeros((self.nDat, self.max_clust_count))
-        # out += dprojresgamma_log_my_mt(self.data.Yp, zeta.T[:self.nCol].T)
-        out += logd_prodgamma_my_mt(
-            r[:, None] * self.data.Yp, 
-            zeta.T[:self.nCol].T, 
-            self.sigma_placeholder,
+        out += np.nansum(
+            extant_clusters * pt_logd_prodgamma_my_st(
+                self.curr_zeta, self.curr_alpha, self.curr_beta,
+                ),
+            axis = 1,
             )
-        out += logd_CDM_mx_ma(self.data.W, zeta.T[self.nCol:].T, self.CatMat)
+        out += logd_gamma_my(self.curr_alpha, *self.priors.alpha).sum(axis = 1)
+        out += logd_gamma_my(self.curr_beta, *self.priors.beta).sum(axis = 1)
+        out += logd_gamma_my(self.curr_eta, *self.priors.eta)
         return out
 
     def initialize_sampler(self, ns):
-        self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nCats)
+        tCol = self.nCol + self.nCat
+        # Samples
+        self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nTemp)
         self.samples.alpha[0] = 1.
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
                 shape = 2., scale = 2., 
-                size = (self.max_clust_count - 30, self.nCol + self.nCat),
+                size = (self.nTemp, self.max_clust_count - 30, tCol),
                 )
-        self.samples.eta[0] = 40.
-        self.samples.delta[0] = choice(self.max_clust_count - 30, size = self.nDat)
-        self.samples.delta[0][-1] = np.arange(self.max_clust_count - 30)[-1]
-        self.samples.r[0] = self.sample_r(
-                self.samples.delta[0], self.samples.zeta[0],
-                )
+        self.samples.eta[0] = 10.
+        self.samples.delta[0] = choice(
+            self.max_clust_count - 20, 
+            size = (self.nTemp, self.nDat),
+            )
+        # Iterator
         self.curr_iter = 0
-        self.sigma_placeholder = np.ones((self.max_clust_count, self.nCol))
+        # Additional
+        self.sigma_placeholder = np.ones((self.nTemp, self.max_clust_count, self.nCol))
+        # Adaptive Metropolis related        
+        self.am_cov_i     = np.empty((self.nDat, self.nTemp, tCol, tCol))
+        self.am_cov_i[:]  = np.eye(tCol, tCol)[None,None,:,:] * 1e-4
+        self.am_mean_i    = np.empty((self.nDat, self.nTemp, tCol))
+        self.am_mean_i[:] = 0.
+        self.am_cov_c     = np.empty((self.nTemp, self.max_clust_count, tCol, tCol))
+        self.am_mean_c    = np.empty((self.nTemp, self.max_clust_count, tCol))
+        self.am_n_c       = np.zeros((self.nTemp, self.max_clust_count))
+        self.am_alpha     = np.zeros((self.nTemp, self.max_clust_count))
+        self.samples.lzhist[0] = np.swapaxes(
+            np.log(self.samples.zeta[0][
+                self.temp_unravel, self.samples.delta[0].ravel()
+                ].reshape(self.nTemp, self.nDat, tCol)), 
+            0, 1,
+            )
+        self.sigma_ph1 = np.ones((self.nTemp, self.max_clust_count, self.nCol))
+        self.sigma_ph2 = np.ones((self.nTemp, self.nDat, self.nCol))
+        return
+
+    def update_am_cov_initial(self):
+        """ Initial update for Adaptive Metropolis Covariance per obsv."""
+        self.am_mean_i[:] = self.samples.lzhist[:self.curr_iter].mean(axis = 0)
+        self.am_cov_i[:] = 1 / self.curr_iter * np.einsum(
+            'intj,intk->ntjk',
+            self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
+            self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
+            )
+        return
+    
+    def update_am_cov(self):
+        """ Online updating for Adaptive Metropolis Covariance per obsv. """
+        c = self.curr_iter 
+        c1 = self.curr_iter + 1
+        self.am_mean_i += (
+            (self.samples.lzhist[self.curr_iter] - self.am_mean_i) / c
+            )
+        self.am_cov_i[:] = (
+            + (c/c1) * self.am_cov_i
+            + (c/c1/c1) * np.einsum(
+                'tej,tel->tejl',
+                self.samples.lzhist[self.curr_iter] - self.am_mean_i,
+                self.samples.lzhist[self.curr_iter] - self.am_mean_i,
+                )
+            )
         return
 
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
-        delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
+        delta = self.curr_delta.copy()
         alpha = self.curr_alpha
         beta  = self.curr_beta
-        zeta  = np.vstack((self.curr_zeta, self.sample_zeta_new(alpha, beta, m)))
+        zeta  = self.curr_zeta.copy()
         eta   = self.curr_eta
-        r     = self.curr_r
 
+        if self.curr_iter > 300:
+            self.update_am_cov()
+        elif self.curr_iter == 300:
+            self.update_am_cov_initial()
+        else:
+            pass
+        # Advance the iterator
         self.curr_iter += 1
-        # generate log-likelihood, uniforms to inverse-cdf sample cluster indices
-        log_likelihood = self.cluster_log_likelihood(r, zeta)
-        unifs = uniform(size = self.nDat)
-        # Sample cluster indices
-        delta = diriproc_cluster_sampler(delta, log_likelihood, unifs, eta)
-        # clean indices (clear out dropped/unused clusters, and re-index)
-        delta, zeta = self.clean_delta_zeta(delta, zeta)
-        self.samples.delta[self.curr_iter] = delta
+        ci = self.curr_iter
+
+        # Sample new candidate clusters
+        cand_clusters = np.where(bincount2D_vectorized(delta, self.max_clust_count) == 0)
+        zeta[cand_clusters] = self.sample_zeta_new(alpha, beta)[cand_clusters]
+        
+        # Update cluster assignments and re-index
+        self.sample_delta(delta, zeta, eta)
+        self.clean_delta_zeta(delta, zeta)
+        self.samples.delta[ci] = delta
+        
         # do rest of sampling
-        self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta)
-        self.samples.zeta[self.curr_iter]  = self.sample_zeta(
-                zeta, self.curr_r, self.curr_delta, alpha, beta,
-                )
-        self.samples.alpha[self.curr_iter] = self.sample_alpha(self.curr_zeta, alpha)
-        self.samples.beta[self.curr_iter]  = self.sample_beta(self.curr_zeta, self.curr_alpha)
-        self.samples.eta[self.curr_iter]   = self.sample_eta(eta, self.curr_delta)
+        extant_clusters = bincount2D_vectorized(self.curr_delta, self.max_clust_count) > 0
+        self.samples.zeta[ci] = self.sample_zeta(
+            zeta, self.curr_delta, alpha, beta,
+            )
+        self.samples.alpha[ci] = self.sample_alpha(
+            self.curr_zeta, alpha, extant_clusters
+            )
+        self.samples.beta[ci]  = self.sample_beta(
+            self.curr_zeta, self.curr_alpha, extant_clusters,
+            )
+        self.samples.eta[ci] = self.sample_eta(eta, self.curr_delta)
+
+        # Attempt Swap:
+        if self.curr_iter >= self.swap_start:
+            # declare log-likelihood, log-prior
+            lpl = self.log_tempering_likelihood()
+            lpp = self.log_tempering_prior()
+            # declare swap choices
+            sw  = choice(self.nTemp, 2 * self.nSwap_per, replace = False).reshape(-1, 2)
+            # compute swap log-probability
+            sw_alpha = np.zeros(sw.shape[0])
+            sw_alpha += lpl[sw.T[1]] - lpl[sw.T[0]]
+            sw_alpha *= self.itl[sw.T[0]] - self.itl[sw.T[1]]
+            sw_alpha += lpp[sw.T[1]] - lpp[sw.T[0]]
+            logp = np.log(uniform(size = sw_alpha.shape))
+            for tt in sw[np.where(logp < sw_alpha)[0]]:
+                self.samples.zeta[ci][tt[0]], self.samples.zeta[ci][tt[1]] = \
+                    self.samples.zeta[ci][tt[1]].copy(), self.samples.zeta[ci][tt[0]].copy()
+                self.samples.alpha[ci][tt[0]], self.samples.alpha[ci][tt[1]] = \
+                    self.samples.alpha[ci][tt[1]].copy(), self.samples.alpha[ci][tt[0]].copy()
+                self.samples.beta[ci][tt[0]], self.samples.beta[ci][tt[1]] = \
+                    self.samples.beta[ci][tt[1]].copy(), self.samples.beta[ci][tt[0]].copy()
+                self.samples.delta[ci][tt[0]], self.samples.delta[ci][tt[1]] = \
+                    self.samples.delta[ci][tt[1]].copy(), self.samples.delta[ci][tt[0]].copy()
+                self.samples.eta[ci][tt[0]], self.samples.eta[ci][tt[1]] = \
+                    self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
+            
+        self.samples.lzhist[ci] = np.swapaxes(
+            np.log(self.curr_zeta)[
+                self.temp_unravel, self.curr_delta.ravel(),
+                ].reshape(self.nTemp, self.nDat, self.nCol + self.nCat),
+            0, 1,
+            )
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -384,22 +507,20 @@ class Chain(DirichletProcessSampler):
             os.mkdir(folder)
         if os.path.exists(path):
             os.remove(path)
-
+        # assemble data
         zetas  = np.vstack([
-            np.hstack((np.ones((zeta.shape[0], 1)) * i, zeta))
+            np.hstack((np.ones((zeta[0].shape[0], 1)) * i, zeta[0]))
             for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
             ])
-        alphas = self.samples.alpha[nBurn :: nThin]
-        betas  = self.samples.beta[nBurn :: nThin]
-        deltas = self.samples.delta[nBurn :: nThin]
-        rs     = self.samples.r[nBurn :: nThin]
-        etas   = self.samples.eta[nBurn :: nThin]
-
+        alphas = self.samples.alpha[nBurn :: nThin, 0]
+        betas  = self.samples.beta[nBurn :: nThin, 0]
+        deltas = self.samples.delta[nBurn :: nThin, 0]
+        etas   = self.samples.eta[nBurn :: nThin, 0]
+        # make output dictionary
         out = {
             'zetas'  : zetas,
             'alphas' : alphas,
             'betas'  : betas,
-            'rs'     : rs,
             'deltas' : deltas,
             'etas'   : etas,
             'nCol'   : self.nCol,
@@ -409,15 +530,14 @@ class Chain(DirichletProcessSampler):
             'V'      : self.data.V,
             'W'      : self.data.W,
             }
-        
+        # try to add outcome to dictionary
         try:
             out['Y'] = self.data.Y
         except AttributeError:
             pass
-        
+        # write to disk
         with open(path, 'wb') as file:
             pickle.dump(out, file)
-
         return
 
     def set_projection(self):
@@ -428,8 +548,6 @@ class Chain(DirichletProcessSampler):
     def categorical_considerations(self):
         """ Builds the CatMat """
         self.CatMat = category_matrix(self.data.Cats)
-        # cats = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(self.data.Cats)))
-        # self.CatMat = (cats[:, None] == np.arange(len(self.data.Cats))).T
         return
     
     def __init__(
@@ -440,6 +558,8 @@ class Chain(DirichletProcessSampler):
             prior_beta  = GammaPrior(0.5, 0.5),
             p           = 10,
             max_clust_count = 300,
+            ntemps = 5,
+            stepping = 1.3,
             ):
         assert type(data) is MixedData
         self.data = data
@@ -453,6 +573,12 @@ class Chain(DirichletProcessSampler):
         self.set_projection()
         self.categorical_considerations()
         self.pool = Pool(processes = 8, initializer = limit_cpu())
+
+        self.nTemp = ntemps
+        self.itl = 1 / stepping**np.arange(ntemps)
+        self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
+        self.nSwap_per = self.nTemp // 2
+        self.swap_start = 100
         return
 
 class Result(object):

@@ -334,7 +334,7 @@ def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
+def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
     """
     returns log-likelihood per temperature
     inputs:
