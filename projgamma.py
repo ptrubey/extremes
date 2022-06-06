@@ -111,12 +111,12 @@ def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
     Returns:
         log-density (n, t, j)
     """
-    t,n,d = aY.shape; j = aAlpha.shape[1] # set dimensions
+    n = aY.shape[0]; t,j,d = aAlpha.shape # set dimensions
     ld = np.zeros((n,t,j))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
         ld -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
-        ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
+        ld += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
         ld += gammaln(np.einsum('tjd->tj', aAlpha))[None,:,:]
         ld -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
     np.nan_to_num(ld, False, -np.inf)
@@ -316,7 +316,7 @@ def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
         logd -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
         logd += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
         logd -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
-        logd -= np.einsum('tnd->nt', gammaln(aW + 1))[:,:,None]
+        logd -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -345,7 +345,7 @@ def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
         logd       : (t,n)
     """
     sa = np.einsum('tnd,cd->tnc', aAlpha, sphere_mat)
-    sw = np.einsum('nd,cd->nc')
+    sw = np.einsum('nd,cd->nc', aW.astype(int), sphere_mat)
     logd = np.zeros((aAlpha.shape[0], aW.shape[0]))
     # with np.errstate(divide = 'ignore', invalid = 'ignore'):
     with nullcontext():
@@ -386,7 +386,7 @@ def logd_loggamma_paired(x, a, b):
         out : (m)
     """
     logd = np.empty((x.shape[0]))
-    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+    with np.errstate(divide = 'ignore', invalid = 'ignore', over = 'ignore'):
         logd += np.einsum('md,md->m', a, np.log(b))
         logd -= np.einsum('md->m', gammaln(a))
         logd += np.einsum('md,md->m', a, x)

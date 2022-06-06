@@ -17,7 +17,7 @@ from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
-from projgamma import pt_logd_prodgamma_my_st, logd_gamma_my,  pt_logd_loggamma_mx_st,  \
+from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st, logd_gamma_my,  pt_logd_loggamma_mx_st,  \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,                     \
     pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
 from multiprocessing import Pool
@@ -98,7 +98,7 @@ class Samples(object):
         self.beta  = np.empty((nSamp + 1, nTemp, nCol + nCat))
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
         self.eta   = np.empty((nSamp + 1, nTemp))
-        self.lzhist = np.empty((nSamp + 1, nTemp, nDat, nCol + nCat))
+        self.lzhist = np.empty((nSamp + 1, nDat, nTemp, nCol + nCat))
         return
 
 def Samples_(object):
@@ -147,12 +147,12 @@ class Chain(DirichletProcessSampler):
     am_n_c    = None
     max_clust_count = None
 
-    def sample_delta(self, r, delta, zeta, eta):
+    def sample_delta(self, delta, zeta, eta):
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_cluster_state = (curr_cluster_state == 0)
         log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
         log_likelihood += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
-        log_likelihood += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.sphere_mat)
+        log_likelihood += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
         tidx = np.arange(self.nTemp)
         p = uniform(size = (self.nDat, self.nTemp))
         p += tidx[None,:]
@@ -161,7 +161,7 @@ class Chain(DirichletProcessSampler):
             curr_cluster_state[tidx, delta.T[i]] -= 1
             scratch[:] = 0
             scratch += curr_cluster_state
-            scratch += cand_cluster_state * (eta / cand_cluster_state.sum(axis = 1) + 1e-9)[None,:]
+            scratch += cand_cluster_state * (eta / (cand_cluster_state.sum(axis = 1) + 1e-9))[:,None]
             with np.errstate(divide = 'ignore', invalid = 'ignore'):
                 np.log(scratch, out = scratch)
             scratch += log_likelihood[i]
@@ -206,7 +206,7 @@ class Chain(DirichletProcessSampler):
     def am_covariance_matrices(self, delta, index):
         cluster_covariance_mat(
             self.am_cov_c, self.am_mean_c, self.am_n_c, delta,
-            self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.temp),
+            self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.nTemp),
             )
         return self.am_cov_c[index]
 
@@ -230,43 +230,21 @@ class Chain(DirichletProcessSampler):
         am_alpha[idx] = 0.
         
         zcurr = zeta
-        lzcurr = np.log(zeta)
+        with np.errstate(divide = 'ignore'):
+            lzcurr = np.log(zeta)
         lzcand = lzcurr.copy()
         lzcand[idx] += np.einsum(
             'mpq,mq->mp', 
-            cholesky(covs), normal(size = (idx[0].shape[0], self.nCol)),
+            cholesky(covs), normal(size = (idx[0].shape[0], self.nCol + self.nCat)),
             )
         zcand = np.exp(lzcurr)
         am_alpha += np.einsum('ntj,tnj->tj', self.log_likelihood(zcand), delta_ind_mat)
         am_alpha -= np.einsum('ntj,tnj->tj', self.log_likelihood(zcurr), delta_ind_mat)
         with np.errstate(invalid = 'ignore'):
             am_alpha *= self.itl[:,None]
-        am_alpha[idx] += pt_logd_loggamma_mx_st(lzcand[idx], alpha[idx[0]], beta[idx[0]])
-        am_alpha[idx] -= pt_logd_loggamma_mx_st(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
+        am_alpha[idx] += logd_loggamma_paired(lzcand[idx], alpha[idx[0]], beta[idx[0]])
+        am_alpha[idx] -= logd_loggamma_paired(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
         keep = np.where(np.log(uniform(size = am_alpha.shape)) < am_alpha)
-        # self.am_alpha[:] = -np.inf
-        # self.am_alpha[idx] = 0.
-        # self.am_alpha[idx] += logd_projgamma_paired_yt(
-        #     self.data.Yp,
-        #     zcand[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
-        #     self.sigma_ph2,
-        #     )
-        # self.am_alpha[idx] += pt_logd_cumdirmultinom_paired(
-        #     self.data.W,
-        #     zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
-        #     self.CatMat,
-        #     )
-        # self.am_alpha[idx] -= pt_logd_projgamma_paired_yt(
-        #     self.data.Yp,
-        #     zeta[:,:,:self.nCol][self.temp_unravel, delta.ravel()].reshape(z1_shape),
-        #     self.sigma_ph2,
-        #     )
-        # self.am_alpha[idx] -= pt_logd_cumdirmultinom_paired(
-        #     self.data.W,
-        #     zcand[:,:,self.nCol:][self.temp_unravel, delta.ravel()].reshape(z2_shape),
-        #     self.CatMat,
-        #     )
-        # self.am_alpha[idx] *= self.itl[idx[0]]
         zeta[keep] = np.exp(lzcand[keep])
         return zeta
 
@@ -290,7 +268,8 @@ class Chain(DirichletProcessSampler):
             repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
             repeat(self.priors.beta.a), repeat(self.priors.beta.b),
             )
-        res = map(sample_gamma_shape_wrapper, args)
+        # res = map(sample_gamma_shape_wrapper, args)
+        res = self.pool.map(sample_gamma_shape_wrapper, args)
         return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
 
     def sample_beta(self, zeta, alpha, extant_clusters):
@@ -336,7 +315,7 @@ class Chain(DirichletProcessSampler):
                 self.temp_unravel, 
                 self.curr_delta.ravel(),
                 ].reshape(self.nTemp, self.nDat, self.nCol),
-            self.sigma_ph1,
+            self.sigma_ph2,
             ).sum(axis = 1)
         out += pt_logd_cumdirmultinom_paired_yt(
             self.data.W, 
@@ -344,20 +323,20 @@ class Chain(DirichletProcessSampler):
                 self.temp_unravel,
                 self.curr_delta.ravel(),
                 ].reshape(self.nTemp, self.nDat, self.nCat),
+            self.CatMat,
             ).sum(axis = 1)
         return out
 
     def log_tempering_prior(self):
         out = np.zeros(self.nTemp)
-        extant_clusters = np.where(
-            bincount2D_vectorized(self.curr_delta, self.max_clust_count) > 0,
-            )
-        out += np.nansum(
-            extant_clusters * pt_logd_prodgamma_my_st(
-                self.curr_zeta, self.curr_alpha, self.curr_beta,
-                ),
-            axis = 1,
-            )
+        extant_clusters = (bincount2D_vectorized(self.curr_delta, self.max_clust_count) > 0)
+        with np.errstate(invalid = 'ignore'):
+            out += np.nansum(
+                extant_clusters * pt_logd_prodgamma_my_st(
+                    self.curr_zeta, self.curr_alpha, self.curr_beta,
+                    ),
+                axis = 1,
+                )
         out += logd_gamma_my(self.curr_alpha, *self.priors.alpha).sum(axis = 1)
         out += logd_gamma_my(self.curr_beta, *self.priors.beta).sum(axis = 1)
         out += logd_gamma_my(self.curr_eta, *self.priors.eta)
@@ -371,7 +350,7 @@ class Chain(DirichletProcessSampler):
         self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
                 shape = 2., scale = 2., 
-                size = (self.nTemp, self.max_clust_count - 30, tCol),
+                size = (self.nTemp, self.max_clust_count, tCol),
                 )
         self.samples.eta[0] = 10.
         self.samples.delta[0] = choice(
@@ -399,6 +378,9 @@ class Chain(DirichletProcessSampler):
             )
         self.sigma_ph1 = np.ones((self.nTemp, self.max_clust_count, self.nCol))
         self.sigma_ph2 = np.ones((self.nTemp, self.nDat, self.nCol))
+        self.zeta_shape = (self.nTemp, self.nDat, self.nCol + self.nCat)
+
+
         return
 
     def update_am_cov_initial(self):
@@ -492,13 +474,10 @@ class Chain(DirichletProcessSampler):
                     self.samples.delta[ci][tt[1]].copy(), self.samples.delta[ci][tt[0]].copy()
                 self.samples.eta[ci][tt[0]], self.samples.eta[ci][tt[1]] = \
                     self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
-            
-        self.samples.lzhist[ci] = np.swapaxes(
-            np.log(self.curr_zeta)[
-                self.temp_unravel, self.curr_delta.ravel(),
-                ].reshape(self.nTemp, self.nDat, self.nCol + self.nCat),
-            0, 1,
-            )
+        
+        self.samples.lzhist[ci] = np.swapaxes(np.log(
+            self.curr_zeta[self.temp_unravel, self.curr_delta.ravel()].reshape(self.zeta_shape)
+            ),0,1)
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -555,7 +534,7 @@ class Chain(DirichletProcessSampler):
             data,
             prior_eta   = GammaPrior(2., 0.5),
             prior_alpha = GammaPrior(0.5, 0.5),
-            prior_beta  = GammaPrior(0.5, 0.5),
+            prior_beta  = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
             ntemps = 5,
@@ -745,21 +724,21 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    p = argparser()
-    # d = {
-    #     'in_data_path'    : './ad/cover/data.csv',
-    #     'in_outcome_path' : './ad/cover/outcome.csv',
-    #     'out_path' : './ad/cover/results_mdppprg.pkl',
-    #     'cat_vars' : '[9,10,11,12]',
-    #     'decluster' : 'False',
-    #     'quantile' : 0.998,
-    #     'nSamp' : 50000,
-    #     'nKeep' : 20000,
-    #     'nThin' : 30,
-    #     'eta_alpha' : 2.,
-    #     'eta_beta' : 1.,
-    #     }
-    # p = Heap(**d)
+    # p = argparser()
+    d = {
+        'in_data_path'    : './ad/cardio/data.csv',
+        'in_outcome_path' : './ad/cardio/outcome.csv',
+        'out_path' : './ad/cardio/results_mdppprg.pkl',
+        'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
+        'decluster' : 'False',
+        'quantile' : 0.95,
+        'nSamp' : 10000,
+        'nKeep' : 5000,
+        'nThin' : 5,
+        'eta_alpha' : 2.,
+        'eta_beta' : 1.,
+        }
+    p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values
@@ -771,7 +750,7 @@ if __name__ == '__main__':
         outcome = out,
         )
     data.fill_outcome(out)
-    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10, ntemps = 3)
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
     res = Result(p.out_path)
