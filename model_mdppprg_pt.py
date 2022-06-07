@@ -257,36 +257,38 @@ class Chain(DirichletProcessSampler):
         Returns:
             new_alpha  : (t,d)
         """
-        assert np.all(zeta[extant_clusters] > 0)
-        with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            sz = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
-            slz = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) # (t,d)
-        n = np.ones((self.nTemp, self.nCol + self.nCat)) # (t,d)
-        n *= extant_clusters.sum(axis = 1)[:,None]       # (t,d)
-        args = zip(
-            curr_alpha.ravel(), n.ravel(), sz.ravel(), slz.ravel(),   # (t x d)
-            repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
-            repeat(self.priors.beta.a), repeat(self.priors.beta.b),
-            )
-        # res = map(sample_gamma_shape_wrapper, args)
-        res = self.pool.map(sample_gamma_shape_wrapper, args)
-        return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
+        # assert np.all(zeta[extant_clusters] > 0)
+        # with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        #     sz = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
+        #     slz = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) # (t,d)
+        # n = np.ones((self.nTemp, self.nCol + self.nCat)) # (t,d)
+        # n *= extant_clusters.sum(axis = 1)[:,None]       # (t,d)
+        # args = zip(
+        #     curr_alpha.ravel(), n.ravel(), sz.ravel(), slz.ravel(),   # (t x d)
+        #     repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
+        #     repeat(self.priors.beta.a), repeat(self.priors.beta.b),
+        #     )
+        # # res = map(sample_gamma_shape_wrapper, args)
+        # # res = self.pool.map(sample_gamma_shape_wrapper, args)
+        # # return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
+        return np.ones(curr_alpha.shape)
 
     def sample_beta(self, zeta, alpha, extant_clusters):
-        """
-        Args:
-            zeta  : (t,j,d)
-            alpha : (t,d)
-            extant_clusters : (t,j)
-        Returns:
-            beta  : (t,d)
-        """
-        n = np.ones((self.nTemp, self.nCol + self.nCat))
-        n *= extant_clusters.sum(axis = 1)[:,None]                 # (t,d)
-        zs = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
-        As = n * alpha + self.priors.beta.a
-        Bs = zs + self.priors.beta.b
-        return gamma(shape = As, scale = 1 / Bs)
+        # """
+        # Args:
+        #     zeta  : (t,j,d)
+        #     alpha : (t,d)
+        #     extant_clusters : (t,j)
+        # Returns:
+        #     beta  : (t,d)
+        # """
+        # n = np.ones((self.nTemp, self.nCol + self.nCat))
+        # n *= extant_clusters.sum(axis = 1)[:,None]                 # (t,d)
+        # zs = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
+        # As = n * alpha + self.priors.beta.a
+        # Bs = zs + self.priors.beta.b
+        # return gamma(shape = As, scale = 1 / Bs)
+        return np.ones(alpha.shape)
 
     def sample_eta(self, curr_eta, delta):
         """
@@ -538,7 +540,7 @@ class Chain(DirichletProcessSampler):
             p           = 10,
             max_clust_count = 300,
             ntemps = 5,
-            stepping = 1.3,
+            stepping = 1.05,
             ):
         assert type(data) is MixedData
         self.data = data
@@ -706,9 +708,9 @@ def argparser():
     p.add_argument('--in_outcome_path', default = False)
     p.add_argument('--decluster', default = 'False')
     p.add_argument('--quantile', default = 0.95)
-    p.add_argument('--nSamp', default = 50000)
-    p.add_argument('--nKeep', default = 20000)
-    p.add_argument('--nThin', default = 30)
+    p.add_argument('--nSamp', default = 20000)
+    p.add_argument('--nKeep', default = 10000)
+    p.add_argument('--nThin', default = 10)
     p.add_argument('--eta_alpha', default = 2.)
     p.add_argument('--eta_beta', default = 1.)
     return p.parse_args()
@@ -725,20 +727,20 @@ if __name__ == '__main__':
     import os
 
     # p = argparser()
-    d = {
-        'in_data_path'    : './ad/cardio/data.csv',
-        'in_outcome_path' : './ad/cardio/outcome.csv',
-        'out_path' : './ad/cardio/results_mdppprg.pkl',
-        'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
-        'decluster' : 'False',
-        'quantile' : 0.95,
-        'nSamp' : 10000,
-        'nKeep' : 5000,
-        'nThin' : 5,
-        'eta_alpha' : 2.,
-        'eta_beta' : 1.,
-        }
-    p = Heap(**d)
+    # d = {
+    #     'in_data_path'    : './ad/cardio/data.csv',
+    #     'in_outcome_path' : './ad/cardio/outcome.csv',
+    #     'out_path' : './ad/cardio/results_mdppprg.pkl',
+    #     'cat_vars' : '[15,16,17,18,19,20,21,22,23,24]',
+    #     'decluster' : 'False',
+    #     'quantile' : 0.95,
+    #     'nSamp' : 20000,
+    #     'nKeep' : 10000,
+    #     'nThin' : 10,
+    #     'eta_alpha' : 2.,
+    #     'eta_beta' : 1.,
+    #     }
+    # p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values
