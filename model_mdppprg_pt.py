@@ -726,7 +726,7 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    # p = argparser()
+    p = argparser()
     # d = {
     #     'in_data_path'    : './ad/cardio/data.csv',
     #     'in_outcome_path' : './ad/cardio/outcome.csv',
