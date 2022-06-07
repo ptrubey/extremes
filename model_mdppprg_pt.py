@@ -70,7 +70,8 @@ def update_zeta_j_wrapper(args):
     return prop_zeta_j
 
 def sample_gamma_shape_wrapper(args):
-    return sample_alpha_k_mh_summary(*args)
+    # return sample_alpha_k_mh_summary(*args)
+    return sample_alpha_1_mh_summary(*args)
 
 def category_matrix(cats):
     catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
@@ -257,21 +258,21 @@ class Chain(DirichletProcessSampler):
         Returns:
             new_alpha  : (t,d)
         """
-        # assert np.all(zeta[extant_clusters] > 0)
-        # with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        #     sz = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
-        #     slz = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) # (t,d)
-        # n = np.ones((self.nTemp, self.nCol + self.nCat)) # (t,d)
-        # n *= extant_clusters.sum(axis = 1)[:,None]       # (t,d)
-        # args = zip(
-        #     curr_alpha.ravel(), n.ravel(), sz.ravel(), slz.ravel(),   # (t x d)
-        #     repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
-        #     repeat(self.priors.beta.a), repeat(self.priors.beta.b),
-        #     )
-        # # res = map(sample_gamma_shape_wrapper, args)
-        # # res = self.pool.map(sample_gamma_shape_wrapper, args)
-        # # return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
-        return np.ones(curr_alpha.shape)
+        assert np.all(zeta[extant_clusters] > 0)
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            sz = np.nansum(zeta * extant_clusters[:,:,None], axis = 1) # (t,d)
+            slz = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) # (t,d)
+        n = np.ones((self.nTemp, self.nCol + self.nCat)) # (t,d)
+        n *= extant_clusters.sum(axis = 1)[:,None]       # (t,d)
+        args = zip(
+            curr_alpha.ravel(), n.ravel(), sz.ravel(), slz.ravel(),   # (t x d)
+            repeat(self.priors.alpha.a), repeat(self.priors.alpha.b),
+            # repeat(self.priors.beta.a), repeat(self.priors.beta.b),
+            )
+        # res = map(sample_gamma_shape_wrapper, args)
+        res = self.pool.map(sample_gamma_shape_wrapper, args)
+        return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
+        # return np.ones(curr_alpha.shape)
 
     def sample_beta(self, zeta, alpha, extant_clusters):
         # """
