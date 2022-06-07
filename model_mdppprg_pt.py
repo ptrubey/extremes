@@ -672,7 +672,6 @@ class Result(object):
         zetas  = out['zetas']
         alphas = out['alphas']
         betas  = out['betas']
-        rs     = out['rs']
         cats   = out['cats']
         
         self.data = MixedDataBase(out['V'], out['W'], out['cats'])
@@ -692,7 +691,6 @@ class Result(object):
         self.samples.alpha = alphas
         self.samples.beta  = betas
         self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
-        self.samples.r     = rs
         return
 
     def __init__(self, path):
