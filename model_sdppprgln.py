@@ -16,12 +16,10 @@ from cUtility import generate_indices
 from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, logd_gamma_my, logd_invwishart_ms,    \
     logd_mvnormal_mx_st, pt_logd_mvnormal_mx_st,                        \
-    pt_logd_prodgamma_my_mt, pt_logd_prodgamma_paired
+    pt_logd_prodgamma_my_mt, pt_logd_prodgamma_paired, NormalPrior, InvWishartPrior
     
 from model_sdpppgln import cluster_covariance_mat
 
-NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
-InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 Prior           = namedtuple('Prior', 'eta mu Sigma xi tau')
 
 # Log Densities
