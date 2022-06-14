@@ -1,5 +1,3 @@
-from re import M, S
-from termios import CINTR
 from numpy.random import choice, gamma, beta, uniform, normal
 from numpy.linalg import cholesky
 from collections import namedtuple
@@ -17,8 +15,9 @@ from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
-from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st, logd_gamma_my,  pt_logd_loggamma_mx_st,  \
-    pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,                     \
+from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,        \
+    logd_gamma_my,  pt_logd_loggamma_mx_st,                                 \
+    pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,         \
     pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
 from multiprocessing import Pool
 from energy import limit_cpu
@@ -147,13 +146,16 @@ class Chain(DirichletProcessSampler):
     am_mean_i = None
     am_n_c    = None
     max_clust_count = None
+    swap_attempts = None
+    swap_succeeds = None
 
     def sample_delta(self, delta, zeta, eta):
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_cluster_state = (curr_cluster_state == 0)
-        log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        log_likelihood += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
-        log_likelihood += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
+        log_likelihood = self.log_delta_likelihood(zeta)
+        # log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
+        # log_likelihood += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
+        # log_likelihood += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
         tidx = np.arange(self.nTemp)
         p = uniform(size = (self.nDat, self.nTemp))
         p += tidx[None,:]
@@ -230,7 +232,7 @@ class Chain(DirichletProcessSampler):
         am_alpha[:] = -np.inf
         am_alpha[idx] = 0.
         
-        zcurr = zeta
+        zcurr = zeta.copy()
         with np.errstate(divide = 'ignore'):
             lzcurr = np.log(zeta)
         lzcand = lzcurr.copy()
@@ -240,15 +242,19 @@ class Chain(DirichletProcessSampler):
             normal(size = (idx[0].shape[0], self.tCol), scale = 0.3),
             )
         zcand = np.exp(lzcand)
-        am_alpha += np.einsum('ntj,tnj->tj', self.log_likelihood(zcand), delta_ind_mat)
-        am_alpha -= np.einsum('ntj,tnj->tj', self.log_likelihood(zcurr), delta_ind_mat)
+        # am_alpha += np.einsum('ntj,tnj->tj', self.log_likelihood(zcand), delta_ind_mat)
+        # am_alpha -= np.einsum('ntj,tnj->tj', self.log_likelihood(zcurr), delta_ind_mat)
+        am_alpha += self.log_zeta_likelihood(zcand, delta, delta_ind_mat)
+        am_alpha -= self.log_zeta_likelihood(zcurr, delta, delta_ind_mat)
         with np.errstate(invalid = 'ignore'):
             am_alpha *= self.itl[:,None]
-        am_alpha[idx] += logd_loggamma_paired(lzcand[idx], alpha[idx[0]], beta[idx[0]])
-        am_alpha[idx] -= logd_loggamma_paired(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
+        # am_alpha[idx] += logd_loggamma_paired(lzcand[idx], alpha[idx[0]], beta[idx[0]])
+        # am_alpha[idx] -= logd_loggamma_paired(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
+        am_alpha[idx] += self.log_logzeta_prior(lzcand, idx, alpha, beta)
+        am_alpha[idx] -= self.log_logzeta_prior(lzcurr, idx, alpha, beta)
         keep = np.where(np.log(uniform(size = am_alpha.shape)) < am_alpha)
-        zeta[keep] = np.exp(lzcand[keep])
-        return zeta
+        zcurr[keep] = zcand[keep]
+        return zcurr
 
     def sample_alpha(self, zeta, curr_alpha, extant_clusters):
         """
@@ -305,10 +311,34 @@ class Chain(DirichletProcessSampler):
         aaa = aa * id + (aa - 1) * (1 - id)
         return gamma(shape = aaa, scale = 1 / bb)
 
-    def log_likelihood(self, zeta):
+    def log_delta_likelihood(self, zeta):
         out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        out += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_placeholder)
+        out += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
         out += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
+        return out
+    
+    def log_zeta_likelihood(self, zeta, delta, dmat):
+        zs = zeta[self.temp_unravel, delta.ravel()].reshape(self.zeta_shape)
+        out = np.zeros((self.nTemp, self.max_clust_count))
+        out += np.einsum(
+            'tn,tnj->tj',
+            pt_logd_cumdirmultinom_paired_yt(
+                self.data.W, zs[:,:,self.nCol:], self.CatMat,
+                ),
+            dmat,
+            )
+        out += np.einsum(
+            'tn,tnj->tj',
+            pt_logd_projgamma_paired_yt(
+                self.data.Yp, zs[:,:,:self.nCol], self.sigma_ph2,
+                ),
+            dmat,
+            )
+        return out
+    
+    def log_logzeta_prior(self, lzeta, idx,  alpha, beta):
+        out = np.zeros(idx[0].shape[0]) # (m)
+        out += logd_loggamma_paired(lzeta[idx], alpha[idx[0]], beta[idx[0]])
         return out
     
     def log_tempering_likelihood(self):
@@ -362,8 +392,6 @@ class Chain(DirichletProcessSampler):
             )
         # Iterator
         self.curr_iter = 0
-        # Additional
-        self.sigma_placeholder = np.ones((self.nTemp, self.max_clust_count, self.nCol))
         # Adaptive Metropolis related        
         self.am_cov_i     = np.empty((self.nDat, self.nTemp, self.tCol, self.tCol))
         self.am_cov_i[:]  = np.eye(self.tCol, self.tCol)[None,None,:,:] * 1e-4
@@ -380,6 +408,9 @@ class Chain(DirichletProcessSampler):
                 ].reshape(self.nTemp, self.nDat, self.tCol)), 
             0, 1,
             )
+        self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
+        self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
+        # PlaceHolders
         self.sigma_ph1 = np.ones((self.nTemp, self.max_clust_count, self.nCol))
         self.sigma_ph2 = np.ones((self.nTemp, self.nDat, self.nCol))
         self.zeta_shape = (self.nTemp, self.nDat, self.tCol)
@@ -409,6 +440,50 @@ class Chain(DirichletProcessSampler):
                 self.samples.lzhist[self.curr_iter] - self.am_mean_i,
                 self.samples.lzhist[self.curr_iter] - self.am_mean_i,
                 )
+            )
+        return
+
+    def try_tempering_swap(self):
+        ci = self.curr_iter
+        # declare log-likelihood, log-prior
+        lpl = self.log_tempering_likelihood()
+        lpp = self.log_tempering_prior()
+        # declare swap attempts
+        sw  = choice(self.nTemp, 2 * self.nSwap_per, replace = False).reshape(-1, 2)
+        for s in sw:
+            # record attempted swap
+            self.swap_attempts[s[0],s[1]] += 1
+            self.swap_attempts[s[1],s[0]] += 1
+        # compute swap log-probability
+        sw_alpha = np.zeros(sw.shape[0])
+        sw_alpha += lpl[sw.T[1]] - lpl[sw.T[0]]
+        sw_alpha *= self.itl[sw.T[0]] - self.itl[sw.T[1]]
+        sw_alpha += lpp[sw.T[1]] - lpp[sw.T[0]]
+        # calculate swaps
+        logp = np.log(uniform(size = sw_alpha.shape))
+        for tt in sw[np.where(logp < sw_alpha)[0]]:
+            # report successful swap
+            self.swap_succeeds[tt[0],tt[1]] += 1
+            self.swap_succeeds[tt[1],tt[0]] += 1
+            # do the swap
+            self.samples.zeta[ci][tt[0]], self.samples.zeta[ci][tt[1]] = \
+                self.samples.zeta[ci][tt[1]].copy(), self.samples.zeta[ci][tt[0]].copy()
+            self.samples.alpha[ci][tt[0]], self.samples.alpha[ci][tt[1]] = \
+                self.samples.alpha[ci][tt[1]].copy(), self.samples.alpha[ci][tt[0]].copy()
+            self.samples.beta[ci][tt[0]], self.samples.beta[ci][tt[1]] = \
+                self.samples.beta[ci][tt[1]].copy(), self.samples.beta[ci][tt[0]].copy()
+            self.samples.delta[ci][tt[0]], self.samples.delta[ci][tt[1]] = \
+                self.samples.delta[ci][tt[1]].copy(), self.samples.delta[ci][tt[0]].copy()
+            self.samples.eta[ci][tt[0]], self.samples.eta[ci][tt[1]] = \
+                self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
+        return
+
+    def update_logzeta_historical(self):
+        self.samples.lzhist[self.curr_iter] = np.swapaxes(
+            np.log(self.curr_zeta[self.temp_unravel, 
+                    self.curr_delta.ravel(),].reshape(self.zeta_shape)
+                ),
+            0, 1,
             )
         return
 
@@ -454,32 +529,9 @@ class Chain(DirichletProcessSampler):
 
         # Attempt Swap:
         if self.curr_iter >= self.swap_start:
-            # declare log-likelihood, log-prior
-            lpl = self.log_tempering_likelihood()
-            lpp = self.log_tempering_prior()
-            # declare swap choices
-            sw  = choice(self.nTemp, 2 * self.nSwap_per, replace = False).reshape(-1, 2)
-            # compute swap log-probability
-            sw_alpha = np.zeros(sw.shape[0])
-            sw_alpha += lpl[sw.T[1]] - lpl[sw.T[0]]
-            sw_alpha *= self.itl[sw.T[0]] - self.itl[sw.T[1]]
-            sw_alpha += lpp[sw.T[1]] - lpp[sw.T[0]]
-            logp = np.log(uniform(size = sw_alpha.shape))
-            for tt in sw[np.where(logp < sw_alpha)[0]]:
-                self.samples.zeta[ci][tt[0]], self.samples.zeta[ci][tt[1]] = \
-                    self.samples.zeta[ci][tt[1]].copy(), self.samples.zeta[ci][tt[0]].copy()
-                self.samples.alpha[ci][tt[0]], self.samples.alpha[ci][tt[1]] = \
-                    self.samples.alpha[ci][tt[1]].copy(), self.samples.alpha[ci][tt[0]].copy()
-                self.samples.beta[ci][tt[0]], self.samples.beta[ci][tt[1]] = \
-                    self.samples.beta[ci][tt[1]].copy(), self.samples.beta[ci][tt[0]].copy()
-                self.samples.delta[ci][tt[0]], self.samples.delta[ci][tt[1]] = \
-                    self.samples.delta[ci][tt[1]].copy(), self.samples.delta[ci][tt[0]].copy()
-                self.samples.eta[ci][tt[0]], self.samples.eta[ci][tt[1]] = \
-                    self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
+            self.try_tempering_swap()
         
-        self.samples.lzhist[ci] = np.swapaxes(np.log(
-            self.curr_zeta[self.temp_unravel, self.curr_delta.ravel()].reshape(self.zeta_shape)
-            ),0,1)
+        self.update_logzeta_historical()
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -535,8 +587,8 @@ class Chain(DirichletProcessSampler):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_alpha = GammaPrior(10., 1.),
-            prior_beta  = GammaPrior(10., 1.),
+            prior_alpha = GammaPrior(1., 1.),
+            prior_beta  = GammaPrior(1., 1.),
             # prior_alpha = GammaPrior(0.5, 0.5),
             # prior_beta  = GammaPrior(2., 2.),
             p           = 10,
@@ -556,7 +608,7 @@ class Chain(DirichletProcessSampler):
         self.priors = Prior(prior_eta, prior_alpha, prior_beta)
         self.set_projection()
         self.categorical_considerations()
-        self.pool = Pool(processes = 8, initializer = limit_cpu())
+        # self.pool = Pool(processes = 8, initializer = limit_cpu())
 
         self.nTemp = ntemps
         self.itl = 1 / stepping**np.arange(ntemps)
@@ -728,21 +780,21 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    # p = argparser()
-    d = {
-        'in_data_path'    : './ad/mammography/data.csv',
-        'in_outcome_path' : './ad/mammography/outcome.csv',
-        'out_path' : './ad/mammography/results_mdppprg_pt.pkl',
-        'cat_vars' : '[5,6,7,8]',
-        'decluster' : 'False',
-        'quantile' : 0.95,
-        'nSamp' : 3000,
-        'nKeep' : 2000,
-        'nThin' : 1,
-        'eta_alpha' : 2.,
-        'eta_beta' : 1.,
-        }
-    p = Heap(**d)
+    p = argparser()
+    # d = {
+    #     'in_data_path'    : './ad/mammography/data.csv',
+    #     'in_outcome_path' : './ad/mammography/outcome.csv',
+    #     'out_path' : './ad/mammography/results_mdppprg_pt.pkl',
+    #     'cat_vars' : '[5,6,7,8]',
+    #     'decluster' : 'False',
+    #     'quantile' : 0.95,
+    #     'nSamp' : 3000,
+    #     'nKeep' : 2000,
+    #     'nThin' : 1,
+    #     'eta_alpha' : 2.,
+    #     'eta_beta' : 1.,
+    #     }
+    # p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values
