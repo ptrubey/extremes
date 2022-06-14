@@ -18,6 +18,9 @@ from slice import univariate_slice_sample, skip_univariate_slice_sample
 GammaPrior     = namedtuple('GammaPrior', 'a b')
 DirichletPrior = namedtuple('DirichletPrior', 'a')
 BetaPrior      = namedtuple('BetaPrior', 'a b')
+# LogNormal Models
+NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
+InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 
 ## Functions related to projected gamma density
 
@@ -257,6 +260,21 @@ def logd_cumdirmultinom_mx_sa(aW, vAlpha, sphere_mat):
         logd += np.einsum('nd->n', gammaln(aW + vAlpha[None,:]))
         logd -= gammaln(vAlpha).sum()
         logd -= np.einsum('nd->n', gammaln(aW + 1))
+    np.nan_to_num(logd, False, -np.inf)
+    return logd
+
+def logd_cumdircateg_mx_sa(aW, vAlpha, sphere_mat):
+    sa = np.einsum('d,cd->c', vAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat) # matrix of ones (n x c)
+    logd = np.zeros(aW.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        logd += gammaln(sa).sum()
+        # logd += np.einsum('nc->n', gammaln(sw + 1)) # zeros, all the way down
+        # logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa[:,None,:])) # gammaln(sa + 1)
+        logd -= gammaln(sa + 1.).sum()
+        logd += np.einsum('nd->n', gammaln(aW + vAlpha[None,:]))
+        logd -= gammaln(vAlpha).sum()
+        # logd -= np.einsum('nd->n', gammaln(aW + 1)) # zeros again
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
