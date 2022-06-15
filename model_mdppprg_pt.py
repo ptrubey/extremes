@@ -13,7 +13,8 @@ from scipy.special import gammaln, betaln
 import cUtility as cu
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube, euclidean_to_simplex, MixedDataBase
+from data import euclidean_to_angular, euclidean_to_hypercube,              \
+    euclidean_to_simplex, MixedDataBase, MixedData
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
 from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,        \
     logd_gamma_my,  pt_logd_loggamma_mx_st,                                 \
@@ -589,8 +590,6 @@ class Chain(DirichletProcessSampler):
             prior_eta   = GammaPrior(2., 0.5),
             prior_alpha = GammaPrior(1., 1.),
             prior_beta  = GammaPrior(1., 1.),
-            # prior_alpha = GammaPrior(0.5, 0.5),
-            # prior_beta  = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
             ntemps = 5,
