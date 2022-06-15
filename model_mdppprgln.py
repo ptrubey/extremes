@@ -493,16 +493,14 @@ class Chain(DirichletProcessSampler):
             for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
             ])
         mus    = self.samples.mu[nBurn :: nThin, 0]
-        Sigmas = self.samples.Sigma[nBurn :: nThin, 0]        
-        alphas = self.samples.alpha[nBurn :: nThin, 0]
-        betas  = self.samples.beta[nBurn :: nThin, 0]
+        Sigmas = self.samples.Sigma[nBurn :: nThin, 0]
         deltas = self.samples.delta[nBurn :: nThin, 0]
         etas   = self.samples.eta[nBurn :: nThin, 0]
         # make output dictionary
         out = {
             'zetas'  : zetas,
-            'alphas' : alphas,
-            'betas'  : betas,
+            'mus'    : mus,
+            'Sigmas' : Sigmas,
             'deltas' : deltas,
             'etas'   : etas,
             'nCol'   : self.nCol,
@@ -684,8 +682,8 @@ class Result(object):
         deltas = out['deltas']
         etas   = out['etas']
         zetas  = out['zetas']
-        alphas = out['alphas']
-        betas  = out['betas']
+        mus    = out['mus']
+        Sigmas = out['Sigmas']
         cats   = out['cats']
         
         self.data = MixedDataBase(out['V'], out['W'], out['cats'])
@@ -693,17 +691,20 @@ class Result(object):
         self.nDat   = deltas.shape[1]
         self.nCat   = self.data.nCat
         self.nCol   = self.data.nCol
+        self.tCol   = self.nCol + self.nCat
         self.nCats  = cats.shape[0]
         self.cats   = cats
         
         if 'Y' in out.keys():
             self.data.fill_outcome(out['Y'])
         
-        self.samples       = Samples(self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats)
+        self.samples       = Samples(
+            self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats
+            )
         self.samples.delta = deltas
         self.samples.eta   = etas
-        self.samples.alpha = alphas
-        self.samples.beta  = betas
+        self.samples.mu    = mus
+        self.samples.Sigma = Sigmas
         self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
         return
 
