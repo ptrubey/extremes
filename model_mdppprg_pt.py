@@ -592,7 +592,7 @@ class Chain(DirichletProcessSampler):
             prior_beta  = GammaPrior(1., 1.),
             p           = 10,
             max_clust_count = 300,
-            ntemps = 5,
+            ntemps = 3,
             stepping = 1.05,
             ):
         assert type(data) is MixedData

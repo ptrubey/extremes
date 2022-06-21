@@ -1,3 +1,3 @@
-python model_mdppprg_pt.py './ad/cardio/data.csv' './ad/cardio/results_mdppprg_vs.pkl' \[15,16,17,18,19,20,21,22,23,24\] --in_outcome_path './ad/cardio/outcome.csv'
-python model_mdppprg_pt.py './ad/cover/data.csv' './ad/cover/results_mdppprg_vs.pkl' \[9,10,11,12\] --in_outcome_path './ad/cover/outcome.csv' --quantile 0.998
-python model_mdppprg_pt.py './ad/mammography/data.csv' './ad/mammography/results_mdppprg_vs.pkl' \[5,6,7,8\] --in_outcome_path './ad/mammography/outcome.csv'
+python model_mdppprgln.py './ad/cardio/data.csv' './ad/cardio/results_mdppprgln.pkl' \[15,16,17,18,19,20,21,22,23,24\] --in_outcome_path './ad/cardio/outcome.csv'
+python model_mdppprgln.py './ad/cover/data.csv' './ad/cover/results_mdppprgln.pkl' \[9,10,11,12\] --in_outcome_path './ad/cover/outcome.csv' --quantile 0.998
+python model_mdppprgln.py './ad/mammography/data.csv' './ad/mammography/results_mdppprgln.pkl' \[5,6,7,8\] --in_outcome_path './ad/mammography/outcome.csv'
