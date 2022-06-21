@@ -2,8 +2,8 @@ import sys, os
 import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
-# models = ['mdppprgln','mdppprg']
-models = ['mdppprgln']
+models = ['mdppprgln','mdppprg']
+# models = ['mdppprgln']
 
 
 cardio = {
@@ -30,8 +30,8 @@ mammography = {
 
 datasets = [cardio, cover, mammography]
 eta_alphas = ['2']
-# eta_betas = ['1e-1','1e0','1e1','1e2']
-eta_betas = ['1e1']
+eta_betas = ['1e-1','1e0','1e1','1e2']
+# eta_betas = ['1e1']
 
 if __name__ == '__main__':
     processes = []
