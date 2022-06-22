@@ -11,6 +11,7 @@ import re, os, argparse, glob
 from multiprocessing import pool, Pool, cpu_count
 from scipy.integrate import trapezoid
 from scipy.special import gamma as gamma_func
+from numpy.random import gamma
 from itertools import repeat
 from collections import defaultdict
 from functools import cached_property
@@ -18,7 +19,7 @@ from functools import cached_property
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
-from data import euclidean_to_hypercube
+from data import euclidean_to_hypercube, Projection
 # Custom Modules
 from energy import limit_cpu, hypercube_distance_matrix, euclidean_distance_matrix
 from models import Results
@@ -79,7 +80,7 @@ def prc_curve(scores, y, logrange = True):
     out = np.vstack((np.array((0.,1.)).reshape(1,2), res, np.array((1.,0.)).reshape(1,2)))
     return out[np.argsort(out.T[1])]
 
-class Anomaly(object):
+class Anomaly(Projection):
     """ 
     Anomaly:
 
@@ -105,26 +106,59 @@ class Anomaly(object):
         del self.pool
         return
 
+    @cached_property
+    def zeta_sigma(self):
+        zetas = np.array([
+            zeta[delta] 
+            for zeta, delta 
+            in zip(self.samples.zeta, self.samples.delta)
+            ])
+        try:
+            sigmas = np.array([
+                sigma[delta]
+                for sigma, delta
+                in zip(self.samples.sigma, self.samples.delta) 
+                ])
+        except AttributeError:
+            sigmas = np.ones(zetas.shape)
+        return zetas, sigmas
+
+    @cached_property
+    def r(self):
+        zetas, sigmas = self.zeta_sigma
+        self.set_projection()
+        r_shape = zetas[:,:,:self.nCol].sum(axis = 2)
+        r_rate  = (sigmas[:,:,:self.nCol] * self.data.Yp[:,None,:]).sum(axis = 2)
+        return gamma(r_shape, scale = 1 / r_rate)
+
+    @cached_property
+    def rho(self):
+        zetas, sigmas = self.zeta_sigma
+        try:
+            rho_shapes = zetas[:,:,self.nCol:] + self.data.W[None,:,:]
+            rho_rates  = sigmas[:,:,self.nCol:]
+            return gamma(rho_shapes, rho_rates)
+        except AttributeError:
+            return np.zeros((self.nSamp, self.nDat, 0))
+    
     ## Distance Metrics
     @cached_property
     def euclidean_distance(self):
-        Y1 = self.samples.r.mean(axis = 0)[:,None] * self.data.V
-        try:
-            Y2 = self.samples.rho.mean(axis = 0)
-            Y = np.hstack((Y1, Y2))
-            return euclidean_distance_matrix(self.generate_posterior_predictive_gammas(), Y, self.pool)
-        except AttributeError:
-            return euclidean_distance_matrix(self.generate_posterior_predictive_gammas(), Y1, self.pool)
+        mr = self.r.mean(axis = 0)
+        mrho = self.rho.mean(axis = 0) 
+        Y = np.hstack((mr.mean(axis = 0)[:,None] * self.data.Yp, mrho))
+        return euclidean_distance_matrix(
+            self.generate_posterior_predictive_gammas(), Y, self.pool,
+            )
     @cached_property
     def hypercube_distance(self):
-        Y1 = self.samples.r.mean(axis = 0)[:, None] * self.data.V
-        try: 
-            Y2 = self.samples.rho.mean(axis = 0)
-            Y = euclidean_to_hypercube(np.hstack((Y1,Y2)))
-            return hypercube_distance_matrix(self.generate_posterior_predictive_gammas(), Y, self.pool)
-        except AttributeError:
-            Y = euclidean_to_hypercube(Y1)
-            return hypercube_distance_matrix(self.generate_posterior_predictive_gammas(), Y, self.pool)
+        mr = self.r.mean(axis = 0)
+        mrho = self.rho.mean(axis = 0)
+        Y = np.hstack((mr.mean(axis = 0)[:,None] * self.data.Yp, mrho))
+        V = euclidean_to_hypercube(Y)
+        return hypercube_distance_matrix(
+            self.generate_posterior_predictive_gammas(), V, self.pool,
+            )
     @cached_property
     def hypercube_distance_real(self):
         Vnew = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
@@ -359,6 +393,19 @@ def ResultFactory(model, path):
 
     return Result(path)
 
+def MixedResultFactory(path):
+    if 'mdppprgln' in path:
+        class Result(Results['mdppprgln'], Anomaly):
+            pass
+        return Result(path)
+    elif 'mdppprg' in path:
+        class Result(Results['mdppprg'], Anomaly):
+            pass
+        return Result(path)
+    else: 
+        raise ValueError('Wrong!')
+    pass
+
 def plot_log_inverse_scores(scores):
     plt.plot(np.sort(np.log(1/scores)))
     plt.show()
@@ -378,28 +425,28 @@ def argparser():
 
 if __name__ == '__main__':
     # args = argparser()
-    args = {'in_path' : './sim_mixed_ad/results_mdppprg*.pkl', 'out_path' : './sim_mixed_ad/metrics.csv'}
-    files = glob.glob(args['in_path'])
-    metrics = []    
-    for file in files:
-        match = re.search('results_([a-zA-Z]+)_(\d+)_(\d+)_(\d+).pkl', file)
-        model, nmix, nreal, ncat = match.group(1, 2, 3, 4)
-        # temporary code
-        Y = pd.read_csv(os.path.join(os.path.split(file)[0], 'class_m{}.csv'.format(nmix)))
-        result = ResultFactory(model, file)
-        result.data.Y = Y.values.ravel()
-        result.pools_open()
-        metric = result.get_scoring_metrics()
-        result.pools_closed()
-        metric['Model'] = model
-        metric['nMix'] = nmix
-        metric['nReal'] = nreal
-        metric['nCat'] = ncat
-        column_order = ['Model','nMix','nReal','nCat','Metric'] + list(result.scoring_metrics.keys())
-        metrics.append(metric[column_order])
+    # args = {'in_path' : './sim_mixed_ad/results_mdppprg*.pkl', 'out_path' : './sim_mixed_ad/metrics.csv'}
+    # files = glob.glob(args['in_path'])
+    # metrics = []    
+    # for file in files:
+    #     match = re.search('results_([a-zA-Z]+)_(\d+)_(\d+)_(\d+).pkl', file)
+    #     model, nmix, nreal, ncat = match.group(1, 2, 3, 4)
+    #     # temporary code
+    #     Y = pd.read_csv(os.path.join(os.path.split(file)[0], 'class_m{}.csv'.format(nmix)))
+    #     result = ResultFactory(model, file)
+    #     result.data.Y = Y.values.ravel()
+    #     result.pools_open()
+    #     metric = result.get_scoring_metrics()
+    #     result.pools_closed()
+    #     metric['Model'] = model
+    #     metric['nMix'] = nmix
+    #     metric['nReal'] = nreal
+    #     metric['nCat'] = ncat
+    #     column_order = ['Model','nMix','nReal','nCat','Metric'] + list(result.scoring_metrics.keys())
+    #     metrics.append(metric[column_order])
     
-    df = pd.concat(metrics)
-    df.to_csv(args['out_path'], index = False)
+    # df = pd.concat(metrics)
+    # df.to_csv(args['out_path'], index = False)
     pass
 
 # EOF

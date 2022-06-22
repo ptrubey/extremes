@@ -11,7 +11,7 @@ import pickle
 
 import cUtility as cu
 from samplers import DirichletProcessSampler
-from data import euclidean_to_angular, euclidean_to_hypercube,                 \
+from data import Projection, euclidean_to_angular, euclidean_to_hypercube,     \
                 euclidean_to_simplex, MixedDataBase, MixedData
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
 from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,           \
@@ -64,7 +64,7 @@ def Samples_(Samples):
         self.eta   = np.empty((nSamp))
         return
 
-class Chain(DirichletProcessSampler):
+class Chain(DirichletProcessSampler, Projection):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]

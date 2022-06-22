@@ -329,6 +329,15 @@ class MixedData(MixedDataBase, Data_From_Raw, Categorical, Outcome):
             self.fill_outcome(outcome)
         return
 
+class Projection(object):
+    def set_projection(self):
+        self.data.Yp = (
+            self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)
+            ).T
+        self.data.Yp[self.data.Yp <= 1e-6] = 1e-6
+        return
+    pass
+
 if __name__ == '__main__':
     pass
 
