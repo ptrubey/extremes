@@ -3,35 +3,36 @@ import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
 models = ['mdppprgln','mdppprg']
-# models = ['mdppprgln']
 
 
 cardio = {
-    'source'   : './ad/cardio/data.csv',
-    'outcome'  : './ad/cardio/outcome.csv',
-    'results'  : './ad/cardio/results_{}_{}_{}.pkl',
-    'quantile' : '0.95',
-    'cats'     : '[15,16,17,18,19,20,21,22,23,24]'
+    'source'    : './ad/cardio/data.csv',
+    'outcome'   : './ad/cardio/outcome.csv',
+    'results'   : './ad/cardio/results_{}_{}_{}.pkl',
+    'quantile'  : '0.95',
+    'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
+    'decluster' : 'False'
     }
 cover = {
-    'source'   : './ad/cover/data.csv',
-    'outcome'  : './ad/cover/outcome.csv',
-    'results'  : './ad/cover/results_{}_{}_{}.pkl',
-    'quantile' : '0.998',
-    'cats'     : '[9,10,11,12]'
+    'source'    : './ad/cover/data.csv',
+    'outcome'   : './ad/cover/outcome.csv',
+    'results'   : './ad/cover/results_{}_{}_{}.pkl',
+    'quantile'  : '0.998',
+    'cats'      : '[9,10,11,12]',
+    'decluster' : 'False'
     }
 mammography = {
-    'source' : './ad/mammography/data.csv',
-    'outcome' : './ad/mammography/outcome.csv',
-    'results' : './ad/mammography/results_{}_{}_{}.pkl',
-    'quantile' : '0.95',
-    'cats'     : '[5,6,7,8]'
+    'source'    : './ad/mammography/data.csv',
+    'outcome'   : './ad/mammography/outcome.csv',
+    'results'   : './ad/mammography/results_{}_{}_{}.pkl',
+    'quantile'  : '0.95',
+    'cats'      : '[5,6,7,8]',
+    'decluster' : 'False'
     }
 
 datasets = [cardio, cover, mammography]
 eta_alphas = ['2']
 eta_betas = ['1e-1','1e0','1e1','1e2']
-# eta_betas = ['1e1']
 
 if __name__ == '__main__':
     processes = []
@@ -51,6 +52,7 @@ if __name__ == '__main__':
                         '--quantile', dataset['quantile'],
                         '--nSamp', '20000', '--nKeep', '10000', '--nThin', '10',
                         '--eta_shape', ealpha, '--eta_rate', ebeta,
+                        '--decluster', dataset['decluster'],
                         ]
                     process_args.append(args)
                     processes.append(Popen(args))

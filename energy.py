@@ -106,7 +106,7 @@ def postpred_loss_single(predicted, empirical):
 
 def hypercube_distance_matrix(predictions, targets, pool = None):
     if type(pool) is not mcpool.Pool:
-        pool = Pool(processes = cpu_count, initializer = limit_cpu)
+        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
     res = pool.map(
             hypercube_distance_unsummed, 
             zip(repeat(predictions), targets)
@@ -115,7 +115,7 @@ def hypercube_distance_matrix(predictions, targets, pool = None):
 
 def euclidean_distance_matrix(predictions, targets, pool = None):
     if type(pool) is not mcpool.Pool:
-        pool = Pool(processes = cpu_count, initializer = limit_cpu)
+        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
     res = pool.map(
             euclidean_distance_unsummed, 
             zip(repeat(predictions), targets)

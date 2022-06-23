@@ -128,7 +128,7 @@ class Anomaly(Projection):
         zetas, sigmas = self.zeta_sigma
         self.set_projection()
         r_shape = zetas[:,:,:self.nCol].sum(axis = 2)
-        r_rate  = (sigmas[:,:,:self.nCol] * self.data.Yp[:,None,:]).sum(axis = 2)
+        r_rate  = (sigmas[:,:,:self.nCol] * self.data.Yp[None,:,:]).sum(axis = 2)
         return gamma(r_shape, scale = 1 / r_rate)
 
     @cached_property
@@ -146,7 +146,7 @@ class Anomaly(Projection):
     def euclidean_distance(self):
         mr = self.r.mean(axis = 0)
         mrho = self.rho.mean(axis = 0) 
-        Y = np.hstack((mr.mean(axis = 0)[:,None] * self.data.Yp, mrho))
+        Y = np.hstack((mr[:,None] * self.data.Yp, mrho))
         return euclidean_distance_matrix(
             self.generate_posterior_predictive_gammas(), Y, self.pool,
             )
@@ -154,7 +154,7 @@ class Anomaly(Projection):
     def hypercube_distance(self):
         mr = self.r.mean(axis = 0)
         mrho = self.rho.mean(axis = 0)
-        Y = np.hstack((mr.mean(axis = 0)[:,None] * self.data.Yp, mrho))
+        Y = np.hstack((mr[:,None] * self.data.Yp, mrho))
         V = euclidean_to_hypercube(Y)
         return hypercube_distance_matrix(
             self.generate_posterior_predictive_gammas(), V, self.pool,
@@ -447,6 +447,12 @@ if __name__ == '__main__':
     
     # df = pd.concat(metrics)
     # df.to_csv(args['out_path'], index = False)
+    path = './ad/cardio/results_mdppprgln_2_1e1.pkl'
+    result = MixedResultFactory(path)
+    result.p = 10.
+    # result.pools_open()
+    metrics = result.get_scoring_metrics()
+    # result.pools_closed()
     pass
 
 # EOF

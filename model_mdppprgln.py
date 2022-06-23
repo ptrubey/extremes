@@ -47,8 +47,6 @@ class Samples(object):
         self.zeta  = [None] * (nSamp + 1)
         self.mu    = np.empty((nSamp + 1, nTemp, tCol))
         self.Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
-        self.alpha = np.empty((nSamp + 1, nTemp, tCol))
-        self.beta  = np.empty((nSamp + 1, nTemp, tCol))
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
         self.eta   = np.empty((nSamp + 1, nTemp))
         self.lzhist = np.empty((nSamp + 1, nDat, nTemp, tCol))
@@ -74,12 +72,6 @@ class Chain(DirichletProcessSampler, Projection):
     @property
     def curr_Sigma(self):
         return self.samples.Sigma[self.curr_iter]
-    @property
-    def curr_alpha(self):
-        return self.samples.alpha[self.curr_iter]
-    @property
-    def curr_beta(self):
-        return self.samples.beta[self.curr_iter]
     @property
     def curr_delta(self):
         return self.samples.delta[self.curr_iter]
@@ -327,11 +319,8 @@ class Chain(DirichletProcessSampler, Projection):
     def initialize_sampler(self, ns):
         # Samples
         self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nTemp)
-        self.samples.alpha[0] = 1.
         self.samples.mu[0] = 0.
         self.samples.Sigma[0] = np.eye(self.tCol) * 2.
-        
-        self.samples.beta[0] = 1.
         self.samples.zeta[0] = gamma(
                 shape = 2., scale = 2., 
                 size = (self.nTemp, self.max_clust_count, self.tCol),
@@ -581,11 +570,18 @@ class Result(object):
             dmax = self.samples.delta[s].max()
             njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
-            new_zetas = gamma(
-                shape = self.samples.alpha[s],
-                scale = 1. / self.samples.beta[s],
-                size = (m, self.nCol + self.nCat),
+            new_log_zetas = normal()
+
+            new_zetas = normal(size = (m, self.nCol + self.nCat))
+            new_zetas = np.empty((m, self.nCol + self.nCat))
+            np.einsum(
+                'zy,jy->jz', 
+                cholesky(self.samples.Sigma[s]), 
+                normal(size = (m, self.nCol + self.nCat)),
+                out = new_zetas,
                 )
+            new_zetas += self.samples.mu[s][None,:]
+            np.exp(new_zetas, out = new_zetas)
             prob = ljs / ljs.sum()
             deltas = cu.generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
