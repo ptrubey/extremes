@@ -62,7 +62,8 @@ if __name__ == '__main__':
     
     error_proc_ids = np.where(
         np.array([process.returncode for process in processes]) != 0
-        )
+        )[0]
+    
     for error_proc_id in error_proc_ids:
         print(process_args[error_proc_id])
 

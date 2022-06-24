@@ -20,6 +20,7 @@ from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,        \
     logd_gamma_my,  pt_logd_loggamma_mx_st,                                 \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,         \
     pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
+from cov import per_obs_tempered_update_cov_inplace, per_obs_tempered_update_mean_inplace
 from multiprocessing import Pool
 from energy import limit_cpu
 
@@ -419,29 +420,64 @@ class Chain(DirichletProcessSampler):
 
     def update_am_cov_initial(self):
         """ Initial update for Adaptive Metropolis Covariance per obsv."""
-        self.am_mean_i[:] = self.samples.lzhist[:self.curr_iter].mean(axis = 0)
-        self.am_cov_i[:] = 1 / self.curr_iter * np.einsum(
-            'intj,intk->ntjk',
-            self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
-            self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
+        # self.am_mean_i[:] = self.samples.lzhist[:self.curr_iter].mean(axis = 0)
+        # self.am_cov_i[:] = 1 / self.curr_iter * np.einsum(
+        #     'intj,intk->ntjk',
+        #     self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
+        #     self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
+        #     )
+
+        # zeta : (i,t,n,d)
+        lzetas = np.swapaxes(
+            np.log(np.vstack([
+                zeta[self.temp_unravel, delta.ravel()].reshape(
+                self.nTemp, self.nDat, self.tCol
+                )
+                for zeta, delta
+                in zip(self.samples.zeta[:(self.curr_iter + 1)], 
+                    self.samples.delta[:(self.curr_iter + 1)])
+                ])),
+            1, 2,
+            ) # i,n,t,d
+        self.am_mean_i[:] = lzetas.mean(axis = 0) # n,t,d
+        self.am_cov_i[:] = np.einsum(
+            'intj,intl->ntjl,',
+            lzetas - self.am_mean_i[None,:,:,:],
+            lzetas - self.am_mean_i[None,:,:,:],
             )
         return
     
     def update_am_cov(self):
         """ Online updating for Adaptive Metropolis Covariance per obsv. """
-        c = self.curr_iter 
-        c1 = self.curr_iter + 1
-        self.am_mean_i += (
-            (self.samples.lzhist[self.curr_iter] - self.am_mean_i) / c
+        # c = self.curr_iter 
+        # c1 = self.curr_iter + 1
+        # self.am_mean_i += (
+        #     (self.samples.lzhist[self.curr_iter] - self.am_mean_i) / c
+        #     )
+        # self.am_cov_i[:] = (
+        #     + (c/c1) * self.am_cov_i
+        #     + (c/c1/c1) * np.einsum(
+        #         'tej,tel->tejl',
+        #         self.samples.lzhist[self.curr_iter] - self.am_mean_i,
+        #         self.samples.lzhist[self.curr_iter] - self.am_mean_i,
+        #         )
+        #     )
+        zeta = np.swapaxes(
+            np.log(
+                self.curr_zeta[
+                    self.temp_unravel, self.curr_delta.ravel()
+                    ].reshape(
+                        self.nTemp, self.nDat, self.tCol
+                        )
+                ),
+            0, 1,
             )
-        self.am_cov_i[:] = (
-            + (c/c1) * self.am_cov_i
-            + (c/c1/c1) * np.einsum(
-                'tej,tel->tejl',
-                self.samples.lzhist[self.curr_iter] - self.am_mean_i,
-                self.samples.lzhist[self.curr_iter] - self.am_mean_i,
-                )
+        per_obs_tempered_update_mean_inplace(
+            self.am_mean_i, self.curr_iter, np.log(zeta),
             )
+        per_obs_tempered_update_cov_inplace(
+            self.am_cov_i, self.curr_iter, self.am_mean_i, np.log(zeta),
+            )        
         return
 
     def try_tempering_swap(self):
