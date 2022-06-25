@@ -19,6 +19,8 @@ from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,           \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,            \
     pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, logd_mvnormal_mx_st, \
     logd_invwishart_ms, GammaPrior, NormalPrior, InvWishartPrior
+from cov import PerObsTemperedOnlineCovariance
+                
 from multiprocessing import Pool
 from energy import limit_cpu
 
@@ -87,10 +89,11 @@ class Chain(DirichletProcessSampler, Projection):
 
     # Adaptive Metropolis Placeholders
     am_cov_c  = None
-    am_cov_i  = None
     am_mean_c = None
+    am_cov_i  = None
     am_mean_i = None
-    am_n_c    = None
+    am_Sigma  = None
+    am_scale  = None
     max_clust_count = None
     swap_attempts = None
     swap_succeeds = None
@@ -182,8 +185,8 @@ class Chain(DirichletProcessSampler, Projection):
         lzcand = lzcurr.copy()
         lzcand[idx] += np.einsum(
             'mpq,mq->mp', 
-            cholesky(covs), 
-            normal(size = (idx[0].shape[0], self.nCat + self.nCol)),
+            cholesky(self.am_scale * covs), 
+            normal(size = (idx[0].shape[0], self.tCol)),
             )
         zcand = np.exp(lzcand)
         
@@ -355,31 +358,22 @@ class Chain(DirichletProcessSampler, Projection):
         self.zeta_shape = (self.nTemp, self.nDat, self.nCol + self.nCat)
         return
 
-    def update_am_cov_initial(self):
-        """ Initial update for Adaptive Metropolis Covariance per obsv."""
-        self.am_mean_i[:] = self.samples.lzhist[:self.curr_iter].mean(axis = 0)
-        self.am_cov_i[:] = 1 / self.curr_iter * np.einsum(
-            'intj,intk->ntjk',
-            self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
-            self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
-            )
-        return
-    
     def update_am_cov(self):
         """ Online updating for Adaptive Metropolis Covariance per obsv. """
-        c = self.curr_iter 
-        c1 = self.curr_iter + 1
-        self.am_mean_i += (
-            (self.samples.lzhist[self.curr_iter] - self.am_mean_i) / c
+        lzeta = np.swapaxes(
+            np.log(
+                self.curr_zeta[
+                    self.temp_unravel, self.curr_delta.ravel()
+                    ].reshape(
+                        self.nTemp, self.nDat, self.tCol
+                        )
+                ),
+            0, 1,
             )
-        self.am_cov_i[:] = (
-            + (c/c1) * self.am_cov_i
-            + (c/c1/c1) * np.einsum(
-                'tej,tel->tejl',
-                self.samples.lzhist[self.curr_iter] - self.am_mean_i,
-                self.samples.lzhist[self.curr_iter] - self.am_mean_i,
-                )
-            )
+        self.am_Sigma.update(lzeta)
+        if self.curr_iter > 300:
+            self.am_cov_i[:] = self.am_Sigma.Sigma
+            self.am_mean_i[:] = self.am_Sigma.xbar
         return
 
     def try_tempering_swap(self):
@@ -416,15 +410,6 @@ class Chain(DirichletProcessSampler, Projection):
                 self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
         return
 
-    def update_logzeta_historical(self):
-        self.samples.lzhist[self.curr_iter] = np.swapaxes(
-            np.log(self.curr_zeta[self.temp_unravel, 
-                    self.curr_delta.ravel(),].reshape(self.zeta_shape)
-                ),
-            0, 1,
-            )
-        return
-
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy()
@@ -434,20 +419,16 @@ class Chain(DirichletProcessSampler, Projection):
         Sigma_cho = cholesky(self.curr_Sigma)
         Sigma_inv = inv(Sigma)
         eta   = self.curr_eta
+        
         # Adaptive Metropolis Update
-        if self.curr_iter > 300:
-            self.update_am_cov()
-        elif self.curr_iter == 300:
-            self.update_am_cov_initial()
-        else:
-            pass
+        self.update_am_cov()
+        
         # Advance the iterator
         self.curr_iter += 1
         ci = self.curr_iter
 
-        cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
-
         # Sample new candidate clusters
+        cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_clusters = np.where(cluster_state == 0)
         zeta[cand_clusters] = self.sample_zeta_new(mu, Sigma_cho)[cand_clusters]
         
@@ -466,8 +447,6 @@ class Chain(DirichletProcessSampler, Projection):
         # Attempt Swap:
         if self.curr_iter >= self.swap_start:
            self.try_tempering_swap()
-        
-        self.update_logzeta_historical()
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -523,18 +502,16 @@ class Chain(DirichletProcessSampler, Projection):
             self,
             data,
             prior_eta   = GammaPrior(2., 0.5),
-            prior_mu = (0, 3.),
+            prior_mu    = (0, 3.),
             prior_Sigma = (10, 0.5),
-            # prior_alpha = GammaPrior(0.5, 0.5),
-            # prior_beta  = GammaPrior(2., 2.),
             p           = 10,
-            max_clust_count = 300,
-            ntemps = 3,
-            stepping = 1.05,
+            max_clust   = 300,
+            ntemps      = 3,
+            stepping    = 1.05,
             ):
         assert type(data) is MixedData
         self.data = data
-        self.max_clust_count = max_clust_count
+        self.max_clust_count = max_clust
         self.p = p
         self.nCat = self.data.nCat
         self.nCol = self.data.nCol
@@ -542,6 +519,7 @@ class Chain(DirichletProcessSampler, Projection):
         self.nDat = self.data.nDat
         self.nCats = self.data.Cats.shape[0]
 
+        # Setting Priors
         _prior_mu = NormalPrior(
             np.ones(self.tCol) * prior_mu[0], 
             np.eye(self.tCol) * np.sqrt(prior_mu[1]),
@@ -554,13 +532,19 @@ class Chain(DirichletProcessSampler, Projection):
         self.priors = Prior(prior_eta, _prior_mu, _prior_Sigma)
         self.set_projection()
         self.categorical_considerations()
-        # self.pool = Pool(processes = 8, initializer = limit_cpu())
 
+        # Parallel Tempering
         self.nTemp = ntemps
         self.itl = 1 / stepping**np.arange(ntemps)
         self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
         self.nSwap_per = self.nTemp // 2
         self.swap_start = 100
+
+        # Adaptive Metropolis
+        self.am_Sigma = PerObsTemperedOnlineCovariance(
+            self.nTemp, self.nDat, self.tCol,
+            )
+        self.am_scale = 2.38**2 / self.tCol
         return
 
 class Result(object):
@@ -735,21 +719,21 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    p = argparser()
-    # d = {
-    #     'in_data_path'    : './ad/mammography/data.csv',
-    #     'in_outcome_path' : './ad/mammography/outcome.csv',
-    #     'out_path' : './ad/mammography/results_mdppprgln.pkl',
-    #     'cat_vars' : '[5,6,7,8]',
-    #     'decluster' : 'False',
-    #     'quantile' : 0.95,
-    #     'nSamp' : 3000,
-    #     'nKeep' : 2000,
-    #     'nThin' : 1,
-    #     'eta_alpha' : 2.,
-    #     'eta_beta' : 1.,
-    #     }
-    # p = Heap(**d)
+    # p = argparser()
+    d = {
+        'in_data_path'    : './ad/mammography/data.csv',
+        'in_outcome_path' : './ad/mammography/outcome.csv',
+        'out_path' : './ad/mammography/results_mdppprgln_test.pkl',
+        'cat_vars' : '[5,6,7,8]',
+        'decluster' : 'False',
+        'quantile' : 0.95,
+        'nSamp' : 5000,
+        'nKeep' : 2000,
+        'nThin' : 3,
+        'eta_alpha' : 2.,
+        'eta_beta' : 1.,
+        }
+    p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values

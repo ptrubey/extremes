@@ -20,55 +20,11 @@ from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,        \
     logd_gamma_my,  pt_logd_loggamma_mx_st,                                 \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,         \
     pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
-from cov import per_obs_tempered_update_cov_inplace, per_obs_tempered_update_mean_inplace
+from cov import per_obs_tempered_initial_cov, per_obs_tempered_initial_mean,   \
+    per_obs_tempered_update_cov_inplace, per_obs_tempered_update_mean_inplace
+
 from multiprocessing import Pool
 from energy import limit_cpu
-
-def update_zeta_j_cat(curr_zeta, Ws, alpha, beta, catmat):
-    """ Update routine for zeta on categorical/multinomial data """
-    curr_log_zeta = np.log(curr_zeta)
-    prop_log_zeta = curr_log_zeta.copy()
-    offset = normal(scale = 0.3, size = curr_zeta.shape)
-    lunifs = np.log(uniform(size = curr_zeta.shape))
-    logp = np.zeros(2)
-    for i in range(curr_zeta.shape[0]):
-        prop_log_zeta[i] += offset[i]
-        logp += pt_logd_cumdirmultinom_mx_ma(
-            Ws, 
-            np.exp(np.vstack((curr_log_zeta, prop_log_zeta))), 
-            catmat,
-            ).sum(axis = 0)
-        logp += pt_logd_loggamma_mx_st(
-            np.vstack((curr_log_zeta[i], prop_log_zeta[i])), 
-            alpha[i], beta[i],
-            ).ravel()
-        if lunifs[i] < logp[1] - logp[0]:
-            curr_log_zeta[i] = prop_log_zeta[i]
-        else:
-            prop_log_zeta[i] = curr_log_zeta[i]
-        logp[:] = 0.
-    return np.exp(curr_log_zeta)
-
-def update_zeta_j_sph(curr_zeta, n, sY, slY, alpha, beta):
-    """ Update routine for zeta on spherical data """
-    prop_zeta = np.empty(curr_zeta.shape)
-    for l in range(curr_zeta.shape[0]):
-        prop_zeta[l] = sample_alpha_1_mh_summary(
-            curr_zeta[l], n, sY[l], slY[l], alpha[l], beta[l]
-            )
-    return prop_zeta
-
-def update_zeta_j_wrapper(args):
-    # parse arguments
-    curr_zeta_j, nj, sYj, slYj, Ws, alpha, beta, ncol, catmat = args
-    prop_zeta_j = np.empty(curr_zeta_j.shape)
-    prop_zeta_j[:ncol] = update_zeta_j_sph(
-        curr_zeta_j[:ncol], nj, sYj, slYj, alpha[:ncol], beta[:ncol]
-        )
-    prop_zeta_j[ncol:] = update_zeta_j_cat(
-        curr_zeta_j[ncol:], Ws, alpha[ncol:], beta[ncol:], catmat
-        )
-    return prop_zeta_j
 
 def sample_gamma_shape_wrapper(args):
     # return sample_alpha_k_mh_summary(*args)
@@ -147,6 +103,7 @@ class Chain(DirichletProcessSampler):
     am_mean_c = None
     am_mean_i = None
     am_n_c    = None
+    am_scale  = None
     max_clust_count = None
     swap_attempts = None
     swap_succeeds = None
@@ -240,8 +197,8 @@ class Chain(DirichletProcessSampler):
         lzcand = lzcurr.copy()
         lzcand[idx] += np.einsum(
             'mpq,mq->mp', 
-            cholesky(covs), 
-            normal(size = (idx[0].shape[0], self.tCol), scale = 0.3),
+            cholesky(self.am_scale * covs), 
+            normal(size = (idx[0].shape[0], self.tCol)),
             )
         zcand = np.exp(lzcand)
         # am_alpha += np.einsum('ntj,tnj->tj', self.log_likelihood(zcand), delta_ind_mat)
@@ -410,6 +367,7 @@ class Chain(DirichletProcessSampler):
                 ].reshape(self.nTemp, self.nDat, self.tCol)), 
             0, 1,
             )
+        self.am_scale = 2.56**2 / self.tCol
         self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
         self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
         # PlaceHolders
@@ -428,7 +386,7 @@ class Chain(DirichletProcessSampler):
         #     )
 
         # zeta : (i,t,n,d)
-        lzetas = np.swapaxes(
+        lzeta = np.swapaxes(
             np.log(np.vstack([
                 zeta[self.temp_unravel, delta.ravel()].reshape(
                 self.nTemp, self.nDat, self.tCol
@@ -439,12 +397,14 @@ class Chain(DirichletProcessSampler):
                 ])),
             1, 2,
             ) # i,n,t,d
-        self.am_mean_i[:] = lzetas.mean(axis = 0) # n,t,d
-        self.am_cov_i[:] = np.einsum(
-            'intj,intl->ntjl,',
-            lzetas - self.am_mean_i[None,:,:,:],
-            lzetas - self.am_mean_i[None,:,:,:],
-            )
+        self.am_mean_i[:] = per_obs_tempered_initial_mean(lzeta)
+        self.am_cov_i[:] = per_obs_tempered_initial_cov(lzeta, self.am_mean_i)
+        # self.am_mean_i[:] = lzetas.mean(axis = 0) # n,t,d
+        # self.am_cov_i[:] = np.einsum(
+        #     'intj,intl->ntjl,',
+        #     lzetas - self.am_mean_i[None,:,:,:],
+        #     lzetas - self.am_mean_i[None,:,:,:],
+        #     )
         return
     
     def update_am_cov(self):
@@ -462,7 +422,7 @@ class Chain(DirichletProcessSampler):
         #         self.samples.lzhist[self.curr_iter] - self.am_mean_i,
         #         )
         #     )
-        zeta = np.swapaxes(
+        lzeta = np.swapaxes(
             np.log(
                 self.curr_zeta[
                     self.temp_unravel, self.curr_delta.ravel()
@@ -471,13 +431,13 @@ class Chain(DirichletProcessSampler):
                         )
                 ),
             0, 1,
-            )
+            ) # n, t, d
         per_obs_tempered_update_mean_inplace(
-            self.am_mean_i, self.curr_iter, np.log(zeta),
+            self.am_mean_i, self.curr_iter, lzeta,
             )
         per_obs_tempered_update_cov_inplace(
-            self.am_cov_i, self.curr_iter, self.am_mean_i, np.log(zeta),
-            )        
+            self.am_cov_i, self.curr_iter, self.am_mean_i, lzeta,
+            )
         return
 
     def try_tempering_swap(self):
@@ -515,14 +475,14 @@ class Chain(DirichletProcessSampler):
                 self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
         return
 
-    def update_logzeta_historical(self):
-        self.samples.lzhist[self.curr_iter] = np.swapaxes(
-            np.log(self.curr_zeta[self.temp_unravel, 
-                    self.curr_delta.ravel(),].reshape(self.zeta_shape)
-                ),
-            0, 1,
-            )
-        return
+    # def update_logzeta_historical(self):
+    #     self.samples.lzhist[self.curr_iter] = np.swapaxes(
+    #         np.log(self.curr_zeta[self.temp_unravel, 
+    #                 self.curr_delta.ravel(),].reshape(self.zeta_shape)
+    #             ),
+    #         0, 1,
+    #         )
+    #     return
 
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
@@ -568,7 +528,7 @@ class Chain(DirichletProcessSampler):
         if self.curr_iter >= self.swap_start:
             self.try_tempering_swap()
         
-        self.update_logzeta_historical()
+        # self.update_logzeta_historical()
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
