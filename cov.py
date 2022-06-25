@@ -60,12 +60,15 @@ class TemperedOnlineCovariance(OnlineCovariance):
         return
     
 class PerObsTemperedOnlineCovariance(OnlineCovariance):
-    SigmaC = None
-    xbarC = None
-    nC = None
+    c_Sigma = None
+    c_xbar  = None
+    c_n     = None
 
-    def clustered_covariance(self, delta):
-        """ Combines Covariance Matrices for all elements in cluster """
+    def cluster_covariance(self, delta):
+        """ 
+        Combines Covariance Matrices for all elements in cluster 
+        adapted from: https://tinyurl.com/onlinecovariance
+        """
         # cluster related
         S = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))
         mS = np.zeros((self.nTemp, self.nClust, self.nCol))
@@ -87,7 +90,12 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
                 mS[self.temps, delta.T[j]] - mC,
                 mS[self.temps, delta.T[j]] - mC,
                 )
+            S[self.temps, delta.T[j]] += np.einsum(
+                'tp,tq->tpq', self.xbar[j] - mC, self.xbar[j] - mC,
+                )
             S[self.temps, delta.T[j]] /= nC[:, None, None]
+            mS[self.temps, delta.T[j]] = mC
+            nS[self.temps, delta.T[j]] = nC
         S += np.eye(self.nCol)[None,None,:] * 1e-9
         return S
 
@@ -105,10 +113,6 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.Sigma /= self.n
     
     def __init__(self, nTemp, nDat, nCol, nClust = None):
-        # clustering
-        if nClust is None:
-            nClust = nDat
-        self.nClust = nClust
         # regular
         self.nTemp, self.nDat, self.nCol = nTemp, nDat, nCol
         self.temps = np.arange(self.nTemp)
@@ -117,49 +121,13 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.b = np.zeros((self.nDat, self.nTemp, self.nCol))
         self.xbar = np.zeros((self.nDat, self.nTemp, self.nCol))
         self.n = 0
+        # clustering
+        if nClust is not None:
+            self.nClust  = nClust
+            self.c_Sigma = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))
+            self.c_xbar  = np.zeros((self.nTemp, self.nClust, self.nCol))
+            self.c_n     = np.zeros((self.nTemp, self.nClust))
         return
-
-def cluster_covariance_mat(S, mS, nS, delta, covs, mus, n, temps):
-    """
-    S      : cluster cov mat                      : (t x J x d x d)
-    mS     : cluster mean mat                     : (t x J x d)
-    nS     : cluster sample size                  : (t x J)
-    delta  : matrix of cluster identification     : (t x n)
-    covs   : running covariance matrix per datum  : (t x n x d x d)
-    mus    : running mean per datum               : (t x n x d)
-    n      : running sample size                  : int
-    temps  : np.arange(self.nTemp)               : (t)
-    """
-    S[:] = 0    # cluster covariance
-    mS[:] = 0   # cluster mean
-    nS[:] = 0   # cluster Sample Size
-    mC = np.empty((delta.shape[0], S.shape[-1])) # temporary mean
-    nC = np.zeros((delta.shape[0], 1))           # temporary sample size
-    for j in range(delta.shape[1]):
-        nC[:] = nS[temps, delta.T[j], None] + n
-        mC[:] = 1 / nC * (
-            + nS[temps, delta.T[j], None] * mS[temps, delta.T[j]] 
-            + n * mus[j]
-            )
-        S[temps, delta.T[j]] = 1 / nC[:,:,None] * (
-            + nS[temps, delta.T[j], None, None] * S[temps, delta.T[j]]
-            + n * covs[j]
-            + np.einsum(
-                't,tp,tq->tpq', 
-                nS[temps, delta.T[j]], 
-                mS[temps, delta.T[j]] - mC,
-                mS[temps, delta.T[j]] - mC,
-                )
-            + n * np.einsum(
-                'tp,tq->tpq', 
-                mus[j] - mC, 
-                mus[j] - mC,
-                )
-            )
-    S += np.eye(S.shape[-1]) * 1e-9
-    return
-
-
 
 if __name__ == "__main__":
     from numpy.linalg import cholesky
