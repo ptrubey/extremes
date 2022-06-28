@@ -5,10 +5,9 @@ import numpy as np
 class OnlineCovariance(object):
     """  
     Follows the "keeping track of sums" approach to online
-        covariance a la 
-    
+        covariance, adapted from the documentation for:
+        https://github.com/loli/dynstatcov    
     """
-
     nCol = None
     A = None
     b = None
@@ -52,7 +51,9 @@ class TemperedOnlineCovariance(OnlineCovariance):
         self.Sigma += self.A
         self.Sigma -= np.einsum('tj,tl->tjl', self.xbar, self.b)
         self.Sigma -= np.einsum('tj,tl->tjl', self.b, self.xbar)
-        self.Sigma += np.einsum('tj,tl->tjl', self.xbar, self.xbar)
+        self.Sigma += self.n * np.einsum(
+            'tj,tl->tjl', self.xbar, self.xbar,
+            )
         self.Sigma /= self.n
         return
     

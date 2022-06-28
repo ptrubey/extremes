@@ -51,7 +51,6 @@ class Samples(object):
         self.Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
         self.eta   = np.empty((nSamp + 1, nTemp))
-        self.lzhist = np.empty((nSamp + 1, nDat, nTemp, tCol))
         return
 
 def Samples_(Samples):
@@ -154,11 +153,6 @@ class Chain(DirichletProcessSampler, Projection):
         return out
 
     def am_covariance_matrices(self, delta, index):
-        # cluster_covariance_mat(
-        #     self.am_cov_c, self.am_mean_c, self.am_n_c, delta,
-        #     self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.nTemp),
-        #     )
-        # return self.am_cov_c[index]
         return self.am_Sigma.cluster_covariance(delta)[index]
 
     def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
@@ -345,12 +339,6 @@ class Chain(DirichletProcessSampler, Projection):
         self.am_mean_c    = np.empty((self.nTemp, self.max_clust_count, self.tCol))
         self.am_n_c       = np.zeros((self.nTemp, self.max_clust_count))
         self.am_alpha     = np.zeros((self.nTemp, self.max_clust_count))
-        self.samples.lzhist[0] = np.swapaxes(
-            np.log(self.samples.zeta[0][
-                self.temp_unravel, self.samples.delta[0].ravel()
-                ].reshape(self.nTemp, self.nDat, self.tCol)), 
-            0, 1,
-            )
         self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
         self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
         # Placeholders
@@ -372,9 +360,6 @@ class Chain(DirichletProcessSampler, Projection):
             0, 1,
             )
         self.am_Sigma.update(lzeta)
-        if self.curr_iter > 300:
-            self.am_cov_i[:] = self.am_Sigma.Sigma
-            self.am_mean_i[:] = self.am_Sigma.xbar
         return
 
     def try_tempering_swap(self):
@@ -487,11 +472,6 @@ class Chain(DirichletProcessSampler, Projection):
         # write to disk
         with open(path, 'wb') as file:
             pickle.dump(out, file)
-        return
-
-    def set_projection(self):
-        self.data.Yp = (self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)).T
-        self.data.Yp[self.data.Yp <= 1e-6] = 1e-6
         return
     
     def categorical_considerations(self):
@@ -720,21 +700,21 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    # p = argparser()
-    d = {
-        'in_data_path'    : './ad/mammography/data.csv',
-        'in_outcome_path' : './ad/mammography/outcome.csv',
-        'out_path' : './ad/mammography/results_mdppprgln_test.pkl',
-        'cat_vars' : '[5,6,7,8]',
-        'decluster' : 'False',
-        'quantile' : 0.95,
-        'nSamp' : 5000,
-        'nKeep' : 2000,
-        'nThin' : 3,
-        'eta_alpha' : 2.,
-        'eta_beta' : 1.,
-        }
-    p = Heap(**d)
+    p = argparser()
+    # d = {
+    #     'in_data_path'    : './ad/mammography/data.csv',
+    #     'in_outcome_path' : './ad/mammography/outcome.csv',
+    #     'out_path' : './ad/mammography/results_mdppprgln_test.pkl',
+    #     'cat_vars' : '[5,6,7,8]',
+    #     'decluster' : 'False',
+    #     'quantile' : 0.95,
+    #     'nSamp' : 5000,
+    #     'nKeep' : 2000,
+    #     'nThin' : 3,
+    #     'eta_alpha' : 2.,
+    #     'eta_beta' : 1.,
+    #     }
+    # p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values

@@ -13,15 +13,14 @@ from scipy.special import gammaln, betaln
 import cUtility as cu
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
-from data import euclidean_to_angular, euclidean_to_hypercube,              \
+from data import Projection, euclidean_to_angular, euclidean_to_hypercube,              \
     euclidean_to_simplex, MixedDataBase, MixedData
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
 from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,        \
     logd_gamma_my,  pt_logd_loggamma_mx_st,                                 \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,         \
     pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
-from cov import per_obs_tempered_initial_cov, per_obs_tempered_initial_mean,   \
-    per_obs_tempered_update_cov_inplace, per_obs_tempered_update_mean_inplace
+from cov import PerObsTemperedOnlineCovariance
 
 from multiprocessing import Pool
 from energy import limit_cpu
@@ -74,7 +73,7 @@ def Samples_(object):
         self.eta   = np.empty((nSamp))
         return
 
-class Chain(DirichletProcessSampler):
+class Chain(DirichletProcessSampler, Projection):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
@@ -98,11 +97,6 @@ class Chain(DirichletProcessSampler):
         return '{:.2f}'.format(acc)
 
     # Adaptive Metropolis Placeholders
-    am_cov_c  = None
-    am_cov_i  = None
-    am_mean_c = None
-    am_mean_i = None
-    am_n_c    = None
     am_scale  = None
     max_clust_count = None
     swap_attempts = None
@@ -112,9 +106,6 @@ class Chain(DirichletProcessSampler):
         curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         cand_cluster_state = (curr_cluster_state == 0)
         log_likelihood = self.log_delta_likelihood(zeta)
-        # log_likelihood = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        # log_likelihood += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
-        # log_likelihood += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
         tidx = np.arange(self.nTemp)
         p = uniform(size = (self.nDat, self.nTemp))
         p += tidx[None,:]
@@ -166,11 +157,7 @@ class Chain(DirichletProcessSampler):
         return out
 
     def am_covariance_matrices(self, delta, index):
-        cluster_covariance_mat(
-            self.am_cov_c, self.am_mean_c, self.am_n_c, delta,
-            self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.nTemp),
-            )
-        return self.am_cov_c[index]
+        return self.am_Sigma.cluster_covariance(delta)[index]
 
     def sample_zeta(self, zeta, delta, alpha, beta):
         """
@@ -352,22 +339,11 @@ class Chain(DirichletProcessSampler):
         # Iterator
         self.curr_iter = 0
         # Adaptive Metropolis related        
-        self.am_cov_i     = np.empty((self.nDat, self.nTemp, self.tCol, self.tCol))
-        self.am_cov_i[:]  = np.eye(self.tCol, self.tCol)[None,None,:,:] * 1e-4
-        self.am_mean_i    = np.empty((self.nDat, self.nTemp, self.tCol))
-        self.am_mean_i[:] = 0.
-        self.am_cov_c     = np.empty((self.nTemp, self.max_clust_count, 
-                                                        self.tCol, self.tCol))
-        self.am_mean_c    = np.empty((self.nTemp, self.max_clust_count, self.tCol))
-        self.am_n_c       = np.zeros((self.nTemp, self.max_clust_count))
-        self.am_alpha     = np.zeros((self.nTemp, self.max_clust_count))
-        self.samples.lzhist[0] = np.swapaxes(
-            np.log(self.samples.zeta[0][
-                self.temp_unravel, self.samples.delta[0].ravel()
-                ].reshape(self.nTemp, self.nDat, self.tCol)), 
-            0, 1,
+        self.am_Sigma = PerObsTemperedOnlineCovariance(
+            self.nTemp, self.nDat, self.tCol, self.max_clust_count,
             )
-        self.am_scale = 2.56**2 / self.tCol
+        self.am_scale = 2.38**2 / self.tCol
+        
         self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
         self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
         # PlaceHolders
@@ -375,53 +351,9 @@ class Chain(DirichletProcessSampler):
         self.sigma_ph2 = np.ones((self.nTemp, self.nDat, self.nCol))
         self.zeta_shape = (self.nTemp, self.nDat, self.tCol)
         return
-
-    def update_am_cov_initial(self):
-        """ Initial update for Adaptive Metropolis Covariance per obsv."""
-        # self.am_mean_i[:] = self.samples.lzhist[:self.curr_iter].mean(axis = 0)
-        # self.am_cov_i[:] = 1 / self.curr_iter * np.einsum(
-        #     'intj,intk->ntjk',
-        #     self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
-        #     self.samples.lzhist[:self.curr_iter] - self.am_mean_i,
-        #     )
-
-        # zeta : (i,t,n,d)
-        lzeta = np.swapaxes(
-            np.log(np.vstack([
-                zeta[self.temp_unravel, delta.ravel()].reshape(
-                self.nTemp, self.nDat, self.tCol
-                )
-                for zeta, delta
-                in zip(self.samples.zeta[:(self.curr_iter + 1)], 
-                    self.samples.delta[:(self.curr_iter + 1)])
-                ])),
-            1, 2,
-            ) # i,n,t,d
-        self.am_mean_i[:] = per_obs_tempered_initial_mean(lzeta)
-        self.am_cov_i[:] = per_obs_tempered_initial_cov(lzeta, self.am_mean_i)
-        # self.am_mean_i[:] = lzetas.mean(axis = 0) # n,t,d
-        # self.am_cov_i[:] = np.einsum(
-        #     'intj,intl->ntjl,',
-        #     lzetas - self.am_mean_i[None,:,:,:],
-        #     lzetas - self.am_mean_i[None,:,:,:],
-        #     )
-        return
     
     def update_am_cov(self):
         """ Online updating for Adaptive Metropolis Covariance per obsv. """
-        # c = self.curr_iter 
-        # c1 = self.curr_iter + 1
-        # self.am_mean_i += (
-        #     (self.samples.lzhist[self.curr_iter] - self.am_mean_i) / c
-        #     )
-        # self.am_cov_i[:] = (
-        #     + (c/c1) * self.am_cov_i
-        #     + (c/c1/c1) * np.einsum(
-        #         'tej,tel->tejl',
-        #         self.samples.lzhist[self.curr_iter] - self.am_mean_i,
-        #         self.samples.lzhist[self.curr_iter] - self.am_mean_i,
-        #         )
-        #     )
         lzeta = np.swapaxes(
             np.log(
                 self.curr_zeta[
@@ -431,13 +363,8 @@ class Chain(DirichletProcessSampler):
                         )
                 ),
             0, 1,
-            ) # n, t, d
-        per_obs_tempered_update_mean_inplace(
-            self.am_mean_i, self.curr_iter, lzeta,
             )
-        per_obs_tempered_update_cov_inplace(
-            self.am_cov_i, self.curr_iter, self.am_mean_i, lzeta,
-            )
+        self.am_Sigma.update(lzeta)
         return
 
     def try_tempering_swap(self):
@@ -474,16 +401,7 @@ class Chain(DirichletProcessSampler):
             self.samples.eta[ci][tt[0]], self.samples.eta[ci][tt[1]] = \
                 self.samples.eta[ci][tt[1]].copy(), self.samples.eta[ci][tt[0]].copy()
         return
-
-    # def update_logzeta_historical(self):
-    #     self.samples.lzhist[self.curr_iter] = np.swapaxes(
-    #         np.log(self.curr_zeta[self.temp_unravel, 
-    #                 self.curr_delta.ravel(),].reshape(self.zeta_shape)
-    #             ),
-    #         0, 1,
-    #         )
-    #     return
-
+    
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy()
@@ -492,12 +410,9 @@ class Chain(DirichletProcessSampler):
         zeta  = self.curr_zeta.copy()
         eta   = self.curr_eta
 
-        if self.curr_iter > 300:
-            self.update_am_cov()
-        elif self.curr_iter == 300:
-            self.update_am_cov_initial()
-        else:
-            pass
+        # Adaptive Metropolis Update
+        self.update_am_cov()
+        
         # Advance the iterator
         self.curr_iter += 1
         ci = self.curr_iter
@@ -527,8 +442,6 @@ class Chain(DirichletProcessSampler):
         # Attempt Swap:
         if self.curr_iter >= self.swap_start:
             self.try_tempering_swap()
-        
-        # self.update_logzeta_historical()
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -540,12 +453,12 @@ class Chain(DirichletProcessSampler):
         # assemble data
         zetas  = np.vstack([
             np.hstack((np.ones((zeta[0].shape[0], 1)) * i, zeta[0]))
-            for i, zeta in enumerate(self.samples.zeta[nBurn :: nThin])
+            for i, zeta in enumerate(self.samples.zeta[(nBurn+1) :: nThin])
             ])
-        alphas = self.samples.alpha[nBurn :: nThin, 0]
-        betas  = self.samples.beta[nBurn :: nThin, 0]
-        deltas = self.samples.delta[nBurn :: nThin, 0]
-        etas   = self.samples.eta[nBurn :: nThin, 0]
+        alphas = self.samples.alpha[(nBurn+1) :: nThin, 0]
+        betas  = self.samples.beta[(nBurn+1) :: nThin, 0]
+        deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
+        etas   = self.samples.eta[(nBurn+1) :: nThin, 0]
         # make output dictionary
         out = {
             'zetas'  : zetas,
@@ -568,11 +481,6 @@ class Chain(DirichletProcessSampler):
         # write to disk
         with open(path, 'wb') as file:
             pickle.dump(out, file)
-        return
-
-    def set_projection(self):
-        self.data.Yp = (self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)).T
-        self.data.Yp[self.data.Yp <= 1e-6] = 1e-6
         return
     
     def categorical_considerations(self):
