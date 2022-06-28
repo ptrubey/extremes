@@ -154,11 +154,12 @@ class Chain(DirichletProcessSampler, Projection):
         return out
 
     def am_covariance_matrices(self, delta, index):
-        cluster_covariance_mat(
-            self.am_cov_c, self.am_mean_c, self.am_n_c, delta,
-            self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.nTemp),
-            )
-        return self.am_cov_c[index]
+        # cluster_covariance_mat(
+        #     self.am_cov_c, self.am_mean_c, self.am_n_c, delta,
+        #     self.am_cov_i, self.am_mean_i, self.curr_iter, np.arange(self.nTemp),
+        #     )
+        # return self.am_cov_c[index]
+        return self.am_Sigma.cluster_covariance(delta)[index]
 
     def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
         """
@@ -542,7 +543,7 @@ class Chain(DirichletProcessSampler, Projection):
 
         # Adaptive Metropolis
         self.am_Sigma = PerObsTemperedOnlineCovariance(
-            self.nTemp, self.nDat, self.tCol,
+            self.nTemp, self.nDat, self.tCol, self.max_clust_count
             )
         self.am_scale = 2.38**2 / self.tCol
         return

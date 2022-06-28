@@ -3,6 +3,12 @@
 import numpy as np
 
 class OnlineCovariance(object):
+    """  
+    Follows the "keeping track of sums" approach to online
+        covariance a la 
+    
+    """
+
     nCol = None
     A = None
     b = None
@@ -69,35 +75,37 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         Combines Covariance Matrices for all elements in cluster 
         adapted from: https://tinyurl.com/onlinecovariance
         """
-        # cluster related
-        S = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))
-        mS = np.zeros((self.nTemp, self.nClust, self.nCol))
-        nS = np.zeros((self.nTemp, self.nClust))
-        # combined (temporary) values
+        if self.n <= 300:
+            return self.c_Sigma
+        # re-zero cluster related values
+        self.c_Sigma[:] = 0.
+        self.c_xbar[:] = 0.
+        self.c_n[:] = 0.
+        # combined (temporary) values targets
         mC = np.zeros((self.nTemp, self.nCol))
         nC = np.zeros((self.nTemp))
         for j in range(self.nDat):
-            nC[:] = nS[self.temps, delta.T[j]] + self.n
+            nC[:] = self.c_n[self.temps, delta.T[j]] + self.n
             mC[:] = 0.
-            mC += nS[self.temps, delta.T[j]] * mS[self.temps, delta.T[j]]
+            mC += self.c_n[self.temps, delta.T[j]][:, None] * self.c_xbar[self.temps, delta.T[j]]
             mC += self.n * self.xbar[j]
             mC /= nC[:,None]
-            S[self.temps, delta.T[j]] *= nS[self.temps, delta.T[j], None, None]
-            S[self.temps, delta.T[j]] += self.n * self.Sigma[j]
-            S[self.temps, delta.T[j]] += np.einsum(
+            self.c_Sigma[self.temps, delta.T[j]] *= self.c_n[self.temps, delta.T[j], None, None]
+            self.c_Sigma[self.temps, delta.T[j]] += self.n * self.Sigma[j]
+            self.c_Sigma[self.temps, delta.T[j]] += np.einsum(
                 't,tp,tq->tpq',
-                nS[self.temps, delta.T[j]],
-                mS[self.temps, delta.T[j]] - mC,
-                mS[self.temps, delta.T[j]] - mC,
+                self.c_n[self.temps, delta.T[j]],
+                self.c_xbar[self.temps, delta.T[j]] - mC,
+                self.c_xbar[self.temps, delta.T[j]] - mC,
                 )
-            S[self.temps, delta.T[j]] += np.einsum(
+            self.c_Sigma[self.temps, delta.T[j]] += self.n * np.einsum(
                 'tp,tq->tpq', self.xbar[j] - mC, self.xbar[j] - mC,
                 )
-            S[self.temps, delta.T[j]] /= nC[:, None, None]
-            mS[self.temps, delta.T[j]] = mC
-            nS[self.temps, delta.T[j]] = nC
-        S += np.eye(self.nCol)[None,None,:] * 1e-9
-        return S
+            self.c_Sigma[self.temps, delta.T[j]] /= nC[:, None, None]
+            self.c_xbar[self.temps, delta.T[j]] = mC
+            self.c_n[self.temps, delta.T[j]] = nC
+        self.c_Sigma += np.eye(self.nCol)[None,None,:] * 1e-9
+        return self.c_Sigma
 
     def update(self, x):
         """ x : (n, t, d) """
@@ -109,8 +117,9 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.Sigma += self.A
         self.Sigma -= np.einsum('ntj,ntl->ntjl', self.xbar, self.b)
         self.Sigma -= np.einsum('ntj,ntl->ntjl', self.b, self.xbar)
-        self.Sigma += np.einsum('ntj,ntl->ntjl', self.xbar, self.xbar)
+        self.Sigma += self.n * np.einsum('ntj,ntl->ntjl', self.xbar, self.xbar)
         self.Sigma /= self.n
+        return
     
     def __init__(self, nTemp, nDat, nCol, nClust = None):
         # regular
@@ -125,6 +134,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         if nClust is not None:
             self.nClust  = nClust
             self.c_Sigma = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))
+            self.c_Sigma += np.eye(self.nCol)[None, None, :, :] * 1e-6
             self.c_xbar  = np.zeros((self.nTemp, self.nClust, self.nCol))
             self.c_n     = np.zeros((self.nTemp, self.nClust))
         return
