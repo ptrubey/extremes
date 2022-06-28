@@ -486,13 +486,13 @@ class Chain(DirichletProcessSampler, Projection):
             prior_mu    = (0, 3.),
             prior_Sigma = (10, 0.5),
             p           = 10,
-            max_clust   = 300,
+            max_clust_count = 300,
             ntemps      = 3,
             stepping    = 1.05,
             ):
         assert type(data) is MixedData
         self.data = data
-        self.max_clust_count = max_clust
+        self.max_clust_count = max_clust_count
         self.p = p
         self.nCat = self.data.nCat
         self.nCol = self.data.nCol
