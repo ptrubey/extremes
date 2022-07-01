@@ -8,7 +8,7 @@ from xml.dom.minidom import Attr
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 import re, os, argparse, glob
 # builtins explicitly called
-from multiprocessing import pool, Pool, cpu_count
+from multiprocessing import pool as mcpool, Pool, cpu_count
 from scipy.integrate import trapezoid
 from scipy.special import gamma as gamma_func
 from numpy.random import gamma
@@ -21,7 +21,8 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 from data import euclidean_to_hypercube, Projection
 # Custom Modules
-from energy import limit_cpu, hypercube_distance_matrix, euclidean_distance_matrix
+from energy import euclidean_distance_mean, hypercube_distance_mean, limit_cpu, hypercube_distance_matrix, euclidean_distance_matrix, \
+    euclidean_distance_unsummed, hypercube_distance_unsummed
 from models import Results
 
 class ClassificationMetric(object):
@@ -172,18 +173,20 @@ class Anomaly(Projection):
     def euclidean_distance_latent(self):
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
         Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
-        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:], # (s,n,d2)
-        Y_con = np.concatenate((Y1,Y2), axis = 2)
+        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
+        Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1)
         Y_new = self.generate_posterior_predictive_gammas()
-        return euclidean_distance_matrix(Y_new, Y_con, self.pool)
+        res = self.pool.map(euclidean_distance_mean, zip(repeat(Y_new), Y_con))
+        return np.array(list(res))
     @cached_property
     def hypercube_distance_latent(self):
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
         Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
         Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:], # (s,n,d2)
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
-        V_con = np.array(list(map(euclidean_to_hypercube, Y_con)))
+        V_con = np.swapaxes(np.array(list(map(euclidean_to_hypercube, Y_con))), 0, 1)
         V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
+        res = self.pool.map(hypercube_distance_mean, zip(repeat(V_new), V_con))
         return hypercube_distance_matrix(V_new, V_con, self.pool)
     
     ## Classic Anomaly Metrics:
@@ -374,6 +377,9 @@ class Anomaly(Projection):
             'cone' : self.cone_density,
             'ekde' : self.euclidean_kernel_density_estimate,
             'hkde' : self.hypercube_kernel_density_estimate,
+            'lhkde' : self.latent_hypercube_kernel_density_estimate,
+            'lekde' : self.latent_euclidean_kernel_density_estimate,
+            'lskde' : self.latent_simplex_kernel_density_estimate,
             }
     def get_scores(self):
         metrics = self.scoring_metrics.keys()
@@ -450,9 +456,10 @@ if __name__ == '__main__':
     path = './ad/cardio/results_mdppprgln_2_1e1.pkl'
     result = MixedResultFactory(path)
     result.p = 10.
-    # result.pools_open()
+    result.pools_open()
     metrics = result.get_scoring_metrics()
-    # result.pools_closed()
+    result.pools_closed()
+    raise
     pass
 
 # EOF

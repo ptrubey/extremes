@@ -12,8 +12,14 @@ def hypercube_distance_unsummed(args):
 def hypercube_distance(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev).sum()
 
+def hypercube_distance_mean(args):
+    return pairwise_distances(args[0], args[1], metric = hcdev).mean()
+
 def euclidean_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1))
+
+def euclidean_distance_mean(args):
+    return pairwise_distances(args[0], args[1]).mean()
 
 def prediction_pairwise_distance(prediction):
     n = prediction.shape[0]
