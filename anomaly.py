@@ -430,6 +430,32 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
+    results = []
+    basepath = './ad'
+    datasets = ['cardio','cover','mammography']
+    resbases = {
+        'mdppprg' : 'result_mdppprg_*.pkl',
+        'mdppprgln' : 'result_mdppprgln_*.pkl',
+        }
+    for model in resbases.keys():
+        for dataset in datasets:
+            files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+            for file in files:
+                results.append((model, file))
+    metrics = []
+    for result in results:
+        extant_result = MixedResultFactory(results[1])
+        extant_result.p = 10.
+        extant_result.pools_open()
+        extant_metric = result.get_scoring_metrics()
+        extant_result.pools_closed()
+        extant_metric['path'] = results[1]
+        metrics.append(extant_metric)
+    
+    df = pd.concat(metrics)
+    df.to_csv('./ad/performance.csv')
+
+
     # args = argparser()
     # args = {'in_path' : './sim_mixed_ad/results_mdppprg*.pkl', 'out_path' : './sim_mixed_ad/metrics.csv'}
     # files = glob.glob(args['in_path'])
@@ -453,13 +479,13 @@ if __name__ == '__main__':
     
     # df = pd.concat(metrics)
     # df.to_csv(args['out_path'], index = False)
-    path = './ad/cardio/results_mdppprgln_2_1e1.pkl'
-    result = MixedResultFactory(path)
-    result.p = 10.
-    result.pools_open()
-    metrics = result.get_scoring_metrics()
-    result.pools_closed()
-    raise
-    pass
+    # path = './ad/cardio/results_mdppprgln_2_1e1.pkl'
+    # result = MixedResultFactory(path)
+    # result.p = 10.
+    # result.pools_open()
+    # metrics = result.get_scoring_metrics()
+    # result.pools_closed()
+    # raise
+    # pass
 
-# EOF
+# EOF   

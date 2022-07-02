@@ -225,7 +225,7 @@ class Chain(DirichletProcessSampler, Projection):
         # # res = map(sample_gamma_shape_wrapper, args)
         # res = self.pool.map(sample_gamma_shape_wrapper, args)
         # return np.array(list(res)).reshape(curr_alpha.shape) # (t,d)
-        return np.ones(curr_alpha.shape)
+        return np.ones(curr_alpha.shape) * 1.1
 
     def sample_beta(self, zeta, alpha, extant_clusters):
         # """
@@ -242,7 +242,7 @@ class Chain(DirichletProcessSampler, Projection):
         # As = n * alpha + self.priors.beta.a
         # Bs = zs + self.priors.beta.b
         # return gamma(shape = As, scale = 1 / Bs)
-        return np.ones(alpha.shape)
+        return np.ones(alpha.shape) * 1.1
 
     def sample_eta(self, curr_eta, delta):
         """

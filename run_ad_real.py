@@ -2,7 +2,8 @@ import sys, os
 import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
-models = ['mdppprgln','mdppprg']
+# models = ['mdppprgln','mdppprg']
+models = ['mdppprg']
 
 
 cardio = {
