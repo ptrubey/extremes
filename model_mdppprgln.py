@@ -700,21 +700,21 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    p = argparser()
-    # d = {
-    #     'in_data_path'    : './ad/mammography/data.csv',
-    #     'in_outcome_path' : './ad/mammography/outcome.csv',
-    #     'out_path' : './ad/mammography/results_mdppprgln_test.pkl',
-    #     'cat_vars' : '[5,6,7,8]',
-    #     'decluster' : 'False',
-    #     'quantile' : 0.95,
-    #     'nSamp' : 5000,
-    #     'nKeep' : 2000,
-    #     'nThin' : 3,
-    #     'eta_alpha' : 2.,
-    #     'eta_beta' : 1.,
-    #     }
-    # p = Heap(**d)
+    # p = argparser()
+    d = {
+        'in_data_path'    : './ad/mammography/data.csv',
+        'in_outcome_path' : './ad/mammography/outcome.csv',
+        'out_path' : './ad/mammography/results_mdppprgln_test.pkl',
+        'cat_vars' : '[5,6,7,8]',
+        'decluster' : 'False',
+        'quantile' : 0.95,
+        'nSamp' : 5000,
+        'nKeep' : 2000,
+        'nThin' : 3,
+        'eta_alpha' : 2.,
+        'eta_beta' : 1.,
+        }
+    p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values

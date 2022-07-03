@@ -188,14 +188,11 @@ class Chain(DirichletProcessSampler, Projection):
             normal(size = (idx[0].shape[0], self.tCol)),
             )
         zcand = np.exp(lzcand)
-        # am_alpha += np.einsum('ntj,tnj->tj', self.log_likelihood(zcand), delta_ind_mat)
-        # am_alpha -= np.einsum('ntj,tnj->tj', self.log_likelihood(zcurr), delta_ind_mat)
+        
         am_alpha += self.log_zeta_likelihood(zcand, delta, delta_ind_mat)
         am_alpha -= self.log_zeta_likelihood(zcurr, delta, delta_ind_mat)
         with np.errstate(invalid = 'ignore'):
             am_alpha *= self.itl[:,None]
-        # am_alpha[idx] += logd_loggamma_paired(lzcand[idx], alpha[idx[0]], beta[idx[0]])
-        # am_alpha[idx] -= logd_loggamma_paired(lzcurr[idx], alpha[idx[0]], beta[idx[0]])
         am_alpha[idx] += self.log_logzeta_prior(lzcand, idx, alpha, beta)
         am_alpha[idx] -= self.log_logzeta_prior(lzcurr, idx, alpha, beta)
         keep = np.where(np.log(uniform(size = am_alpha.shape)) < am_alpha)

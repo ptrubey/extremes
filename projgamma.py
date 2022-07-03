@@ -59,7 +59,8 @@ def pt_logd_prodgamma_my_mt(aY, aAlpha, aBeta):
         ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta)).reshape(1, t, j)
         ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, t, j)
         ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
-    ld -= np.einsum('tnd,tjd->ntj', aY, aBeta)
+        ld -= np.einsum('tnd,tjd->ntj', aY, aBeta)
+    np.nan_to_num(ld, False, -np.inf)
     return ld
 
 def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
@@ -78,7 +79,7 @@ def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
         out -= np.einsum('tnd->tn', gammaln(aAlpha))              # gamma(alpha)
         out += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
         out -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
-    
+    np.nan_to_num(out, False, -np.inf)
     return out                                                # per-temp,Y log-density
 
 def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
@@ -98,7 +99,8 @@ def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
         ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
         ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
         ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
-    ld -= np.einsum('tnd,td->tn', aY, aBeta)
+        ld -= np.einsum('tnd,td->tn', aY, aBeta)
+    np.nan_to_num(ld, False, -np.inf)
     return ld
 
 def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
@@ -141,8 +143,9 @@ def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
         ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
         ld -= np.einsum('tnd->tn', gammaln(aAlpha))
         ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
-    ld += gammaln(np.einsum('tnd->tn', aAlpha))
-    ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
+        ld += gammaln(np.einsum('tnd->tn', aAlpha))
+        ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
+    np.nan_to_num(ld, False, -np.inf)
     return ld
 
 def logd_gamma_my(aY, alpha, beta):
@@ -162,6 +165,7 @@ def logd_gamma_my(aY, alpha, beta):
         lp -= gammaln(alpha)
         lp += (alpha - 1) * np.log(aY)
         lp -= beta * aY
+    np.nan_to_num(lp, False, -np.inf)
     return lp
 
 def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
@@ -183,6 +187,7 @@ def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
         cov_inv, 
         x - mu.reshape(-1,1,cov_chol.shape[1]),
         )
+    np.nan_to_num(ld, False, -np.inf)
     return ld
 
 def logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
