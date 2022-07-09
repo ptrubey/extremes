@@ -155,4 +155,22 @@ cpdef np.ndarray[dtype = np.int_t, ndim = 1] diriproc_cluster_sampler(
             cand_cluster_state[delta[i]] = 0
     return delta
 
+cpdef np.ndarray[dtype = np.int_t, ndim = 2] pt_diriproc_cluster_sampler(
+        np.ndarray[dtype = np.int_t, ndim = 2] delta,    # (t x n)
+        np.ndarray[dtype = np.float_t, ndim = 3] log_likelihood, # (t x n x J)
+        np.ndarray[dtype = np.float_t, ndim = 2] prob,   # (t x n)   
+        np.ndarray[dtype = np.float_t, ndim = 1] eta,    # (t)
+        ):
+    cdef:
+        np.ndarray[dtype = np.int_t, ndim = 2] curr_cluster_state
+        np.ndarray[dtype = np.int_t, ndim = 2] cand_cluster_state
+        np.ndarray[dtype = np.float_t, ndim = 2] scratch
+        np.ndarray[dtype = np.int_t, ndim = 1] ncandcluster
+        int t, i, n, j, J
+    t = delta.shape[0]
+    n = delta.shape[1]
+    J = log_likelihood.shape[2]
+
+
+
 # EOF

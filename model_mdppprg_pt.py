@@ -16,10 +16,10 @@ from cProjgamma import sample_alpha_1_mh_summary, sample_alpha_k_mh_summary
 from data import Projection, euclidean_to_angular, euclidean_to_hypercube,              \
     euclidean_to_simplex, MixedDataBase, MixedData
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
-from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,        \
+from projgamma import logd_loggamma_paired, pt_logd_cumdirmultinom_mx_ma_inplace_unstable, pt_logd_prodgamma_my_st,        \
     logd_gamma_my,  pt_logd_loggamma_mx_st,                                 \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,         \
-    pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, GammaPrior
+    pt_logd_projgamma_my_mt, pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt, GammaPrior
 from cov import PerObsTemperedOnlineCovariance
 
 from multiprocessing import Pool
@@ -256,8 +256,14 @@ class Chain(DirichletProcessSampler, Projection):
 
     def log_delta_likelihood(self, zeta):
         out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        out += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
-        out += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            pt_logd_projgamma_my_mt_inplace_unstable(
+                out, self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1,
+                )
+            pt_logd_cumdirmultinom_mx_ma_inplace_unstable(
+                out, self.data.W, zeta[:,:,self.nCol:], self.CatMat,
+                )
+        np.nan_to_num(out, False, -np.inf)
         return out
     
     def log_zeta_likelihood(self, zeta, delta, dmat):

@@ -127,6 +127,14 @@ def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
+def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
+    out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
+    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
+    out += gammaln(np.einsum('tjd->tj', aAlpha))[None,:,:]
+    out -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
+    return
+
 def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
     # def dprojgamma_log_paired_yt(aY, aAlpha, aBeta):
     """
@@ -342,6 +350,26 @@ def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
         logd -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
     np.nan_to_num(logd, False, -np.inf)
     return logd
+
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
+    sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
+    out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+    out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    return
+
+def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
+    sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
+    out += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
+    out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+    out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    out -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
+    return
 
 def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
     sa = np.einsum('nd,cd->nc', aAlpha, sphere_mat)

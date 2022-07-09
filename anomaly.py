@@ -182,7 +182,7 @@ class Anomaly(Projection):
     def hypercube_distance_latent(self):
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
         Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
-        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:], # (s,n,d2)
+        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
         V_con = np.swapaxes(np.array(list(map(euclidean_to_hypercube, Y_con))), 0, 1)
         V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
@@ -339,12 +339,19 @@ class Anomaly(Projection):
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
         h = self.euclidean_distance_latent.mean()
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.euclidean_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+            return 1 / np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
             return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
         else:
             raise ValueError('requested kernel not available')
         pass
+    def latent_hypercube_energy_score(self):
+        pass
+    def latent_euclidean_energy_score(self):
+        pass
+    def latent_sphere_energy_score(self):
+        pass
+
 
     ## Classification Performance Metrics:
     def get_auroc(self, scores):

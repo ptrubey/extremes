@@ -10,14 +10,14 @@ import os
 import pickle
 
 import cUtility as cu
-from samplers import DirichletProcessSampler
+from samplers import DirichletProcessSampler, pt_dp_sample_cluster
 from data import Projection, euclidean_to_angular, euclidean_to_hypercube,     \
                 euclidean_to_simplex, MixedDataBase, MixedData
 from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
-from projgamma import logd_loggamma_paired, pt_logd_prodgamma_my_st,           \
+from projgamma import logd_loggamma_paired, pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_cumdirmultinom_mx_ma_inplace_unstable, pt_logd_prodgamma_my_st,           \
     logd_gamma_my,  pt_logd_loggamma_mx_st, pt_logd_mvnormal_mx_st,            \
     pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,            \
-    pt_logd_projgamma_my_mt, pt_logd_projgamma_paired_yt, logd_mvnormal_mx_st, \
+    pt_logd_projgamma_my_mt, pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt, logd_mvnormal_mx_st, \
     logd_invwishart_ms, GammaPrior, NormalPrior, InvWishartPrior
 from cov import PerObsTemperedOnlineCovariance
                 
@@ -98,31 +98,35 @@ class Chain(DirichletProcessSampler, Projection):
     swap_succeeds = None
 
     def sample_delta(self, delta, zeta, eta):
-        curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
-        cand_cluster_state = (curr_cluster_state == 0)
         log_likelihood = self.log_delta_likelihood(zeta)
-        tidx = np.arange(self.nTemp)
         p = uniform(size = (self.nDat, self.nTemp))
-        p += tidx[None,:]
-        scratch = np.empty(curr_cluster_state.shape)
-        for i in range(self.nDat):
-            curr_cluster_state[tidx, delta.T[i]] -= 1
-            scratch[:] = 0
-            scratch += curr_cluster_state
-            scratch += cand_cluster_state * (eta / (cand_cluster_state.sum(axis = 1) + 1e-9))[:,None]
-            with np.errstate(divide = 'ignore', invalid = 'ignore'):
-                np.log(scratch, out = scratch)
-            scratch += log_likelihood[i]
-            np.nan_to_num(scratch, False, -np.inf)
-            scratch -= scratch.max(axis = 1)[:,None]
-            with np.errstate(under = 'ignore'):
-                np.exp(scratch, out = scratch)
-            np.cumsum(scratch, axis = 1, out = scratch)
-            scratch /= scratch.T[-1][:,None]
-            scratch += tidx[:,None]
-            delta.T[i] = np.searchsorted(scratch.ravel(), p[i]) % self.max_clust_count
-            curr_cluster_state[tidx, delta.T[i]] += 1
-            cand_cluster_state[tidx, delta.T[i]] = False
+        delta[:] = pt_dp_sample_cluster(delta, log_likelihood, p, eta)
+        # curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
+        # cand_cluster_state = (curr_cluster_state == 0)
+        # log_likelihood = self.log_delta_likelihood(zeta)
+        # tidx = np.arange(self.nTemp)
+        # p = uniform(size = (self.nDat, self.nTemp))
+        # p += tidx[None,:]
+        # scratch = np.empty(curr_cluster_state.shape)
+        # for i in range(self.nDat):
+        #     curr_cluster_state[tidx, delta.T[i]] -= 1
+        #     scratch[:] = 0
+        #     scratch += curr_cluster_state
+        #     scratch += cand_cluster_state * \
+        #               (eta / (cand_cluster_state.sum(axis = 1) + 1e-9))[:,None]
+        #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        #         np.log(scratch, out = scratch)
+        #     scratch += log_likelihood[i]
+        #     np.nan_to_num(scratch, False, -np.inf)
+        #     scratch -= scratch.max(axis = 1)[:,None]
+        #     with np.errstate(under = 'ignore'):
+        #         np.exp(scratch, out = scratch)
+        #     np.cumsum(scratch, axis = 1, out = scratch)
+        #     scratch /= scratch.T[-1][:,None]
+        #     scratch += tidx[:,None]
+        #     delta.T[i] = np.searchsorted(scratch.ravel(), p[i]) % self.max_clust_count
+        #     curr_cluster_state[tidx, delta.T[i]] += 1
+        #     cand_cluster_state[tidx, delta.T[i]] = False
         return
 
     def clean_delta_zeta(self, delta, zeta):
@@ -244,8 +248,14 @@ class Chain(DirichletProcessSampler, Projection):
 
     def log_delta_likelihood(self, zeta):
         out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
-        out += pt_logd_projgamma_my_mt(self.data.Yp, zeta[:,:,:self.nCol], self.sigma_ph1)
-        out += pt_logd_cumdirmultinom_mx_ma(self.data.W, zeta[:,:,self.nCol:], self.CatMat)
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            pt_logd_projgamma_my_mt_inplace_unstable(
+                out, self.data.Yp , zeta[:,:,:self.nCol], self.sigma_ph1,
+                )
+            pt_logd_cumdircategorical_mx_ma_inplace_unstable(
+                out, self.data.W, zeta[:,:,self.nCol:], self.CatMat,
+                )
+        np.nan_to_num(out, False, -np.inf)
         return out
     
     def log_zeta_likelihood(self, zeta, delta, delta_ind_mat):
