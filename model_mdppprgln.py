@@ -100,7 +100,7 @@ class Chain(DirichletProcessSampler, Projection):
     def sample_delta(self, delta, zeta, eta):
         log_likelihood = self.log_delta_likelihood(zeta)
         p = uniform(size = (self.nDat, self.nTemp))
-        delta[:] = pt_dp_sample_cluster(delta, log_likelihood, p, eta)
+        pt_dp_sample_cluster(delta, log_likelihood, p, eta)
         # curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
         # cand_cluster_state = (curr_cluster_state == 0)
         # log_likelihood = self.log_delta_likelihood(zeta)

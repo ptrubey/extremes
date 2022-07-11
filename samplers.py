@@ -15,7 +15,7 @@ DirichletProcessSampler assumes the existence of:
 import time
 import numpy as np
 import math
-from numba import jit, njit, prange
+from numba import jit, njit, prange, int32
 
 
 def bincount2D_vectorized(arr, m):
@@ -124,7 +124,7 @@ def dp_sample_cluster(delta, log_likelihood, prob, eta):
 def bincount2D_jit(arr, M):
     T = arr.shape[0]
     N = arr.shape[1]
-    out = np.zeros((T, M), dtype = int)
+    out = np.zeros((T, M), dtype = int32)
     for t in prange(T):
         for n in range(N):
             out[t,arr[t,n]] += 1
@@ -137,37 +137,44 @@ def fff(s, n):
     return s
 
 @njit(fastmath = True, parallel = True)
-def cumsoftmax3d(arr):
-    N = arr.shape[0]
-    T = arr.shape[1]
-    J = arr.shape[2]
-    scratch = np.empty(N,J)
-    for n in prange(N):
-        for t in prange(T):
-            scratch[n,t] = np.max(arr[n,t])
-            for j in range(J):
-                arr[n,t,j] = math.exp(arr[n,t,j] - scratch[n,t,j])
-            arr[n,t] = np.nancumsum(arr[n,t])
-            np.divide(arr[n,t], arr[n,t,]) # no bueno
-
-
-
-@njit(parallel = True)
-def pt_dp_sample_cluster_jit(delta, log_likelihood, prob, eta):
-    T = delta.shape[0]
-    N = delta.shape[1]
-    J = log_likelihood.shape[2]
-    curr_cluster_state = bincount2D_jit(delta, J)
-    cand_cluster_state = (curr_cluster_state == 0)
+def cumsoftmax2d(arr):
+    T = arr.shape[0]
+    J = arr.shape[1]
+    scratch = np.empty(T)
     for t in prange(T):
-        pass
+        scratch[t] = np.max(arr[t])
+        for j in range(J):
+            arr[t,j] = math.exp(arr[t,j] - scratch[t])
+        arr[t] = np.nancumsum(arr[t])
+        scratch[t] = arr[t,J-1]
+        for j in range(J):
+            arr[t,j] /= scratch[t]
+    return
+
+@njit
+def down_1(cluster_state, dvec):
+    for t, d in enumerate(dvec):
+        cluster_state[t,d] -= 1
+    return
+
+@njit
+def up_1(cluster_state, dvec):
+    for t, d in enumerate(dvec):
+        cluster_state[t,d] += 1
+    return
+
+@njit
+def null_cand(cluster_state, dvec):
+    for t, d in enumerate(dvec):
+        cluster_state[t,d] = False
+    return
 
 def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     """
     Args:
         delta          : (T x N)
-        log_likelihood : (T x N x J)
-        prob ([type])  : (T x N)
+        log_likelihood : (N x T x J)
+        prob ([type])  : (N x T)
         eta ([type])   : (T)
     """
     T = delta.shape[0]
@@ -175,35 +182,21 @@ def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     J = log_likelihood.shape[2]
     curr_cluster_state = bincount2D_jit(delta, J)
     cand_cluster_state = (curr_cluster_state == 0)
-    tidx = np.arange(T)
-    prob += np.expand_dims(tidx,0)
+    prob += np.expand_dims(np.arange(T),0)
     scratch = np.empty(curr_cluster_state.shape)
     clust = np.empty_like(delta.T[0])
     for n in range(N):
-        clust[:] = delta.T[n]
-        curr_cluster_state[tidx, clust] -= 1
-        scratch[:] = 0
+        scratch[:] = 0.
+        down_1(curr_cluster_state, delta.T[n])
         scratch += curr_cluster_state
         scratch += cand_cluster_state * np.expand_dims(
             eta / (np.sum(cand_cluster_state, axis = 1) + 1e-9), -1,
             )
-        np.log(scratch, out = scratch)
-        scratch += log_likelihood[n]
-        scratch -= scratch.max()
-        np.nan_to_num(scratch, False, -np.inf)
-        np.exp(scratch, out = scratch)
-        np.cumsum(scratch, axis = 1, out = scratch)
-        scratch /= scratch.T[-1][:,None]
-        scratch += tidx[:,None]
+        cumsoftmax2d(scratch)
+        scratch += np.expand_dims(np.arange(T), 1)
         delta.T[n] = np.searchsorted(scratch.ravel(), prob[n]) % J
-        clust[:] = delta.T[n]
-        curr_cluster_state[tidx, clust] += 1
-        cand_cluster_state[tidx, clust] = False
-    return delta
-
-
-
-
-        
+        up_1(curr_cluster_state, delta.T[n])
+        null_cand(cand_cluster_state, delta.T[n])
+    return
 
 # EOF

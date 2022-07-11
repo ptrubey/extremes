@@ -141,28 +141,29 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         return
 
 if __name__ == "__main__":
-    from numpy.linalg import cholesky
-    from numpy.random import normal
+    # from numpy.linalg import cholesky
+    # from numpy.random import normal
 
-    starting_cov = np.array([3,0.3,-1.3,0.3,2,0.7,-1.3,0.7,2.5]).reshape(3,3)
-    starting_cho = cholesky(starting_cov)
+    # starting_cov = np.array([3,0.3,-1.3,0.3,2,0.7,-1.3,0.7,2.5]).reshape(3,3)
+    # starting_cho = cholesky(starting_cov)
 
-    z = normal(size = (1000, 3))
-    x = (starting_cho @ z.T).T
-    ccovs = np.empty((1000, 3, 3))
-    covs = np.empty((1000, 3, 3))
-    means = np.empty((1000, 3))
-    cmeans = np.empty((1000, 3))
-    covs[0] = 0.
-    means[0] = 0.
+    # z = normal(size = (1000, 3))
+    # x = (starting_cho @ z.T).T
+    # ccovs = np.empty((1000, 3, 3))
+    # covs = np.empty((1000, 3, 3))
+    # means = np.empty((1000, 3))
+    # cmeans = np.empty((1000, 3))
+    # covs[0] = 0.
+    # means[0] = 0.
 
-    sigma = OnlineCovariance(3)
+    # sigma = OnlineCovariance(3)
 
-    for i in range(1000):
-        sigma.update(x[i])
-        covs[i] = sigma.Sigma
-        if i > 1:
-            ccovs[i] = np.cov(x[:(i+1)].T) * i/(i+1)
+    # for i in range(1000):
+    #     sigma.update(x[i])
+    #     covs[i] = sigma.Sigma
+    #     if i > 1:
+    #         ccovs[i] = np.cov(x[:(i+1)].T) * i/(i+1)
+    pass
 
 # EOF
 
