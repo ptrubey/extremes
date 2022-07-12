@@ -51,7 +51,7 @@ if __name__ == '__main__':
                         '--outcome', dataset['outcome'],
                         '--cats', dataset['cats'],
                         '--quantile', dataset['quantile'],
-                        '--nSamp', '20000', '--nKeep', '10000', '--nThin', '10',
+                        '--nSamp', '30000', '--nKeep', '20000', '--nThin', '10',
                         '--eta_shape', ealpha, '--eta_rate', ebeta,
                         '--decluster', dataset['decluster'],
                         ]
