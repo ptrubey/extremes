@@ -241,9 +241,13 @@ class Anomaly(Projection):
 
     ## Extreme Anomaly Metrics:
     def average_euclidean_distance_to_postpred(self, **kwargs):
-        return self.euclidean_distance.mean(axis = 1)
+        # return self.euclidean_distance.mean(axis = 1)
+        return self.euclidean_distance_latent.mean(axis = 1)
     def average_hypercube_distance_to_postpred(self, **kwargs):
-        return self.hypercube_distance.mean(axis = 1)
+        # return self.hypercube_distance.mean(axis = 1)
+        return self.hypercube_distance_latent.mean(axis = 1)
+    def average_sphere_distance_to_postpred(self, **kwargs):
+        return self.sphere_distance_latent.mean(axis = 1)
     def knn_hypercube_distance_to_postpred(self, k = 10, **kwargs):
         knn = np.array(list(map(np.sort, self.hypercube_distance)))[:,k]
         try:
@@ -318,7 +322,7 @@ class Anomaly(Projection):
         pass
     def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
         """ computes mean kde for  """
-        h = self.sphere_distance_latent.mean()
+        h = self.sphere_distance_latent
         # sphere_distance_latent (n,s,s)
         if kernel == 'gaussian':
             return 1 / (np.exp(-(self.sphere_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
@@ -328,7 +332,7 @@ class Anomaly(Projection):
             raise ValueError('requested kernel not available')
         pass
     def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
-        h = self.euclidean_distance_latent.mean()
+        h = self.euclidean_distance_latent
         if kernel == 'gaussian':
             return 1 / (np.exp(-(self.euclidean_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
         elif kernel == 'laplace':
@@ -337,7 +341,7 @@ class Anomaly(Projection):
             raise ValueError('requested kernel not available')
         pass
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
-        h = self.euclidean_distance_latent.mean()
+        h = self.euclidean_distance_latent
         if kernel == 'gaussian':
             return 1 / np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
@@ -345,13 +349,6 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    def latent_hypercube_energy_score(self):
-        pass
-    def latent_euclidean_energy_score(self):
-        pass
-    def latent_sphere_energy_score(self):
-        pass
-
 
     ## Classification Performance Metrics:
     def get_auroc(self, scores):
