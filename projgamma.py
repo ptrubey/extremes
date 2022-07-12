@@ -351,13 +351,32 @@ def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere_mat):
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
     out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
     out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
     out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    return
+
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
+    """
+    inputs:
+        aW:         (n,d)
+        aAlpha:     (t,j,d)
+        sphere_mat: (c,d)
+    output:
+        logd:       (n,t,j)
+    """
+    sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
+    ga = gammaln(aAlpha)
+    ga1 = gammaln(aAlpha + 1)
+    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
+    out -= np.einsum('tjc->tj', gammaln(sa + 1))[None,:,:]
+    out += np.einsum('tjd,nd->ntj', ga1, aW)
+    out += np.einsum('tjd,nd->ntj', ga, ~aW)
+    out -= np.einsum('tjd->tj', ga)[None,:,:]
     return
 
 def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):

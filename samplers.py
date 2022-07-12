@@ -169,6 +169,30 @@ def null_cand(cluster_state, dvec):
         cluster_state[t,d] = False
     return
 
+@njit
+def sum2d(arr):
+    m = np.zeros(arr.shape[0])
+    for j in range(arr.shape[1]):
+        m += arr.T[j]
+    return m
+
+@njit(parallel = True, fastmath = True)
+def pt_dp_logpost(arr, logl, curr_state, cand_state, eta):
+    T = arr.shape[0]
+    arr[:] = 0.
+    arr += curr_state
+    n_cand = sum2d(cand_state)
+    cand_weight = np.zeros(T)
+    for t in prange(T):
+        cand_weight[t] = eta[t] / n_cand[t]
+        arr[t] += cand_state[t] * cand_weight[t]
+        for j in prange(arr.shape[1]):
+            arr[t,j] = math.log(arr[t,j])
+    arr += logl
+    return
+
+
+
 def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     """
     Args:
@@ -184,19 +208,20 @@ def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     cand_cluster_state = (curr_cluster_state == 0)
     prob += np.expand_dims(np.arange(T),0)
     scratch = np.empty(curr_cluster_state.shape)
-    clust = np.empty_like(delta.T[0])
     for n in range(N):
-        scratch[:] = 0.
         down_1(curr_cluster_state, delta.T[n])
-        scratch += curr_cluster_state
-        scratch += cand_cluster_state * np.expand_dims(
-            eta / (np.sum(cand_cluster_state, axis = 1) + 1e-9), -1,
-            )
+        pt_dp_logpost(scratch, log_likelihood[n], 
+                        curr_cluster_state, cand_cluster_state, eta)
         cumsoftmax2d(scratch)
         scratch += np.expand_dims(np.arange(T), 1)
         delta.T[n] = np.searchsorted(scratch.ravel(), prob[n]) % J
         up_1(curr_cluster_state, delta.T[n])
         null_cand(cand_cluster_state, delta.T[n])
     return
+
+if __name__ == '__main__':
+    pass
+
+
 
 # EOF
