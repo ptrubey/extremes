@@ -15,7 +15,9 @@ DirichletProcessSampler assumes the existence of:
 import time
 import numpy as np
 import math
-from numba import jit, njit, prange, int32
+from numba import jit, njit, prange, int32, set_num_threads
+
+set_num_threads(4)
 
 
 def bincount2D_vectorized(arr, m):
