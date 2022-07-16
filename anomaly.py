@@ -8,10 +8,11 @@ from xml.dom.minidom import Attr
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 import re, os, argparse, glob
 # builtins explicitly called
-from multiprocessing import pool as mcpool, Pool, cpu_count
+from multiprocessing import pool as mcpool, cpu_count, get_context
 from scipy.integrate import trapezoid
 from scipy.special import gamma as gamma_func
-from numpy.random import gamma
+from scipy.stats import gmean
+from numpy.random import gamma, choice
 from itertools import repeat
 from collections import defaultdict
 from functools import cached_property
@@ -21,8 +22,8 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 from data import euclidean_to_hypercube, Projection
 # Custom Modules
-from energy import euclidean_distance_mean, hypercube_distance_mean, limit_cpu, hypercube_distance_matrix, euclidean_distance_matrix, \
-    euclidean_distance_unsummed, hypercube_distance_unsummed
+from energy import euclidean_dmat, hypercube_dmat, limit_cpu, \
+                     hypercube_distance_matrix, euclidean_distance_matrix
 from models import Results
 
 class ClassificationMetric(object):
@@ -95,12 +96,11 @@ class Anomaly(Projection):
         - Can declare multiprocessing.Pool first, so that *_distance_matrix will use 
             an existing pool rather than making a new one every time.
     """
+    # Parallelism
     pool = None
-    
     def pools_open(self):
-        self.pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+        self.pool = get_context('spawn').Pool(processes = cpu_count(), initializer = limit_cpu)
         return
-    
     def pools_closed(self):
         self.pool.close()
         self.pool.join()
@@ -131,7 +131,6 @@ class Anomaly(Projection):
         r_shape = zetas[:,:,:self.nCol].sum(axis = 2)
         r_rate  = (sigmas[:,:,:self.nCol] * self.data.Yp[None,:,:]).sum(axis = 2)
         return gamma(r_shape, scale = 1 / r_rate)
-
     @cached_property
     def rho(self):
         zetas, sigmas = self.zeta_sigma
@@ -162,21 +161,28 @@ class Anomaly(Projection):
             )
     @cached_property
     def hypercube_distance_real(self):
-        Vnew = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
+        Vnew = euclidean_to_hypercube(
+            self.generate_posterior_predictive_gammas()[:,:self.nCol],
+            )
         return hypercube_distance_matrix(Vnew, self.data.V, self.pool)
     @cached_property
     def sphere_distance_latent(self):
         pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1) # (n, s, d)
         pi_new = self.generate_posterior_predictive_spheres() # (s,d)
-        return euclidean_distance_matrix(pi_new, pi_con, self.pool)
+        s1 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
+        s2 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
+        res = self.pool.map(euclidean_dmat, zip(repeat(pi_new[s1]), pi_con[:,s2]))
+        return np.array(list(res))
     @cached_property
     def euclidean_distance_latent(self):
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
         Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
         Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
-        Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1)
-        Y_new = self.generate_posterior_predictive_gammas()
-        res = self.pool.map(euclidean_distance_mean, zip(repeat(Y_new), Y_con))
+        Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n,s,d) 
+        Y_new = self.generate_posterior_predictive_gammas()          # (s,d)
+        s1 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        res = self.pool.map(euclidean_dmat, zip(repeat(Y_new[s1]), Y_con[:,s2]))
         return np.array(list(res))
     @cached_property
     def hypercube_distance_latent(self):
@@ -184,10 +190,12 @@ class Anomaly(Projection):
         Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
         Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
-        V_con = np.swapaxes(np.array(list(map(euclidean_to_hypercube, Y_con))), 0, 1)
+        V_con = np.array(list(map(euclidean_to_hypercube, Y_con)))
         V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
-        res = self.pool.map(hypercube_distance_mean, zip(repeat(V_new), V_con))
-        return hypercube_distance_matrix(V_new, V_con, self.pool)
+        s1 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        res = self.pool.map(hypercube_dmat, zip(repeat(V_new[s1]), V_con[:,s2]))
+        return np.array(list(res))
     
     ## Classic Anomaly Metrics:
     def isolation_forest(self):
@@ -242,10 +250,10 @@ class Anomaly(Projection):
     ## Extreme Anomaly Metrics:
     def average_euclidean_distance_to_postpred(self, **kwargs):
         # return self.euclidean_distance.mean(axis = 1)
-        return self.euclidean_distance_latent.mean(axis = 1)
+        return self.euclidean_distance_latent.mean(axis = (1,2))
     def average_hypercube_distance_to_postpred(self, **kwargs):
         # return self.hypercube_distance.mean(axis = 1)
-        return self.hypercube_distance_latent.mean(axis = 1)
+        return self.hypercube_distance_latent.mean(axis = (1,2))
     def average_sphere_distance_to_postpred(self, **kwargs):
         return self.sphere_distance_latent.mean(axis = 1)
     def knn_hypercube_distance_to_postpred(self, k = 10, **kwargs):
@@ -300,29 +308,29 @@ class Anomaly(Projection):
         for i in range(self.nDat):
             scores[i] = cone_prob[tuple(Y[i] > epsilon)]
         return scores
-    def hypercube_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
+    def hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         # temporary code:
-        h = self.hypercube_distance.mean()
+        h = gmean(self.hypercube_distance.ravel())
         # 
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.hypercube_distance / h)**2) / np.sqrt(2 * np.pi)).mean(axis = 1)
+            return 1 / (np.exp(-(self.hypercube_distance / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.hypercube_distance / h)).mean(axis = 1)
+            return 1 / np.exp(-np.abs(self.hypercube_distance / h)).mean(axis = (1,2))
         else:
             raise ValueError('requested kernel not available')
         pass
-    def euclidean_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
-        h = self.euclidean_distance.mean()
+    def euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
+        h = gmean(self.euclidean_distance.ravel())
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.euclidean_distance / h)**2) / np.sqrt(2 * np.pi)).mean(axis = 1)
+            return 1 / (np.exp(-(self.euclidean_distance / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.euclidean_distance / h)).mean(axis = 1)
+            return 1 / np.exp(-np.abs(self.euclidean_distance / h)).mean(axis = (1,2))
         else:
             raise ValueError('requested kernel not available')
         pass
-    def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
+    def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         """ computes mean kde for  """
-        h = self.sphere_distance_latent
+        h = gmean(self.sphere_distance_latent.ravel())
         # sphere_distance_latent (n,s,s)
         if kernel == 'gaussian':
             return 1 / (np.exp(-(self.sphere_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
@@ -331,17 +339,8 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
-        h = self.euclidean_distance_latent
-        if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.euclidean_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
-        elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
-        else:
-            raise ValueError('requested kernel not available')
-        pass
-    def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', h = 1, **kwargs):
-        h = self.euclidean_distance_latent
+    def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
+        h = gmean(self.euclidean_distance_latent.ravel())
         if kernel == 'gaussian':
             return 1 / np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
@@ -349,7 +348,32 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-
+    def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
+        h = gmean(self.euclidean_distance_latent.ravel())
+        if kernel == 'gaussian':
+            return 1 / np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2))
+        elif kernel == 'laplace':
+            return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+    def mixed_latent_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
+        d_real = self.hypercube_distance_real
+        h_real = gmean(d_real.ravel())
+        d_simp = self.sphere_distance_latent
+        h_simp = gmean(d_simp.ravel())
+        if kernel == 'gaussian':
+            s1 = np.exp(-(d_real/h_real)**2).mean(axis = (1,2))
+            s2 = np.exp(-(d_simp/h_simp)**2).mean(axis = (1,2))
+            return 1 / (s1 * s2)
+        elif kernel == 'laplace':
+            s1 = np.exp(-np.abs(d_real/h_real)).mean(axis = (1,2))
+            s1 = np.exp(-np.abs(d_simp/h_simp)).mean(axis = (1,2))
+            return (1 / (s1 * s2))
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+    
     ## Classification Performance Metrics:
     def get_auroc(self, scores):
         """ 
@@ -384,6 +408,7 @@ class Anomaly(Projection):
             'lhkde' : self.latent_hypercube_kernel_density_estimate,
             'lekde' : self.latent_euclidean_kernel_density_estimate,
             'lskde' : self.latent_simplex_kernel_density_estimate,
+            'mlkde' : self.mixed_latent_kernel_density_estimate,
             }
     def get_scores(self):
         metrics = self.scoring_metrics.keys()
@@ -438,8 +463,8 @@ if __name__ == '__main__':
     basepath = './ad'
     datasets = ['cardio','cover','mammography']
     resbases = {
-        'mdppprg' : 'result_mdppprg_*.pkl',
-        'mdppprgln' : 'result_mdppprgln_*.pkl',
+        # 'mdppprg' : 'result_mdppprg_*.pkl',
+        'mdppprgln' : 'results_mdppprgln_*.pkl',
         }
     for model in resbases.keys():
         for dataset in datasets:
@@ -448,12 +473,13 @@ if __name__ == '__main__':
                 results.append((model, file))
     metrics = []
     for result in results:
-        extant_result = MixedResultFactory(results[1])
+        print('Processing Result {}'.format(result[1]))
+        extant_result = ResultFactory(*result)
         extant_result.p = 10.
         extant_result.pools_open()
-        extant_metric = result.get_scoring_metrics()
+        extant_metric = extant_result.get_scoring_metrics()
         extant_result.pools_closed()
-        extant_metric['path'] = results[1]
+        extant_metric['path'] = result[1]
         metrics.append(extant_metric)
     
     df = pd.concat(metrics)

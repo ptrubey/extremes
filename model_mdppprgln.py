@@ -588,9 +588,9 @@ class Result(object):
         return euclidean_to_angular(hyp)
 
     def generate_posterior_predictive_spheres(self):
-        rhos = self.generate_posterior_predictive_gammas() # (s,D)
+        rhos = self.generate_posterior_predictive_gammas()[:,self.nCol:] # (s,D)
         CatMat = category_matrix(self.data.Cats) # (C,d)
-        shro = rhos[:,self.nCol:] @ CatMat.T # (s,C)
+        shro = rhos @ CatMat.T # (s,C)
         nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)
         pis = rhos / nrho
         return pis
@@ -639,9 +639,9 @@ class Result(object):
         """ pi | zeta, delta = normalized rho
         currently discarding generated Y's, keeping latent pis
         """
-        rhos = self.generate_conditional_posterior_predictive_gammas() # (s,n,D)
+        rhos = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:]
         CatMat = category_matrix(self.data.Cats) # (C,d)
-        shro = rhos[:,:,self.nCol:] @ CatMat.T # (s,n,C)
+        shro = rhos @ CatMat.T # (s,n,C)
         nrho = np.einsum('snc,cd->snd', shro, CatMat) # (s,n,d)
         pis = rhos / nrho
         return pis

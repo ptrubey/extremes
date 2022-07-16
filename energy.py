@@ -21,6 +21,12 @@ def euclidean_distance_unsummed(args):
 def euclidean_distance_mean(args):
     return pairwise_distances(args[0], args[1]).mean()
 
+def euclidean_dmat(args):
+    return pairwise_distances(args[0], args[1])
+
+def hypercube_dmat(args):
+    return pairwise_distances(args[0], args[1], metric = hcdev)
+
 def prediction_pairwise_distance(prediction):
     n = prediction.shape[0]
     res = map(hypercube_distance, zip(repeat(prediction), prediction))
@@ -46,16 +52,20 @@ def energy_score_inner(predictions, targets):
     res1 = pool.map(prediction_pairwise_distance, predictions)
     res2 = pool.map(target_pairwise_distance, zip(predictions, targets))
     pool.close()
+    pool.join()
+    del pool
     return np.array(list(res2)) - 0.5 * np.array(list(res1))
 
 def energy_score(predictions, targets):
     return energy_score_inner(predictions, targets).mean()
 
 def energy_score_full(predictions, targets):
-    res1 = prediction_pairwise_distance(predictions) # same for all elements.  do once.
     pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+    res1 = prediction_pairwise_distance(predictions) # same for all elements.  do once.
     res2 = pool.map(target_pairwise_distance, zip(repeat(predictions), targets))
     pool.close()
+    pool.join()
+    del pool
     return np.array(list(res2)).mean() - 0.5 * res1
 
 def postpred_loss_full(predictions, targets):
@@ -64,10 +74,12 @@ def postpred_loss_full(predictions, targets):
     return pvari + pdev2
 
 def intrinsic_energy_score(dataset):
-    res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
     pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+    res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
     res2 = pool.map(target_pairwise_distance, zip(repeat(dataset),dataset))
     pool.close()
+    pool.join()
+    del pool
     return np.array(list(res2)).mean() - 0.5 * res1
 
 def knn_distance(X, k, metric):
@@ -128,7 +140,7 @@ def euclidean_distance_matrix(predictions, targets, pool = None):
             )
     return np.array(list(res))
 
-def mixed_distance(predictions, targets):
+def mixed_distance(predictions, targets, pool):
     """
     predictions, targets = named tuples (with elements V, W)
     x.V = hypersphere projection
@@ -138,8 +150,8 @@ def mixed_distance(predictions, targets):
         (x,y,0) : V distance (hypercube)
         (x,y,1) : W distance (euclidean)
     """
-    hyp = hypercube_distance_matrix(predictions.V, targets.V)
-    euc = euclidean_distance_matrix(predictions.W, targets.W)
+    hyp = hypercube_distance_matrix(predictions.V, targets.V, pool)
+    euc = euclidean_distance_matrix(predictions.W, targets.W, pool)
     return np.vstack((hyp, euc))
 
 if __name__ == '__main__':
