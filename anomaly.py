@@ -83,6 +83,68 @@ def prc_curve(scores, y, logrange = True):
     out = np.vstack((np.array((0.,1.)).reshape(1,2), res, np.array((1.,0.)).reshape(1,2)))
     return out[np.argsort(out.T[1])]
 
+# Continue Working on this.
+class VectorizedClassificationMetric(object):
+    # Base classification Metrics
+    @property
+    def tpr(self):
+        return self.TP_Count / self.A # np.arange(1, self.N + 1)
+    @property
+    def fpr(self):
+        return self.FP_Count / (self.N - self.A) # np.arange(1, self.N + 1)
+    @property
+    def tnr(self):
+        return self.TN_Count / np.arange(1, self.N + 1)
+    @property
+    def fnr(self):
+        return self.FN_Count / np.arange(1, self.N + 1)
+    # Derived Classification Metrics
+    @property
+    def precision(self):
+        return self.tpr
+    @property
+    def recall(self):
+        return self.TP_Count / self.A
+    @property
+    def F1(self):
+        return 2 * (self.precision * self.recall) / (self.precision + self.recall)
+    @property
+    def ROC_curve(self):
+        return ((self.tpr, self.fpr))
+    @property
+    def AuROC(self):
+        return trapezoid(*self.ROC_Curve)
+
+
+
+
+    def __init__(self, score, actual):
+        # fill in numerical error scores
+        score[np.isposinf(score)] = np.finfo(np.float64).max
+        score[np.isneginf(score)] = np.finfo(np.float64).min
+        score[np.isnan(score)] = np.finfo(np.float64).max
+        # parse args
+        self.actual = actual
+        self.score = score
+        # description info
+        self.N = self.score.shape[0] # number of observations
+        self.A = self.actual.sum()   # number of TRUE's
+        # sort scores in descending order
+        self.order = np.argsort(score)[::-1]
+        self.sorted_actual = self.actual[self.order]
+        self.TP_Count = self.sorted_actual.cumsum()
+        self.FP_Count = (1 - self.sorted_actual).cumsum()
+        self.TN_Count = self.sorted_actual[::-1].cumsum()[::-1]
+        self.FN_Count = (1 - self.sorted_actual)[::-1].cumsum()[::-1]
+        self.sorted_score = self.score[self.order]
+        return
+        
+
+
+
+
+
+
 class Anomaly(Projection):
     """ 
     Anomaly:
