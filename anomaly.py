@@ -6,7 +6,7 @@ Implements classic anomaly detection algorithms, as well as custom anomaly detec
 from inspect import Attribute
 from xml.dom.minidom import Attr
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
-import re, os, argparse, glob
+import re, os, argparse, glob, gc
 # builtins explicitly called
 from multiprocessing import pool as mcpool, cpu_count, get_context
 from scipy.integrate import trapezoid
@@ -25,6 +25,7 @@ from data import euclidean_to_hypercube, Projection
 from energy import euclidean_dmat, hypercube_dmat, limit_cpu, \
                      hypercube_distance_matrix, euclidean_distance_matrix
 from models import Results
+np.seterr(divide = 'ignore')
 
 class ClassificationMetric(object):
     """ Wrapper for establishing the typical classification metrics """
@@ -311,9 +312,8 @@ class Anomaly(Projection):
     def hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         # temporary code:
         h = gmean(self.hypercube_distance.ravel())
-        # 
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.hypercube_distance / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+            return 1 / np.exp(-(self.hypercube_distance / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
             return 1 / np.exp(-np.abs(self.hypercube_distance / h)).mean(axis = (1,2))
         else:
@@ -322,7 +322,7 @@ class Anomaly(Projection):
     def euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance.ravel())
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.euclidean_distance / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+            return 1 / np.exp(-(self.euclidean_distance / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
             return 1 / np.exp(-np.abs(self.euclidean_distance / h)).mean(axis = (1,2))
         else:
@@ -331,9 +331,8 @@ class Anomaly(Projection):
     def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         """ computes mean kde for  """
         h = gmean(self.sphere_distance_latent.ravel())
-        # sphere_distance_latent (n,s,s)
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(self.sphere_distance_latent / h)**2) / np.sqrt(2 * np.pi)).mean(axis = (1,2))
+            return 1 / np.exp(-(self.sphere_distance_latent / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
             return 1 / np.exp(-np.abs(self.sphere_distance_latent / h)).mean(axis = (1,2))
         else:
@@ -479,8 +478,10 @@ if __name__ == '__main__':
         extant_result.pools_open()
         extant_metric = extant_result.get_scoring_metrics()
         extant_result.pools_closed()
+        del extant_result
         extant_metric['path'] = result[1]
         metrics.append(extant_metric)
+        gc.collect()
     
     df = pd.concat(metrics)
     df.to_csv('./ad/performance.csv')
