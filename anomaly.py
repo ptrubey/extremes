@@ -347,7 +347,7 @@ class Anomaly(Projection):
         return scores # pd.DataFrame(scores, columns = metrics.keys())
     def get_scoring_metrics(self):
         scores = self.get_scores()
-        aucs = np.array([auc(score) for score in scores]).T
+        aucs = np.array([auc(score, self.data.Y) for score in scores]).T
         metrics = pd.DataFrame(aucs, columns = self.scoring_metrics.keys())
         metrics['Metric'] = ('AuROC','AuPRC')
         return metrics
