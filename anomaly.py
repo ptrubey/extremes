@@ -120,9 +120,10 @@ class Anomaly(Projection):
     def sphere_distance_latent(self):
         pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1) # (n, s, d)
         pi_new = self.generate_posterior_predictive_spheres() # (s,d)
-        s1 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
-        s2 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
-        res = self.pool.map(euclidean_dmat, zip(repeat(pi_new[s1]), pi_con[:,s2]))
+        # s1 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
+        # s2 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
+        # res = self.pool.map(euclidean_dmat, zip(repeat(pi_new[s1]), pi_con[:,s2]))
+        res = self.pool.map(euclidean_dmat, zip(repeat(pi_new), pi_con))
         return np.array(list(res))
     @cached_property
     def euclidean_distance_latent(self):
@@ -131,9 +132,10 @@ class Anomaly(Projection):
         Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n,s,d) 
         Y_new = self.generate_posterior_predictive_gammas()          # (s,d)
-        s1 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
-        s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
-        res = self.pool.map(euclidean_dmat, zip(repeat(Y_new[s1]), Y_con[:,s2]))
+        # s1 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        # s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        # res = self.pool.map(euclidean_dmat, zip(repeat(Y_new[s1]), Y_con[:,s2]))
+        res = self.pool.map(euclidean_dmat, zip(repeat(Y_new), Y_con))
         return np.array(list(res))
     @cached_property
     def hypercube_distance_latent(self):
@@ -143,9 +145,10 @@ class Anomaly(Projection):
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
         V_con = np.array(list(map(euclidean_to_hypercube, Y_con)))
         V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
-        s1 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
-        s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
-        res = self.pool.map(hypercube_dmat, zip(repeat(V_new[s1]), V_con[:,s2]))
+        # s1 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        # s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
+        # res = self.pool.map(hypercube_dmat, zip(repeat(V_new[s1]), V_con[:,s2]))
+        res = self.pool.map(hypercube_dmat, zip(repeat(V_new), V_con))
         return np.array(list(res))
     
     ## Classic Anomaly Metrics:
