@@ -27,123 +27,11 @@ from energy import euclidean_dmat, hypercube_dmat, limit_cpu, \
 from models import Results
 np.seterr(divide = 'ignore')
 
-class ClassificationMetric(object):
-    """ Wrapper for establishing the typical classification metrics """
-    @property
-    def tpr(self):
-        return self.tp / (self.tp + self.fn + 1e-10)
-    @property
-    def fpr(self):
-        return self.fp / (self.fp + self.tn + 1e-10)
-    @property
-    def ppv(self):
-        return self.tp / (self.tp + self.fp + 1e-10)
+from classify import Classifier
 
-    def roc(self):
-        return np.array((self.tpr, self.fpr))
-
-    def prc(self):
-        return np.array((self.ppv, self.tpr))
-
-    def __init__(self, prediction, actual):
-        self.tp = (prediction * actual).sum()
-        self.tn = ((1 - prediction) * (1 - actual)).sum()
-        self.fp = (prediction * (1 - actual)).sum()
-        self.fn = ((1 - prediction) * actual).sum()
-        return
-
-def roc(cutoff, scores, y):
-    """ Compute True Positive Rate, False Positive Rate for a given threshold """
-    preds = (scores >= cutoff).astype(int)
-    return ClassificationMetric(preds, y).roc()
-def roc_curve(scores, y, logrange = True):
-    """ Compute ROC Curve by varying threshold """
-    if logrange:
-        lbub = np.quantile(np.log(scores), (0.01, 0.99))
-        space = np.exp(np.linspace(*lbub))
-    else:
-        lbub = np.quantile(scores, (0.01, 0.99))
-        space = np.linspace(*lbub)
-    res = np.array(list(map(roc, space, repeat(scores), repeat(y))))
-    out = np.vstack((np.array((1.,1.)).reshape(1,2), res, np.array((0.,0.)).reshape(1,2)))
-    return out[np.argsort(out.T[1])]
-def prc(cutoff, scores, y):
-    """ Compute Precision, Recall for a given Threshold """
-    preds = (scores >= cutoff).astype(int)
-    return ClassificationMetric(preds, y).prc()
-def prc_curve(scores, y, logrange = True):
-    """ Compute PRC Curve for varying threshold """
-    if logrange:
-        lbub = np.quantile(np.log(scores), (0.01, 0.99))
-        space = np.exp(np.linspace(*lbub))
-    else:
-        lbub = np.quantile(scores, (0.01, 0.99))
-        space = np.linspace(*lbub)
-    res = np.array(list(map(prc, space, repeat(scores), repeat(y))))
-    out = np.vstack((np.array((0.,1.)).reshape(1,2), res, np.array((1.,0.)).reshape(1,2)))
-    return out[np.argsort(out.T[1])]
-
-# Continue Working on this.
-class VectorizedClassificationMetric(object):
-    # Base classification Metrics
-    @property
-    def tpr(self):
-        return self.TP_Count / self.A # np.arange(1, self.N + 1)
-    @property
-    def fpr(self):
-        return self.FP_Count / (self.N - self.A) # np.arange(1, self.N + 1)
-    @property
-    def tnr(self):
-        return self.TN_Count / np.arange(1, self.N + 1)
-    @property
-    def fnr(self):
-        return self.FN_Count / np.arange(1, self.N + 1)
-    # Derived Classification Metrics
-    @property
-    def precision(self):
-        return self.tpr
-    @property
-    def recall(self):
-        return self.TP_Count / self.A
-    @property
-    def F1(self):
-        return 2 * (self.precision * self.recall) / (self.precision + self.recall)
-    @property
-    def ROC_curve(self):
-        return ((self.tpr, self.fpr))
-    @property
-    def AuROC(self):
-        return trapezoid(*self.ROC_Curve)
-
-
-
-
-    def __init__(self, score, actual):
-        # fill in numerical error scores
-        score[np.isposinf(score)] = np.finfo(np.float64).max
-        score[np.isneginf(score)] = np.finfo(np.float64).min
-        score[np.isnan(score)] = np.finfo(np.float64).max
-        # parse args
-        self.actual = actual
-        self.score = score
-        # description info
-        self.N = self.score.shape[0] # number of observations
-        self.A = self.actual.sum()   # number of TRUE's
-        # sort scores in descending order
-        self.order = np.argsort(score)[::-1]
-        self.sorted_actual = self.actual[self.order]
-        self.TP_Count = self.sorted_actual.cumsum()
-        self.FP_Count = (1 - self.sorted_actual).cumsum()
-        self.TN_Count = self.sorted_actual[::-1].cumsum()[::-1]
-        self.FN_Count = (1 - self.sorted_actual)[::-1].cumsum()[::-1]
-        self.sorted_score = self.score[self.order]
-        return
-        
-
-
-
-
-
+def auc(scores, actual):
+    c = Classifier(scores, actual)
+    return (c.auroc, c.auprc)
 
 class Anomaly(Projection):
     """ 
@@ -392,7 +280,7 @@ class Anomaly(Projection):
         pass
     def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         """ computes mean kde for  """
-        h = gmean(self.sphere_distance_latent.ravel())
+        h = self.sphere_distance_latent.mean()
         if kernel == 'gaussian':
             return 1 / np.exp(-(self.sphere_distance_latent / h)**2).mean(axis = (1,2))
         elif kernel == 'laplace':
@@ -422,7 +310,7 @@ class Anomaly(Projection):
         d_real = self.hypercube_distance_real
         h_real = gmean(d_real.ravel())
         d_simp = self.sphere_distance_latent
-        h_simp = gmean(d_simp.ravel())
+        h_simp = d_simp.mean()
         if kernel == 'gaussian':
             s1 = np.exp(-(d_real/h_real)**2).mean(axis = (1,2))
             s2 = np.exp(-(d_simp/h_simp)**2).mean(axis = (1,2))
@@ -434,24 +322,6 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    
-    ## Classification Performance Metrics:
-    def get_auroc(self, scores):
-        """ 
-        Get Area under the Receiver Operating Characteristics Curve for matrix of anomaly scores.
-        scores matrix (n x j) is arranged as: [data (n), method (j)]
-        """
-        res = np.array(list(map(roc_curve, scores.T, repeat(self.data.Y))))
-        auc = np.array(list(map(lambda x: trapezoid(*x.T), res)))
-        return auc
-    def get_auprc(self, scores):
-        """ 
-        Get Area under the Precision/Recall Curve for matrix of anomaly scores.
-        scores matrix (n x j) is arranged as: [data (n), method (j)]
-        """
-        res = np.array(list(map(prc_curve, scores.T, repeat(self.data.Y))))
-        auc = np.array(list(map(lambda x: trapezoid(*x.T), res)))
-        return auc
 
     @property
     def scoring_metrics(self):
@@ -473,13 +343,12 @@ class Anomaly(Projection):
             }
     def get_scores(self):
         metrics = self.scoring_metrics.keys()
-        scores = np.array(list([self.scoring_metrics[metric]().ravel() for metric in metrics])).T
+        scores = np.array(list([self.scoring_metrics[metric]().ravel() for metric in metrics]))
         return scores # pd.DataFrame(scores, columns = metrics.keys())
     def get_scoring_metrics(self):
         scores = self.get_scores()
-        auroc = self.get_auroc(scores)
-        auprc = self.get_auprc(scores)
-        metrics = pd.DataFrame(np.vstack((auroc, auprc)), columns = self.scoring_metrics.keys())
+        aucs = np.array([auc(score) for score in scores]).T
+        metrics = pd.DataFrame(aucs, columns = self.scoring_metrics.keys())
         metrics['Metric'] = ('AuROC','AuPRC')
         return metrics
 
@@ -548,6 +417,13 @@ if __name__ == '__main__':
     df = pd.concat(metrics)
     df.to_csv('./ad/performance.csv')
 
+    # path = './simulated/lnad/results_mdppprgln.pkl'
+    # extant_result = ResultFactory('mdppprgln', path)
+    # extant_result.p = 10
+    # extant_result.pools_open()
+    # scores = extant_result.get_scores()
+    # extant_result.pools_closed()
+    # raise
 
     # args = argparser()
     # args = {'in_path' : './sim_mixed_ad/results_mdppprg*.pkl', 'out_path' : './sim_mixed_ad/metrics.csv'}
