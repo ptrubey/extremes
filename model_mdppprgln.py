@@ -473,6 +473,9 @@ class Chain(DirichletProcessSampler, Projection):
             'cats'   : self.data.Cats,
             'V'      : self.data.V,
             'W'      : self.data.W,
+            'swap_y' : self.swap_succeeds,
+            'swap_n' : self.swap_attempts - self.swap_succeeds,
+            'swap_p' : self.swap_succeeds / self.swap_attempts,
             }
         # try to add outcome to dictionary
         try:
@@ -677,6 +680,11 @@ class Result(object):
         self.samples.mu    = mus
         self.samples.Sigma = Sigmas
         self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
+
+        if 'swap_y' in out.keys():
+            self.swap_y = out['swap_y']
+            self.swap_n = out['swap_n']
+            self.swap_p = out['swap_p']
         return
 
     def __init__(self, path):
