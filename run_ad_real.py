@@ -33,7 +33,7 @@ mammography = {
 
 datasets = [cardio, cover, mammography]
 eta_alphas = ['2']
-eta_betas = ['1e-1','1e0','1e1','1e2'],
+eta_betas = ['1e-1','1e0','1e1','1e2']
 stepping = '1.03'
 ntemps = '6'
 
