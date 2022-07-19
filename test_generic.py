@@ -67,6 +67,7 @@ if __name__ == '__main__':
                     data, 
                     prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)), 
                     p = int(p.p), max_clust_count = int(p.maxclust),
+                    ntemps = int(p.ntemps), stepping = float(p.stepping),
                     )
     elif p.model[:3] in ('sfm','mfm','cfm'):
         model = Chain(data, nMix = int(p.nMix), p = int(p.p),)

@@ -33,7 +33,9 @@ mammography = {
 
 datasets = [cardio, cover, mammography]
 eta_alphas = ['2']
-eta_betas = ['1e-1','1e0','1e1','1e2']
+eta_betas = ['1e-1','1e0','1e1','1e2'],
+stepping = '1.03'
+ntemps = '6'
 
 if __name__ == '__main__':
     processes = []
@@ -51,9 +53,10 @@ if __name__ == '__main__':
                         '--outcome', dataset['outcome'],
                         '--cats', dataset['cats'],
                         '--quantile', dataset['quantile'],
-                        '--nSamp', '30000', '--nKeep', '20000', '--nThin', '10',
+                        '--nSamp', '50000', '--nKeep', '30000', '--nThin', '10',
                         '--eta_shape', ealpha, '--eta_rate', ebeta,
                         '--decluster', dataset['decluster'],
+                        '--ntemps', ntemps, '--stepping', stepping,
                         ]
                     process_args.append(args)
                     processes.append(Popen(args))

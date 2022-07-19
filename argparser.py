@@ -42,6 +42,8 @@ def argparser_generic():
     p.add_argument('--decluster', default = 'True')
     p.add_argument('--p', default = '10')
     p.add_argument('--maxclust', default = '300')
+    p.add_argument('--ntemps', default = '3')
+    p.add_argument('--stepping', default = '1.05')
     return p.parse_args()
 
 def argparser_simulation():
