@@ -475,7 +475,7 @@ class Chain(DirichletProcessSampler, Projection):
             'W'      : self.data.W,
             'swap_y' : self.swap_succeeds,
             'swap_n' : self.swap_attempts - self.swap_succeeds,
-            'swap_p' : self.swap_succeeds / self.swap_attempts,
+            'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
             }
         # try to add outcome to dictionary
         try:
