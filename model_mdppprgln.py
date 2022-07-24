@@ -595,7 +595,7 @@ class Result(object):
         CatMat = category_matrix(self.data.Cats) # (C,d)
         shro = rhos @ CatMat.T # (s,C)
         nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)
-        pis = rhos / nrho
+        pis = rhos / (nrho + np.finfo(float).eps)
         return pis
 
     def write_posterior_predictive(self, path, n_per_sample = 1):
