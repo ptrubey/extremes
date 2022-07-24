@@ -124,7 +124,7 @@ class Anomaly(Projection):
         # s2 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
         # res = self.pool.map(euclidean_dmat, zip(repeat(pi_new[s1]), pi_con[:,s2]))
         s = np.random.choice(pi_new.shape[0], pi_new.shape[0]//2, False)
-        res = self.pool.map(euclidean_dmat, zip(repeat(pi_new), pi_con[s]))
+        res = self.pool.map(euclidean_dmat, zip(repeat(pi_new), pi_con[:,s]))
         return np.array(list(res))
     @cached_property
     def euclidean_distance_latent(self):
@@ -137,7 +137,7 @@ class Anomaly(Projection):
         # s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
         # res = self.pool.map(euclidean_dmat, zip(repeat(Y_new[s1]), Y_con[:,s2]))
         s = np.random.choice(Y_new.shape[0], Y_new.shape[0]//2, False)
-        res = self.pool.map(euclidean_dmat, zip(repeat(Y_new), Y_con[s]))
+        res = self.pool.map(euclidean_dmat, zip(repeat(Y_new), Y_con[:,s]))
         return np.array(list(res))
     @cached_property
     def hypercube_distance_latent(self):
@@ -151,7 +151,7 @@ class Anomaly(Projection):
         # s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
         # res = self.pool.map(hypercube_dmat, zip(repeat(V_new[s1]), V_con[:,s2]))
         s = np.random.choice(V_new.shape[0], V_new.shape[0]//2, False)
-        res = self.pool.map(hypercube_dmat, zip(repeat(V_new), V_con[s]))
+        res = self.pool.map(hypercube_dmat, zip(repeat(V_new), V_con[:,s]))
         return np.array(list(res))
     
     ## Classic Anomaly Metrics:
