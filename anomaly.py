@@ -364,7 +364,7 @@ class Anomaly(Projection):
     # scoring metrics
     @property
     def scoring_metrics(self):
-        return {
+        metrics = {
             'if'     : self.isolation_forest,
             'lof'    : self.local_outlier_factor,
             'svm'    : self.one_class_svm,
@@ -379,16 +379,20 @@ class Anomaly(Projection):
             'lekde'  : self.latent_euclidean_kernel_density_estimate,
             'lskde'  : self.latent_simplex_kernel_density_estimate,
             'mlkde'  : self.mixed_latent_kernel_density_estimate,
-            'ckhdp'  : self.combined_knn_hypercube_distance_to_postpred,
-            'ckedp'  : self.combined_knn_euclidean_distance_to_postpred,
-            'ccone'  : self.combined_cone_density,
-            'chkde'  : self.combined_hypercube_kernel_density_estimate,
-            'cekde'  : self.combined_euclidean_kernel_density_estimate,
-            'clskde' : self.combined_latent_simplex_kernel_density_estimate,
-            'clekde' : self.combined_latent_euclidean_kernel_density_estimate,
-            'clhkde' : self.combined_latent_euclidean_kernel_density_estimate,
-            'cmlkde' : self.combined_mixed_latent_kernel_density_estimate,
             }
+        if hasattr(self.data, 'R'):
+            metrics.update({
+                'ckhdp'  : self.combined_knn_hypercube_distance_to_postpred,
+                'ckedp'  : self.combined_knn_euclidean_distance_to_postpred,
+                'ccone'  : self.combined_cone_density,
+                'chkde'  : self.combined_hypercube_kernel_density_estimate,
+                'cekde'  : self.combined_euclidean_kernel_density_estimate,
+                'clskde' : self.combined_latent_simplex_kernel_density_estimate,
+                'clekde' : self.combined_latent_euclidean_kernel_density_estimate,
+                'clhkde' : self.combined_latent_euclidean_kernel_density_estimate,
+                'cmlkde' : self.combined_mixed_latent_kernel_density_estimate,
+                })
+        return metrics
     def get_scores(self):
         metrics = self.scoring_metrics.keys()
         scores = np.array(
