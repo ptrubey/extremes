@@ -360,7 +360,6 @@ class Anomaly(Projection):
     def combined_mixed_latent_kernel_density_estimate(self, **kwargs):
         return self.mixed_latent_kernel_density_estimate(**kwargs) * self.data.R
 
-
     # scoring metrics
     @property
     def scoring_metrics(self):
