@@ -288,27 +288,39 @@ class Anomaly(Projection):
         """ computes mean kde for  """
         h = self.sphere_distance_latent.mean()
         if kernel == 'gaussian':
-            return 1 / np.exp(-(self.sphere_distance_latent / h)**2).mean(axis = (1,2))
+            return np.sqrt(2 * np.pi) * h / np.exp(
+                - (self.sphere_distance_latent / h)**2).mean(axis = (1,2)
+                )
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.sphere_distance_latent / h)).mean(axis = (1,2))
+            return 2 * h / np.exp(
+                - np.abs(self.sphere_distance_latent / h)).mean(axis = (1,2)
+                )
         else:
             raise ValueError('requested kernel not available')
         pass
     def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance_latent.ravel())
         if kernel == 'gaussian':
-            return 1 / np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2))
+            return np.sqrt(2 * np.pi) * h / np.exp(
+                - (self.euclidean_distance_latent / h)**2).mean(axis = (1,2)
+                )
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
+            return 2 * h / np.exp(
+                - np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)
+                )
         else:
             raise ValueError('requested kernel not available')
         pass
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance_latent.ravel())
         if kernel == 'gaussian':
-            return 1 / np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2))
+            return np.sqrt(2 * np.pi) * h / np.exp(
+                - (self.euclidean_distance_latent / h)**2).mean(axis = (1,2)
+                )
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2))
+            return 2 * h / np.exp(
+                -np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)
+                )
         else:
             raise ValueError('requested kernel not available')
         pass
@@ -328,29 +340,61 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
+    
+    def combined_knn_hypercube_distance_to_postpred(self, **kwargs):
+        return self.knn_hypercube_distance_to_postpred(**kwargs) * self.data.R
+    def combined_knn_euclidean_distance_to_postpred(self, **kwargs):
+        return self.knn_euclidean_distance_to_postpred(**kwargs) * self.data.R
+    def combined_cone_density(self, **kwargs):
+        return self.cone_density(**kwargs) * self.data.R
+    def combined_hypercube_kernel_density_estimate(self, **kwargs):
+        return self.hypercube_kernel_density_estimate(**kwargs) * self.data.R
+    def combined_euclidean_kernel_density_estimate(self, **kwargs):
+        return self.euclidean_kernel_density_estimate(**kwargs) * self.data.R
+    def combined_latent_simplex_kernel_density_estimate(self, **kwargs):
+        return self.latent_simplex_kernel_density_estimate(**kwargs) * self.data.R
+    def combined_latent_euclidean_kernel_density_estimate(self, **kwargs):
+        return self.latent_euclidean_kernel_density_estimate(**kwargs) * self.data.R
+    def combined_latent_hypercube_kernel_density_estimate(self, **kwargs):
+        return self.latent_hypercube_kernel_density_estimate(**kwargs) * self.data.R
+    def combined_mixed_latent_kernel_density_estimate(self, **kwargs):
+        return self.mixed_latent_kernel_density_estimate(**kwargs) * self.data.R
 
+
+    # scoring metrics
     @property
     def scoring_metrics(self):
         return {
-            'if'   : self.isolation_forest,
-            'lof'  : self.local_outlier_factor,
-            'svm'  : self.one_class_svm,
-            'aedp' : self.average_euclidean_distance_to_postpred,
-            'ahdp' : self.average_hypercube_distance_to_postpred,
-            'kedp' : self.knn_euclidean_distance_to_postpred,
-            'khdp' : self.knn_hypercube_distance_to_postpred,
-            'cone' : self.cone_density,
-            'ekde' : self.euclidean_kernel_density_estimate,
-            'hkde' : self.hypercube_kernel_density_estimate,
-            'lhkde' : self.latent_hypercube_kernel_density_estimate,
-            'lekde' : self.latent_euclidean_kernel_density_estimate,
-            'lskde' : self.latent_simplex_kernel_density_estimate,
-            'mlkde' : self.mixed_latent_kernel_density_estimate,
+            'if'     : self.isolation_forest,
+            'lof'    : self.local_outlier_factor,
+            'svm'    : self.one_class_svm,
+            'aedp'   : self.average_euclidean_distance_to_postpred,
+            'ahdp'   : self.average_hypercube_distance_to_postpred,
+            'kedp'   : self.knn_euclidean_distance_to_postpred,
+            'khdp'   : self.knn_hypercube_distance_to_postpred,
+            'cone'   : self.cone_density,
+            'ekde'   : self.euclidean_kernel_density_estimate,
+            'hkde'   : self.hypercube_kernel_density_estimate,
+            'lhkde'  : self.latent_hypercube_kernel_density_estimate,
+            'lekde'  : self.latent_euclidean_kernel_density_estimate,
+            'lskde'  : self.latent_simplex_kernel_density_estimate,
+            'mlkde'  : self.mixed_latent_kernel_density_estimate,
+            'ckhdp'  : self.combined_knn_hypercube_distance_to_postpred,
+            'ckedp'  : self.combined_knn_euclidean_distance_to_postpred,
+            'ccone'  : self.combined_cone_density,
+            'chkde'  : self.combined_hypercube_kernel_density_estimate,
+            'cekde'  : self.combined_euclidean_kernel_density_estimate,
+            'clskde' : self.combined_latent_simplex_kernel_density_estimate,
+            'clekde' : self.combined_latent_euclidean_kernel_density_estimate,
+            'clhkde' : self.combined_latent_euclidean_kernel_density_estimate,
+            'cmlkde' : self.combined_mixed_latent_kernel_density_estimate,
             }
     def get_scores(self):
         metrics = self.scoring_metrics.keys()
-        scores = np.array(list([self.scoring_metrics[metric]().ravel() for metric in metrics]))
-        return scores # pd.DataFrame(scores, columns = metrics.keys())
+        scores = np.array(
+            list([self.scoring_metrics[metric]().ravel() for metric in metrics])
+            )
+        return scores 
     def get_scoring_metrics(self):
         scores = self.get_scores()
         aucs = np.array([auc(score, self.data.Y) for score in scores]).T
