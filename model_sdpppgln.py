@@ -776,11 +776,10 @@ class Chain(DirichletProcessSampler):
             'etas'   : etas,
             'V'      : self.data.V,
             }
-
-        try:
-            out['Y'] = self.data.Y
-        except AttributeError:
-            pass
+        # try to add outcome / radius to dictionary
+        for attr in ['Y','R']:
+            if hasattr(self.data, attr):
+                out[attr] = self.data.__dict__[attr]
 
         with open(path, 'wb') as file:
             pickle.dump(out, file)

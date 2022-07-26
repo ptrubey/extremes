@@ -477,11 +477,10 @@ class Chain(DirichletProcessSampler, Projection):
             'swap_n' : self.swap_attempts - self.swap_succeeds,
             'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
             }
-        # try to add outcome to dictionary
-        try:
-            out['Y'] = self.data.Y
-        except AttributeError:
-            pass
+        # try to add outcome / radius to dictionary
+        for attr in ['Y','R']:
+            if hasattr(self.data, attr):
+                out[attr] = self.data.__dict__[attr]
         # write to disk
         with open(path, 'wb') as file:
             pickle.dump(out, file)
@@ -672,6 +671,9 @@ class Result(object):
         if 'Y' in out.keys():
             self.data.fill_outcome(out['Y'])
         
+        if 'R' in out.keys():
+            self.data.R = out['R']
+
         self.samples       = Samples(
             self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats
             )
