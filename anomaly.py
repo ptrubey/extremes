@@ -27,6 +27,8 @@ from energy import euclidean_dmat, hypercube_dmat, limit_cpu, \
 from models import Results
 np.seterr(divide = 'ignore')
 
+EPS = np.finfo(float).eps 
+
 from classify import Classifier
 
 def auc(scores, actual):
@@ -269,18 +271,18 @@ class Anomaly(Projection):
         # temporary code:
         h = gmean(self.hypercube_distance.ravel())
         if kernel == 'gaussian':
-            return 1 / np.exp(-(self.hypercube_distance / h)**2).mean(axis = (1,2))
+            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.hypercube_distance / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.hypercube_distance / h)).mean(axis = (1,2))
+            return 2 * h / (np.exp(-np.abs(self.hypercube_distance / h)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
     def euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance.ravel())
         if kernel == 'gaussian':
-            return 1 / np.exp(-(self.euclidean_distance / h)**2).mean(axis = (1,2))
+            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(self.euclidean_distance / h)).mean(axis = (1,2))
+            return 2 * h / (np.exp(-np.abs(self.euclidean_distance / h)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
@@ -288,39 +290,27 @@ class Anomaly(Projection):
         """ computes mean kde for  """
         h = self.sphere_distance_latent.mean()
         if kernel == 'gaussian':
-            return np.sqrt(2 * np.pi) * h / np.exp(
-                - (self.sphere_distance_latent / h)**2).mean(axis = (1,2)
-                )
+            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.sphere_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 2 * h / np.exp(
-                - np.abs(self.sphere_distance_latent / h)).mean(axis = (1,2)
-                )
+            return 2 * h / (np.exp(-np.abs(self.sphere_distance_latent / h)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
     def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance_latent.ravel())
         if kernel == 'gaussian':
-            return np.sqrt(2 * np.pi) * h / np.exp(
-                - (self.euclidean_distance_latent / h)**2).mean(axis = (1,2)
-                )
+            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 2 * h / np.exp(
-                - np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)
-                )
+            return 2 * h / (np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance_latent.ravel())
         if kernel == 'gaussian':
-            return np.sqrt(2 * np.pi) * h / np.exp(
-                - (self.euclidean_distance_latent / h)**2).mean(axis = (1,2)
-                )
+            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 2 * h / np.exp(
-                -np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)
-                )
+            return 2 * h / (np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
@@ -336,7 +326,7 @@ class Anomaly(Projection):
         elif kernel == 'laplace':
             s1 = np.exp(-np.abs(d_real/h_real)).mean(axis = (1,2))
             s1 = np.exp(-np.abs(d_simp/h_simp)).mean(axis = (1,2))
-            return (1 / (s1 * s2))
+            return 1 / (s1 * s2)
         else:
             raise ValueError('requested kernel not available')
         pass
