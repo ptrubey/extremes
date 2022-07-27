@@ -308,9 +308,9 @@ class Anomaly(Projection):
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = gmean(self.euclidean_distance_latent.ravel())
         if kernel == 'gaussian':
-            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
+            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.hypercube_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 2 * h / (np.exp(-np.abs(self.euclidean_distance_latent / h)).mean(axis = (1,2)) + EPS)
+            return 2 * h / (np.exp(-np.abs(self.hypercube_distance_latent / h)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
