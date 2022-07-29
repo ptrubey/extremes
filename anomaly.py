@@ -269,7 +269,8 @@ class Anomaly(Projection):
         return scores
     def hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         # temporary code:
-        h = gmean(self.hypercube_distance.ravel())
+        h = np.sqrt((self.hypercube_distance**2).mean()) * self.data.nDat**(-1/5)
+        # h = gmean(self.hypercube_distance.ravel())
         if kernel == 'gaussian':
             return np.sqrt(2 * np.pi) * h / (np.exp(-(self.hypercube_distance / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -278,7 +279,7 @@ class Anomaly(Projection):
             raise ValueError('requested kernel not available')
         pass
     def euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        h = gmean(self.euclidean_distance.ravel())
+        h = np.sqrt((self.euclidean_distance**2).mean()) * self.data.nDat**(-1/5)
         if kernel == 'gaussian':
             return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -288,7 +289,7 @@ class Anomaly(Projection):
         pass
     def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         """ computes mean kde for  """
-        h = self.sphere_distance_latent.mean()
+        h = np.sqrt((self.sphere_distance_latent**2).mean()) * self.data.nDat**(-1/5)
         if kernel == 'gaussian':
             return np.sqrt(2 * np.pi) * h / (np.exp(-(self.sphere_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -297,7 +298,7 @@ class Anomaly(Projection):
             raise ValueError('requested kernel not available')
         pass
     def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        h = gmean(self.euclidean_distance_latent.ravel())
+        h = np.sqrt((self.euclidean_distance_latent**2).mean()) * self.data.nDat**(-1/5)
         if kernel == 'gaussian':
             return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -306,7 +307,7 @@ class Anomaly(Projection):
             raise ValueError('requested kernel not available')
         pass
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        h = gmean(self.euclidean_distance_latent.ravel())
+        h = np.sqrt((self.hypercube_distance_latent**2).mean()) * self.data.nDat**(-1/5)
         if kernel == 'gaussian':
             return np.sqrt(2 * np.pi) * h / (np.exp(-(self.hypercube_distance_latent / h)**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -316,8 +317,10 @@ class Anomaly(Projection):
         pass
     def mixed_latent_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         d_real = self.hypercube_distance_real
-        h_real = gmean(d_real.ravel())
+        h_real = np.sqrt((d_real**2).mean()) * self.data.nDat**(-1/5)
         d_simp = self.sphere_distance_latent
+        h_simp = np.sqrt((d_simp**2).mean()) * self.data.nDat**(-1/5)
+
         h_simp = d_simp.mean()
         if kernel == 'gaussian':
             s1 = np.exp(-(d_real/h_real)**2).mean(axis = (1,2))
@@ -432,7 +435,7 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    results = []
+    results  = []
     basepath = './ad'
     datasets = ['cardio','cover','mammography']
     resbases = {
@@ -464,7 +467,7 @@ if __name__ == '__main__':
     # extant_result = ResultFactory('mdppprgln', path)
     # extant_result.p = 10
     # extant_result.pools_open()
-    # scores = extant_result.get_scores()
+    # scores = extant_result.get_scoring_metrics()
     # extant_result.pools_closed()
     # raise
 
