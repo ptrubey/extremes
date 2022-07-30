@@ -16,6 +16,7 @@ import time
 import numpy as np
 import math
 from numba import jit, njit, prange, int32, set_num_threads
+import warnings
 
 set_num_threads(4)
 
@@ -132,11 +133,6 @@ def bincount2D_jit(arr, M):
             out[t,arr[t,n]] += 1
     return out
 
-@njit(fastmath = True)
-def fff(s, n):
-    for i in range(1, n+1):
-        s += math.exp(i * 0.0001)
-    return s
 
 @njit(fastmath = True, parallel = True)
 def cumsoftmax2d(arr):
@@ -206,19 +202,21 @@ def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     T = delta.shape[0]
     N = delta.shape[1]
     J = log_likelihood.shape[2]
-    curr_cluster_state = bincount2D_jit(delta, J)
-    cand_cluster_state = (curr_cluster_state == 0)
-    prob += np.expand_dims(np.arange(T),0)
-    scratch = np.empty(curr_cluster_state.shape)
-    for n in range(N):
-        down_1(curr_cluster_state, delta.T[n])
-        pt_dp_logpost(scratch, log_likelihood[n], 
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="The TBB threading layer requires TBB version")
+        curr_cluster_state = bincount2D_jit(delta, J)
+        cand_cluster_state = (curr_cluster_state == 0)
+        prob += np.expand_dims(np.arange(T),0)
+        scratch = np.empty(curr_cluster_state.shape)
+        for n in range(N):
+            down_1(curr_cluster_state, delta.T[n])
+            pt_dp_logpost(scratch, log_likelihood[n], 
                         curr_cluster_state, cand_cluster_state, eta)
-        cumsoftmax2d(scratch)
-        scratch += np.expand_dims(np.arange(T), 1)
-        delta.T[n] = np.searchsorted(scratch.ravel(), prob[n]) % J
-        up_1(curr_cluster_state, delta.T[n])
-        null_cand(cand_cluster_state, delta.T[n])
+            cumsoftmax2d(scratch)
+            scratch += np.expand_dims(np.arange(T), 1)
+            delta.T[n] = np.searchsorted(scratch.ravel(), prob[n]) % J
+            up_1(curr_cluster_state, delta.T[n])
+            null_cand(cand_cluster_state, delta.T[n])
     return
 
 if __name__ == '__main__':
