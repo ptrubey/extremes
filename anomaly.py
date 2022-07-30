@@ -23,7 +23,8 @@ from sklearn.svm import OneClassSVM
 from data import euclidean_to_hypercube, Projection
 # Custom Modules
 from energy import euclidean_dmat, hypercube_dmat, limit_cpu, \
-                     hypercube_distance_matrix, euclidean_distance_matrix
+                     hypercube_distance_matrix, euclidean_distance_matrix, \
+                        euclidean_dmat_per_obs, hypercube_dmat_per_obs
 from models import Results
 np.seterr(divide = 'ignore')
 
@@ -129,8 +130,9 @@ class Anomaly(Projection):
         # s2 = choice(np.arange(pi_new.shape[0]), size = pi_new.shape[0]//2, replace = False)
         # res = self.pool.map(euclidean_dmat, zip(repeat(pi_new[s1]), pi_con[:,s2]))
         s = np.random.choice(pi_new.shape[0], pi_new.shape[0]//2, False)
-        res = self.pool.map(euclidean_dmat, zip(repeat(pi_new), pi_con[:,s]))
-        return np.array(list(res))
+        # res = self.pool.map(euclidean_dmat, zip(repeat(pi_new), pi_con[:,s]))
+        # return np.array(list(res))'
+        return euclidean_dmat_per_obs(pi_con[:,s], pi_new, self.pool)
     @cached_property
     def euclidean_distance_latent(self):
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
@@ -142,8 +144,9 @@ class Anomaly(Projection):
         # s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
         # res = self.pool.map(euclidean_dmat, zip(repeat(Y_new[s1]), Y_con[:,s2]))
         s = np.random.choice(Y_new.shape[0], Y_new.shape[0]//2, False)
-        res = self.pool.map(euclidean_dmat, zip(repeat(Y_new), Y_con[:,s]))
-        return np.array(list(res))
+        # res = self.pool.map(euclidean_dmat, zip(repeat(Y_new), Y_con[:,s]))
+        # return np.array(list(res))
+        return euclidean_dmat_per_obs(Y_con[:,s], Y_new, self.pool)
     @cached_property
     def hypercube_distance_latent(self):
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
@@ -156,8 +159,9 @@ class Anomaly(Projection):
         # s2 = choice(np.arange(R.shape[0]), size = R.shape[0]//2, replace = False)
         # res = self.pool.map(hypercube_dmat, zip(repeat(V_new[s1]), V_con[:,s2]))
         s = np.random.choice(V_new.shape[0], V_new.shape[0]//2, False)
-        res = self.pool.map(hypercube_dmat, zip(repeat(V_new), V_con[:,s]))
-        return np.array(list(res))
+        # res = self.pool.map(hypercube_dmat, zip(repeat(V_new), V_con[:,s]))
+        # return np.array(list(res))
+        return hypercube_dmat_per_obs(V_con[:,s], V_new, self.pool)
     
     ## Classic Anomaly Metrics:
     def isolation_forest(self):
