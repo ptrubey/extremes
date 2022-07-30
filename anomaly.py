@@ -215,8 +215,8 @@ class Anomaly(Projection):
         return self.hypercube_distance_latent.mean(axis = (1,2))
     def average_sphere_distance_to_postpred(self, **kwargs):
         return self.sphere_distance_latent.mean(axis = 1)
-    def knn_hypercube_distance_to_postpred(self, k = 10, **kwargs):
-        knn = np.array(list(map(np.sort, self.hypercube_distance)))[:,k]
+    def knn_hypercube_distance_to_postpred(self, k = 5, **kwargs):
+        knn = np.array(list(map(np.sort, self.hypercube_distance)))[:,k, 0]
         try:
             n, p = self.data.VW.shape
         except AttributeError:
@@ -230,8 +230,8 @@ class Anomaly(Projection):
                     raise
         inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
-    def knn_euclidean_distance_to_postpred(self, k = 10, **kwargs):
-        knn = np.array(list(map(np.sort, self.euclidean_distance)))[:,k]
+    def knn_euclidean_distance_to_postpred(self, k = 5, **kwargs):
+        knn = np.array(list(map(np.sort, self.euclidean_distance)))[:, k, 0]
         try:
             n, p = self.data.VW.shape
         except AttributeError:
