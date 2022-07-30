@@ -52,7 +52,10 @@ class Anomaly(Projection):
     # Parallelism
     pool = None
     def pools_open(self):
-        self.pool = get_context('spawn').Pool(processes = cpu_count(), initializer = limit_cpu)
+        self.pool = get_context('spawn').Pool(
+            processes = min(cpu_count(), 32), 
+            initializer = limit_cpu,
+            )
         return
     def pools_closed(self):
         self.pool.close()
