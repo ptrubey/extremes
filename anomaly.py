@@ -171,7 +171,7 @@ class Anomaly(Projection):
     def latent_euclidean_bandwidth(self):
         Y = self.postpred_latent_euclidean
         YY = euclidean_dmat_per_obs(Y[None], Y, self.pool)
-        return np.sqrt((YY**2) / (2 * Y.shape[0] * (Y.shape[0] - 1) ))
+        return np.sqrt((YY**2).sum() / (2 * Y.shape[0] * (Y.shape[0] - 1) ))
     @cached_property
     def postpred_latent_hypercube(self):
         return euclidean_to_hypercube(self.postpred_latent_euclidean)
@@ -179,7 +179,7 @@ class Anomaly(Projection):
     def latent_hypercube_bandwidth(self):
         V = self.postpred_latent_hypercube
         VV = hypercube_dmat_per_obs(V[None], V, self.pool)
-        return np.sqrt((VV**2) / (2 * V.shape[0] * (V.shape[0] - 1) ))
+        return np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1) ))
     @cached_property
     def latent_mixed_bandwidth(self):
         V = euclidean_to_hypercube(
@@ -190,8 +190,8 @@ class Anomaly(Projection):
         VV = hypercube_dmat_per_obs(V[None], V, self.pool)
         PP = euclidean_dmat_per_obs(P[None], P, self.pool)
         
-        hV = np.sqrt(VV**2 / (2 * V.shape[0] * (V.shape[0] - 1)))
-        hP = np.sqrt(PP**2 / (2 * P.shape[0] * (P.shape[0] - 1)))
+        hV = np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1)))
+        hP = np.sqrt((PP**2).sum() / (2 * P.shape[0] * (P.shape[0] - 1)))
         
         return (hV, hP)
 
