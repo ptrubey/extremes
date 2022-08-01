@@ -154,11 +154,11 @@ def mixed_distance(predictions, targets, pool):
     euc = euclidean_distance_matrix(predictions.W, targets.W, pool)
     return np.vstack((hyp, euc))
 
-
 def euclidean_dmat_per_obs(conditional, postpred, pool):
     """
-    conditional : (n, s_c, d)
-    postpred : (s_p, d)
+    conditional : (n, s_c, d)  in R_+^d
+    postpred    : (s_p, d)     in R_+^d
+    pool        : multiprocessing.Pool
     """
     cshape = conditional.shape; pshape = postpred.shape
     args = zip(repeat(postpred), conditional.reshape(-1, cshape[-1]))
@@ -166,17 +166,15 @@ def euclidean_dmat_per_obs(conditional, postpred, pool):
     return res.reshape(cshape[0], cshape[1], pshape[0])
 
 def hypercube_dmat_per_obs(conditional, postpred, pool):
+    """
+    conditional : (n, s_c, d)  in S_{\infty}^{d-1}
+    postpred    : (s_p, d)     in S_{\infty}^{d-1}
+    pool        : multiprocessing.Pool
+    """
     cshape = conditional.shape; pshape = postpred.shape
     args = zip(repeat(postpred), conditional.reshape(-1, cshape[-1]))
     res = np.array(list(pool.map(hypercube_distance_unsummed, args)))
     return res.reshape(cshape[0], cshape[1], pshape[0])
-
-
-
-
-
-
-
 
 if __name__ == '__main__':
     pass
