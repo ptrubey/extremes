@@ -195,10 +195,6 @@ class Anomaly(Projection):
         
         return (hV, hP)
 
-    # @cached_property
-    # def latent_simplex_bandwidth(self):
-    #     S = self.postpred_latent_euclidean
-
     ## Classic Anomaly Metrics:
     def isolation_forest(self):
         """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
@@ -429,7 +425,7 @@ class Anomaly(Projection):
                 'cekde'  : self.combined_euclidean_kernel_density_estimate,
                 'clskde' : self.combined_latent_simplex_kernel_density_estimate,
                 'clekde' : self.combined_latent_euclidean_kernel_density_estimate,
-                'clhkde' : self.combined_latent_euclidean_kernel_density_estimate,
+                'clhkde' : self.combined_latent_hypercube_kernel_density_estimate,
                 'cmlkde' : self.combined_mixed_latent_kernel_density_estimate,
                 })
         return metrics
