@@ -12,7 +12,7 @@ cardio = {
     'results'   : './ad/cardio/results_{}_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
-    'decluster' : 'False'
+    'decluster' : 'False',
     }
 cover = {
     'source'    : './ad/cover/data.csv',
@@ -20,7 +20,7 @@ cover = {
     'results'   : './ad/cover/results_{}_{}_{}.pkl',
     'quantile'  : '0.998',
     'cats'      : '[9,10,11,12]',
-    'decluster' : 'False'
+    'decluster' : 'False',
     }
 mammography = {
     'source'    : './ad/mammography/data.csv',
@@ -28,10 +28,19 @@ mammography = {
     'results'   : './ad/mammography/results_{}_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8]',
-    'decluster' : 'False'
+    'decluster' : 'False',
+    }
+pima = {
+    'source'    : './ad/pima/data.csv',
+    'outcome'   : './ad/pima/outcome.csv',
+    'results'   : './ad/pima/results_{}_{}_{}.pkl',
+    'quantile'  : '0.90',
+    'cats'      : '[7,8,9,10,11,12]',
+    'decluster' : 'False',
     }
 
-datasets = [cardio, cover, mammography]
+# datasets = [cardio, cover, mammography, pima]
+datasets = [pima]
 eta_alphas = ['2']
 eta_betas = ['1e-1','1e0','1e1','1e2']
 stepping = '1.03'
