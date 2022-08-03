@@ -47,9 +47,7 @@ satellite = {
     'decluster' : 'False',
     }
 
-# datasets = [cardio, cover, mammography, pima, satellite]
-# datasets = [pima]
-datasets = [satellite]
+datasets = [cardio, cover, mammography, pima, satellite]
 eta_alphas = ['2']
 eta_betas = ['1e-1','1e0','1e1','1e2']
 stepping = '1.03'
