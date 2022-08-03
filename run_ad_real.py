@@ -38,9 +38,18 @@ pima = {
     'cats'      : '[7,8,9,10,11,12]',
     'decluster' : 'False',
     }
+satellite = {
+    'source'    : './ad/satellite/data.csv',
+    'outcome'   : './ad/satellite/outcome.csv',
+    'results'   : './ad/satellite/results_{}_{}_{}.pkl',
+    'quantile'  : '0.95',
+    'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
+    'decluster' : 'False',
+    }
 
-# datasets = [cardio, cover, mammography, pima]
-datasets = [pima]
+# datasets = [cardio, cover, mammography, pima, satellite]
+# datasets = [pima]
+datasets = [satellite]
 eta_alphas = ['2']
 eta_betas = ['1e-1','1e0','1e1','1e2']
 stepping = '1.03'
@@ -54,7 +63,8 @@ if __name__ == '__main__':
         for model in models:
             for ealpha in eta_alphas:
                 for ebeta in eta_betas:
-                    args = [sys.executable, 
+                    args = [
+                        sys.executable, 
                         'test_generic.py', 
                         dataset['source'],
                         dataset['results'].format(model, ealpha, ebeta),
