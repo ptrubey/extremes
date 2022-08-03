@@ -481,7 +481,7 @@ def argparser():
 if __name__ == '__main__':
     results  = []
     basepath = './ad'
-    datasets = ['cardio','cover','mammography']
+    datasets = ['cardio','cover','mammography','pima']
     resbases = {
         # 'mdppprg' : 'result_mdppprg_*.pkl',
         'mdppprgln' : 'results_mdppprgln_*.pkl',
