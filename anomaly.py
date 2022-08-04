@@ -8,7 +8,7 @@ from xml.dom.minidom import Attr
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 import re, os, argparse, glob, gc
 # builtins explicitly called
-from multiprocessing import pool as mcpool, cpu_count, get_context
+from multiprocessing import pool as mcpool, cpu_count, get_context #  Pool # 
 from scipy.integrate import trapezoid
 from scipy.special import gamma as gamma_func
 from scipy.stats import gmean
@@ -54,6 +54,7 @@ class Anomaly(Projection):
     pool = None
     def pools_open(self):
         self.pool = get_context('spawn').Pool(
+        # self.pool = Pool(
             processes = min(cpu_count(), 32), 
             initializer = limit_cpu,
             )
@@ -404,8 +405,8 @@ class Anomaly(Projection):
             'if'     : self.isolation_forest,
             'lof'    : self.local_outlier_factor,
             'svm'    : self.one_class_svm,
-            'aedp'   : self.average_euclidean_distance_to_postpred,
-            'ahdp'   : self.average_hypercube_distance_to_postpred,
+            # 'aedp'   : self.average_euclidean_distance_to_postpred,
+            # 'ahdp'   : self.average_hypercube_distance_to_postpred,
             'kedp'   : self.knn_euclidean_distance_to_postpred,
             'khdp'   : self.knn_hypercube_distance_to_postpred,
             'cone'   : self.cone_density,
