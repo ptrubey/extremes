@@ -147,7 +147,7 @@ class Anomaly(Projection):
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
         V_con = np.array(list(map(euclidean_to_hypercube, Y_con)))
         V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
-        s = np.random.choice(V_new.shape[0], V_new.shape[0]//2, False)
+        s = np.random.choice(V_con.shape[1], V_new.shape[1]//2, False)
         return hypercube_dmat_per_obs(V_con[:,s], V_new, self.pool)
     
     @cached_property
