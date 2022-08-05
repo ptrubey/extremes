@@ -128,7 +128,7 @@ class Anomaly(Projection):
     def sphere_distance_latent(self):
         pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1) # (n, s, d)
         pi_new = self.generate_posterior_predictive_spheres(10) # (s,d)
-        s = np.random.choice(pi_new.shape[0], pi_new.shape[0] // 2, False)
+        s = np.random.choice(pi_con.shape[1], pi_con.shape[1] // 2, False)
         return euclidean_dmat_per_obs(pi_con[:,s], pi_new, self.pool)
     @property
     def euclidean_distance_latent(self):
@@ -137,7 +137,7 @@ class Anomaly(Projection):
         Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
         Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n,s,d) 
         Y_new = self.generate_posterior_predictive_gammas()          # (s,d)
-        s = np.random.choice(Y_new.shape[0], Y_new.shape[0]//2, False)
+        s = np.random.choice(Y_con.shape[1], Y_con.shape[1]//2, False)
         return euclidean_dmat_per_obs(Y_con[:,s], Y_new, self.pool)
     @property
     def hypercube_distance_latent(self):
