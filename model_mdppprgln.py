@@ -547,9 +547,6 @@ class Result(object):
             dmax = self.samples.delta[s].max()
             njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
             ljs = njs + (njs == 0) * self.samples.eta[s] / m
-            new_log_zetas = normal()
-
-            new_zetas = normal(size = (m, self.nCol + self.nCat))
             new_zetas = np.empty((m, self.nCol + self.nCat))
             np.einsum(
                 'zy,jy->jz', 
@@ -589,8 +586,8 @@ class Result(object):
         hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
         return euclidean_to_angular(hyp)
 
-    def generate_posterior_predictive_spheres(self):
-        rhos = self.generate_posterior_predictive_gammas()[:,self.nCol:] # (s,D)
+    def generate_posterior_predictive_spheres(self, n_per_sample):
+        rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:] # (s,D)
         CatMat = category_matrix(self.data.Cats) # (C,d)
         shro = rhos @ CatMat.T # (s,C)
         nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)

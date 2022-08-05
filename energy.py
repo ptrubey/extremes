@@ -18,6 +18,11 @@ def hypercube_distance_mean(args):
 def euclidean_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1))
 
+distance_metrics = {
+    'euclidean' : euclidean_distance_unsummed,
+    'hypercube' : hypercube_distance_unsummed,
+    }
+
 def euclidean_distance_mean(args):
     return pairwise_distances(args[0], args[1]).mean()
 
@@ -122,25 +127,15 @@ def postpred_loss_single(predicted, empirical):
         pvari[d] = np.trace(np.cov(pdevi[:,d].T))
     return bias + pvari
 
-def hypercube_distance_matrix(predictions, targets, pool = None):
-    if type(pool) is not mcpool.Pool:
-        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
-    res = pool.map(
-            hypercube_distance_unsummed, 
-            zip(repeat(predictions), targets)
-            )
+def hypercube_distance_matrix(predictions, targets, pool):
+    res = pool.map(hypercube_distance_unsummed, zip(repeat(predictions), targets))
     return np.array(list(res))
 
-def euclidean_distance_matrix(predictions, targets, pool = None):
-    if type(pool) is not mcpool.Pool:
-        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
-    res = pool.map(
-            euclidean_distance_unsummed, 
-            zip(repeat(predictions), targets)
-            )
+def euclidean_distance_matrix(predictions, targets, pool):
+    res = pool.map(euclidean_distance_unsummed, zip(repeat(predictions), targets))
     return np.array(list(res))
 
-def mixed_distance(predictions, targets, pool):
+def mixed_distance(real_pred, real_targ, cat_pred, cat_targ, pool):
     """
     predictions, targets = named tuples (with elements V, W)
     x.V = hypersphere projection
@@ -150,9 +145,15 @@ def mixed_distance(predictions, targets, pool):
         (x,y,0) : V distance (hypercube)
         (x,y,1) : W distance (euclidean)
     """
-    hyp = hypercube_distance_matrix(predictions.V, targets.V, pool)
-    euc = euclidean_distance_matrix(predictions.W, targets.W, pool)
+    hyp = hypercube_distance_matrix(real_pred, real_targ, pool)
+    euc = euclidean_distance_matrix(cat_pred, cat_targ, pool)
     return np.vstack((hyp, euc))
+
+def mixed_energy_score(real_pred, real_targ, cat_pred, cat_targ, pool):
+    phyp, peuc = mixed_distance(real_pred, real_pred, cat_pred, cat_pred, pool)
+    thyp, teuc = mixed_distance(real_pred, real_targ, cat_pred, cat_targ, pool)
+    
+    return (phyp + peuc).mean() - 0.5 * (thyp + teuc).mean()
 
 def euclidean_dmat_per_obs(conditional, postpred, pool):
     """
@@ -175,6 +176,40 @@ def hypercube_dmat_per_obs(conditional, postpred, pool):
     args = zip(repeat(postpred), conditional.reshape(-1, cshape[-1]))
     res = np.array(list(pool.map(hypercube_distance_unsummed, args)))
     return res.reshape(cshape[0], cshape[1], pshape[0])
+
+def kernel_gaussian(distance, bandwidth):
+    return np.exp(- 0.5 * (distance / bandwidth)**2) / (np.sqrt(2 * np.pi) * bandwidth)
+
+def kernel_laplace(distance, bandwidth):
+    return np.exp(- np.abs(distance / bandwidth)) / (2 * bandwidth)
+
+kernels = {
+    'gaussian' : kernel_gaussian,
+    'laplace'  : kernel_laplace,
+    }
+
+def kde_per_obs_inner(args):
+    conditional, postpred, bandwidth, metric = args
+    # def kde_per_obs_inner(conditional, postpred, bandwidth, metric, kernel = 'gaussian'):
+    args = zip(repeat(postpred), conditional)
+    res = map(distance_metrics[metric], args)
+    distance = np.array(list(res))
+    return kernels['gaussian'](distance, bandwidth).mean()
+
+def kde_per_obs(conditional, postpred, bandwidth, metric, pool):
+    """
+    KDE per observation
+    
+    Args:
+        conditional : (N, S1, D)
+        postpred    : (S2, D)
+        bandwidth   : (1)
+        metric      : ('euclidean','hypercube')
+        pool        : multiprocessing.Pool
+    """
+    args = zip(conditional, repeat(postpred), repeat(bandwidth), repeat(metric))
+    res  = pool.map(kde_per_obs_inner, args)
+    return np.array(list(res))
 
 if __name__ == '__main__':
     pass
