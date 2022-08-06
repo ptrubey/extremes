@@ -18,9 +18,13 @@ def hypercube_distance_mean(args):
 def euclidean_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1))
 
+def manhattan_distance_unsummed(args):
+    return pairwise_distances(args[0], args[1].reshape(1,-1), metric = 'manhattan')
+
 distance_metrics = {
     'euclidean' : euclidean_distance_unsummed,
     'hypercube' : hypercube_distance_unsummed,
+    'manhattan' : manhattan_distance_unsummed,
     }
 
 def euclidean_distance_mean(args):
@@ -175,6 +179,12 @@ def hypercube_dmat_per_obs(conditional, postpred, pool):
     cshape = conditional.shape; pshape = postpred.shape
     args = zip(repeat(postpred), conditional.reshape(-1, cshape[-1]))
     res = np.array(list(pool.map(hypercube_distance_unsummed, args)))
+    return res.reshape(cshape[0], cshape[1], pshape[0])
+
+def manhattan_dmat_per_obs(conditional, postpred, pool):
+    cshape = conditional.shape; pshape = postpred.shape
+    args = zip(repeat(postpred), conditional.reshape(-1, cshape[-1]))
+    res = np.array(list(pool.map(manhattan_distance_unsummed, args)))
     return res.reshape(cshape[0], cshape[1], pshape[0])
 
 def kernel_gaussian(distance, bandwidth):
