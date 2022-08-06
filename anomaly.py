@@ -480,7 +480,7 @@ if __name__ == '__main__':
     results  = []
     basepath = './ad'
     datasets = ['cardio','cover','mammography','pima','satellite']
-    datasets = ['cardio']
+    # datasets = ['cardio']
     resbases = {
         # 'mdppprg' : 'result_mdppprg_*.pkl',
         'mdppprgln' : 'results_mdppprgln_*.pkl',

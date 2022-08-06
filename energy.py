@@ -8,16 +8,12 @@ from hypercube_deviance import hcdev
 
 def hypercube_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev)
-
 def hypercube_distance(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = hcdev).sum()
-
 def hypercube_distance_mean(args):
     return pairwise_distances(args[0], args[1], metric = hcdev).mean()
-
 def euclidean_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1))
-
 def manhattan_distance_unsummed(args):
     return pairwise_distances(args[0], args[1].reshape(1,-1), metric = 'manhattan')
 
@@ -29,23 +25,18 @@ distance_metrics = {
 
 def euclidean_distance_mean(args):
     return pairwise_distances(args[0], args[1]).mean()
-
 def euclidean_dmat(args):
     return pairwise_distances(args[0], args[1])
-
 def hypercube_dmat(args):
     return pairwise_distances(args[0], args[1], metric = hcdev)
-
 def prediction_pairwise_distance(prediction):
     n = prediction.shape[0]
     res = map(hypercube_distance, zip(repeat(prediction), prediction))
     return np.array(list(res)).sum() / (n * n)
-
 def target_pairwise_distance(args):
     prediction, target = args
     n = prediction.shape[0]
     return hypercube_distance((prediction, target)) / n
-
 def limit_cpu():
     p = psutil.Process(os.getpid())
     if os.name == 'nt':
