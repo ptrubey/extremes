@@ -58,7 +58,7 @@ class Anomaly(Projection):
     def pools_open(self):
         # self.pool = get_context('spawn').Pool(
         self.pool = Pool(
-            processes = min(cpu_count(), 32), 
+            processes = (3 * cpu_count()) // 4, 
             initializer = limit_cpu,
             )
         return
@@ -407,36 +407,36 @@ class Anomaly(Projection):
             'lskde'  : self.latent_simplex_kernel_density_estimate,
             'mlkde'  : self.mixed_latent_kernel_density_estimate,
             }
-        if hasattr(self.data, 'R'):
-            metrics.update({
-                'ckhdp'  : self.combined_knn_hypercube_distance_to_postpred,
-                'ckedp'  : self.combined_knn_euclidean_distance_to_postpred,
-                'ccone'  : self.combined_cone_density,
-                'chkde'  : self.combined_hypercube_kernel_density_estimate,
-                'cekde'  : self.combined_euclidean_kernel_density_estimate,
-                'clskde' : self.combined_latent_simplex_kernel_density_estimate,
-                'clekde' : self.combined_latent_euclidean_kernel_density_estimate,
-                'clhkde' : self.combined_latent_hypercube_kernel_density_estimate,
-                'cmlkde' : self.combined_mixed_latent_kernel_density_estimate,
-                })
+        # if hasattr(self.data, 'R'):
+        #     metrics.update({
+        #        'ckhdp'  : self.combined_knn_hypercube_distance_to_postpred,
+        #        'ckedp'  : self.combined_knn_euclidean_distance_to_postpred,
+        #        'ccone'  : self.combined_cone_density,
+        #        'chkde'  : self.combined_hypercube_kernel_density_estimate,
+        #        'cekde'  : self.combined_euclidean_kernel_density_estimate,
+        #        'clskde' : self.combined_latent_simplex_kernel_density_estimate,
+        #        'clekde' : self.combined_latent_euclidean_kernel_density_estimate,
+        #        'clhkde' : self.combined_latent_hypercube_kernel_density_estimate,
+        #        'cmlkde' : self.combined_mixed_latent_kernel_density_estimate,
+        #        })
         return metrics
     def get_scores(self):
         metrics = self.scoring_metrics.keys()
-        out = []
+        density_metrics = ['khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','mlkde']
+        out = pd.DataFrame()
         for metric in metrics:
-            print('\b'*10 + metric.ljust(10), end = '')
+            print('s' + '\b'*11 + metric.ljust(10), end = '')
             sleep(1)
-            out.append(self.scoring_metrics[metric]().ravel())
-        print('\b'*10 + 'Done')
-        scores = np.array(out)
-        # scores = np.array(
-        #     list([self.scoring_metrics[metric]().ravel() for metric in metrics])
-        #     )
-        return scores
+            out[metric] = self.scoring_metrics[metric]().ravel()
+            if hasattr(self.data, 'R'):
+                if metric in density_metrics:
+                    out['c' + metric] = out[metric] * self.data.R
+        print('s' + '\b'*11 + 'Done'.ljust(10))
+        return out
     def get_scoring_metrics(self):
         scores = self.get_scores()
-        aucs = np.array([auc(score, self.data.Y) for score in scores]).T
-        metrics = pd.DataFrame(aucs, columns = self.scoring_metrics.keys())
+        aucs = np.array([auc(score, self.data.Y) for score in scores.values.T]).T
+        metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
         metrics['Metric'] = ('AuROC','AuPRC')
         return metrics
 
