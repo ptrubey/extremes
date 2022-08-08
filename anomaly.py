@@ -23,9 +23,9 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 from data import euclidean_to_hypercube, Projection
 # Custom Modules
-from energy import limit_cpu, euclidean_dmat_per_obs, hypercube_dmat_per_obs,   \
-            hypercube_distance_matrix, euclidean_distance_matrix, kde_per_obs,  \
-            manhattan_dmat_per_obs
+from energy import limit_cpu, euclidean_dmat_per_obs, hypercube_dmat_per_obs,       \
+    hypercube_distance_matrix, euclidean_distance_matrix, manhattan_dmat_per_obs,   \
+    mixed_energy_score, real_energy_score, simp_energy_score, kde_per_obs
 from models import Results
 np.seterr(divide = 'ignore')
 
@@ -102,6 +102,24 @@ class Anomaly(Projection):
         except AttributeError:
             return np.zeros((self.nSamp, self.nDat, 0))
     
+    def energy_score(self):
+        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+            Vnew = euclidean_to_hypercube(
+                self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
+                )
+            Wnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
+            return mixed_energy_score(self.data.V, self.data.W, Vnew, Wnew)
+        elif hasattr(self.data, 'V'):
+            Vnew = euclidean_to_hypercube(
+                self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
+                )
+            return real_energy_score(self.data.V, Vnew)
+        elif hasattr(self.data, 'W'):
+            Wnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
+            return simp_energy_score(self.data.W, Wnew)
+        else:
+            raise            
+
     ## Latent Distance per Observation (Summary)
     @property
     def euclidean_distance(self):
@@ -324,7 +342,6 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-
     def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         """ computes mean kde for  """
         h = self.latent_sphere_bandwidth
@@ -332,7 +349,6 @@ class Anomaly(Projection):
         pi_new = self.generate_posterior_predictive_spheres(10)
         inv_scores =  kde_per_obs(pi_con, pi_new, h, 'manhattan', self.pool)
         return 1 / (inv_scores + EPS)
-
     def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = self.latent_euclidean_bandwidth
         R = self.generate_conditional_posterior_predictive_radii()   # (s,n)
@@ -342,7 +358,6 @@ class Anomaly(Projection):
         Y_new = self.generate_posterior_predictive_gammas(self.postpred_per_samp)          # (s,d)
         inv_scores = kde_per_obs(Y_con, Y_new, h, 'euclidean', self.pool)
         return 1 / (inv_scores + EPS)
-    
     def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h = self.latent_hypercube_bandwidth
         R = self.generate_conditional_posterior_predictive_radii() # (s,n)
@@ -353,7 +368,6 @@ class Anomaly(Projection):
         V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(self.postpred_per_samp))
         inv_scores = kde_per_obs(V_con, V_new, h, 'hypercube', self.pool)
         return 1 / (inv_scores + EPS)
-    
     def mixed_latent_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h_real, h_simp = self.latent_mixed_bandwidth
         if kernel == 'gaussian':
@@ -368,7 +382,6 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    
     def combined_knn_hypercube_distance_to_postpred(self, **kwargs):
         return self.knn_hypercube_distance_to_postpred(**kwargs) * self.data.R
     def combined_knn_euclidean_distance_to_postpred(self, **kwargs):
@@ -392,7 +405,7 @@ class Anomaly(Projection):
     @property
     def scoring_metrics(self):
         metrics = {
-            'if'     : self.isolation_forest,
+            'iso'    : self.isolation_forest,
             'lof'    : self.local_outlier_factor,
             'svm'    : self.one_class_svm,
             # 'aedp'   : self.average_euclidean_distance_to_postpred,
@@ -438,6 +451,7 @@ class Anomaly(Projection):
         aucs = np.array([auc(score, self.data.Y) for score in scores.values.T]).T
         metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
         metrics['Metric'] = ('AuROC','AuPRC')
+        metrics['EnergyScore'] = self.energy_score()
         return metrics
 
 def ResultFactory(model, path):
@@ -477,42 +491,42 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    results  = []
-    basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite']
-    # datasets = ['cardio']
-    resbases = {
-        # 'mdppprg' : 'result_mdppprg_*.pkl',
-        'mdppprgln' : 'results_mdppprgln_*.pkl',
-        }
-    for model in resbases.keys():
-        for dataset in datasets:
-            files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
-            for file in files:
-                results.append((model, file))
-    metrics = []
-    for result in results:
-        print('Processing Result {}'.format(result[1]).ljust(80), end = '')
-        extant_result = ResultFactory(*result)
-        extant_result.p = 10.
-        extant_result.pools_open()
-        extant_metric = extant_result.get_scoring_metrics()
-        extant_result.pools_closed()
-        del extant_result
-        extant_metric['path'] = result[1]
-        metrics.append(extant_metric)
-        gc.collect()
+    # results  = []
+    # basepath = './ad'
+    # datasets = ['cardio','cover','mammography','pima','satellite']
+    # resbases = {
+    #     # 'mdppprg' : 'result_mdppprg_*.pkl',
+    #     'mdppprgln' : 'results_mdppprgln_*.pkl',
+    #     }
+    # for model in resbases.keys():
+    #     for dataset in datasets:
+    #         files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+    #         for file in files:
+    #             results.append((model, file))
+    # metrics = []
+    # for result in results:
+    #     print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+    #     extant_result = ResultFactory(*result)
+    #     extant_result.p = 10.
+    #     extant_result.pools_open()
+    #     extant_metric = extant_result.get_scoring_metrics()
+    #     extant_result.pools_closed()
+    #     del extant_result
+    #     extant_metric['path'] = result[1]
+    #     metrics.append(extant_metric)
+    #     gc.collect()
     
-    df = pd.concat(metrics)
-    df.to_csv('./ad/performance.csv')
+    # df = pd.concat(metrics)
+    # df.to_csv('./ad/performance.csv')
 
-    # path = './simulated/lnad/results_mdppprgln.pkl'
-    # print('Processing Result {}'.format(path).ljust(80), end = '')
-    # extant_result = ResultFactory('mdppprgln', path)
-    # extant_result.p = 10
-    # extant_result.pools_open()
-    # scores = extant_result.get_scoring_metrics()
-    # extant_result.pools_closed()
+    path = './simulated/lnad/results_mdppprgln.pkl'
+    print('Processing Result {}'.format(path).ljust(80), end = '')
+    extant_result = ResultFactory('mdppprgln', path)
+    extant_result.p = 10
+    extant_result.pools_open()
+    scores = extant_result.get_scoring_metrics()
+    extant_result.pools_closed()
+    raise
 
     # args = argparser()
     # args = {'in_path' : './sim_mixed_ad/results_mdppprg*.pkl', 'out_path' : './sim_mixed_ad/metrics.csv'}

@@ -212,6 +212,57 @@ def kde_per_obs(conditional, postpred, bandwidth, metric, pool):
     res  = pool.map(kde_per_obs_inner, args)
     return np.array(list(res))
 
+def distance_to_point(a, b, metric):
+    """
+    a : array (n, d)
+    b : vector (d)
+    metric : string or func
+    """
+    return pairwise_distances(a, b.reshape(1,-1), metric = metric)
+
+def real_energy_score(V, Vnew):
+    pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+    res1 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Vnew), Vnew, repeat(hcdev))
+                )))
+    res2 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Vnew), V, repeat(hcdev))
+                )))
+    pool.close()
+    pool.join()
+    return res2.mean() - 0.5 * res1.mean()
+
+def simp_energy_score(W, Wnew):
+    pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+    res1 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Wnew), Wnew, repeat('manhattan'))
+                )))
+    res2 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Wnew), W, repeat('manhattan'))
+                )))
+    pool.close()
+    pool.join()
+    return res2.mean() - 0.5 * res1.mean()
+
+def mixed_energy_score(V, W, Vnew, Wnew):
+    pool = Pool(processes = cpu_count(), initializer = limit_cpu)
+    res1 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Vnew), Vnew, repeat(hcdev))
+                )))
+    res2 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Vnew), V, repeat(hcdev))
+                )))
+
+    res3 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Wnew), Wnew, repeat('manhattan'))
+                )))
+    res4 = np.array(list(pool.starmap(
+                distance_to_point, zip(repeat(Wnew), W, repeat('manhattan'))
+                )))
+    pool.close()
+    pool.join()
+    return (res2 + res4).mean() - 0.5 * (res1 + res3).mean()
+
 if __name__ == '__main__':
     pass
 
