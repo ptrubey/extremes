@@ -213,51 +213,41 @@ class Anomaly(Projection):
     ## Classic Anomaly Metrics:
     def isolation_forest(self):
         """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
-        try:
-            forest = IsolationForest().fit(self.data.VW)
-            raw = forest.score_samples(self.data.VW)
-        except AttributeError:
-            try:
-                forest = IsolationForest().fit(self.data.V)
-                raw = forest.score_samples(self.data.V)
-            except AttributeError:
-                try:
-                    forest = IsolationForest().fit(self.data.W)
-                    raw = forest.score_samples(self.data.W)
-                except AttributeError:
-                    print("Where's the data?")
-                    raise
+        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+            dat = np.hstack((self.data.V, self.data.W))
+        elif hasattr(self.data.V):
+            dat = self.data.V
+        elif hasattr(self.data.W):
+            dat = self.data.W
+        else:
+            raise
+        forest = IsolationForest().fit(dat)
+        raw = forest.score_samples(dat)
         return raw.max() - raw + 1
-    def local_outlier_factor(self, k = 20):
+    def local_outlier_factor(self, k = 5):
         """ Implements Local Outlier Factor.  k specifies the number of neighbors to fit to. """
-        try:
-            lof = LocalOutlierFactor(n_neighbors = k).fit(self.data.VW)
-        except AttributeError:
-            try:
-                lof = LocalOutlierFactor(n_neighbors = k).fit(self.data.V)
-            except AttributeError:
-                try:
-                    lof = LocalOutlierFactor(n_neighbors = k).fit(self.data.W)
-                except AttributeError:
-                    print("Where's the data?")
-                    raise
+        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+            dat = np.hstack((self.data.V, self.data.W))
+        elif hasattr(self.data.V):
+            dat = self.data.V
+        elif hasattr(self.data.W):
+            dat = self.data.W
+        else:
+            raise
+        lof = LocalOutlierFactor(n_neighbors= k).fit(dat)
         raw = lof.negative_outlier_factor_.copy()
         return raw.max() - raw + 1
-    def one_class_svm(self):
-        try:
-            svm = OneClassSVM(gamma = 'auto').fit(self.data.VW)
-            raw = svm.score_samples(self.data.VW)
-        except AttributeError:
-            try:
-                svm = OneClassSVM(gamma = 'auto').fit(self.data.V)
-                raw = svm.score_samples(self.data.V)
-            except AttributeError:
-                try:
-                    svm = OneClassSVM(gamma = 'auto').fit(self.data.W)
-                    raw = svm.score_samples(self.data.W)
-                except AttributeError:
-                    print('Where\'s the data?')
-                    raise 
+    def one_class_svm(self):        
+        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+            dat = np.hstack((self.data.V, self.data.W))
+        elif hasattr(self.data.V):
+            dat = self.data.V
+        elif hasattr(self.data.W):
+            dat = self.data.W
+        else:
+            raise
+        svm = OneClassSVM(gamma = 'auto').fit(dat)
+        raw = svm.score_samples(dat)
         return raw.max() - raw + 1
 
     ## Extreme Anomaly Metrics:
@@ -271,32 +261,32 @@ class Anomaly(Projection):
         return self.sphere_distance_latent.mean(axis = 1)
     def knn_hypercube_distance_to_postpred(self, k = 5, **kwargs):
         knn = np.array(list(map(np.sort, self.hypercube_distance)))[:,k, 0]
-        try:
-            n, p = self.data.VW.shape
-        except AttributeError:
-            try:
-                n, p = self.data.V.shape
-            except AttributeError:
-                try:
-                    n, p = self.data.W.shape
-                except AttributeError:
-                    print('Where\'s the data?')
-                    raise
+        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+            n = self.data.V.shape[0]
+            p = self.data.V.shape[1] + self.data.W.shape[1]
+        elif hasattr(self.data.V):
+            n = self.data.V.shape[0]
+            p = self.data.V.shape[1]
+        elif hasattr(self.data.W):
+            n = self.data.W.shape[0]
+            p = self.data.W.shape[1]
+        else:
+            raise
         inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
     def knn_euclidean_distance_to_postpred(self, k = 5, **kwargs):
         knn = np.array(list(map(np.sort, self.euclidean_distance)))[:, k, 0]
-        try:
-            n, p = self.data.VW.shape
-        except AttributeError:
-            try:
-                n, p = self.data.V.shape
-            except AttributeError:
-                try:
-                    n, p = self.data.W.shape
-                except AttributeError:
-                    print('Where\'s the data?')
-                    raise
+        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+            n = self.data.V.shape[0]
+            p = self.data.V.shape[1] + self.data.W.shape[1]
+        elif hasattr(self.data.V):
+            n = self.data.V.shape[0]
+            p = self.data.V.shape[1]
+        elif hasattr(self.data.W):
+            n = self.data.W.shape[0]
+            p = self.data.W.shape[1]
+        else:
+            raise
         inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
     def populate_cones(self, epsilon):
@@ -494,10 +484,7 @@ if __name__ == '__main__':
     results  = []
     basepath = './ad'
     datasets = ['cardio','cover','mammography','pima','satellite']
-    resbases = {
-        # 'mdppprg' : 'result_mdppprg_*.pkl',
-        'mdppprgln' : 'results_mdppprgln_*.pkl',
-        }
+    resbases = {'mdppprgln' : 'results_mdppprgln_*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
             files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
@@ -527,37 +514,5 @@ if __name__ == '__main__':
     # scores = extant_result.get_scoring_metrics()
     # extant_result.pools_closed()
     # raise
-
-    # args = argparser()
-    # args = {'in_path' : './sim_mixed_ad/results_mdppprg*.pkl', 'out_path' : './sim_mixed_ad/metrics.csv'}
-    # files = glob.glob(args['in_path'])
-    # metrics = []    
-    # for file in files:
-    #     match = re.search('results_([a-zA-Z]+)_(\d+)_(\d+)_(\d+).pkl', file)
-    #     model, nmix, nreal, ncat = match.group(1, 2, 3, 4)
-    #     # temporary code
-    #     Y = pd.read_csv(os.path.join(os.path.split(file)[0], 'class_m{}.csv'.format(nmix)))
-    #     result = ResultFactory(model, file)
-    #     result.data.Y = Y.values.ravel()
-    #     result.pools_open()
-    #     metric = result.get_scoring_metrics()
-    #     result.pools_closed()
-    #     metric['Model'] = model
-    #     metric['nMix'] = nmix
-    #     metric['nReal'] = nreal
-    #     metric['nCat'] = ncat
-    #     column_order = ['Model','nMix','nReal','nCat','Metric'] + list(result.scoring_metrics.keys())
-    #     metrics.append(metric[column_order])
-    
-    # df = pd.concat(metrics)
-    # df.to_csv(args['out_path'], index = False)
-    # path = './ad/cardio/results_mdppprgln_2_1e1.pkl'
-    # result = MixedResultFactory(path)
-    # result.p = 10.
-    # result.pools_open()
-    # metrics = result.get_scoring_metrics()
-    # result.pools_closed()
-    # raise
-    # pass
 
 # EOF   
