@@ -1,4 +1,4 @@
-from numpy.random import choice, gamma, beta, uniform, normal
+from numpy.random import choice, gamma, beta, uniform, normal, multinomial
 from scipy.stats import invwishart
 from numpy.linalg import cholesky, inv
 from collections import namedtuple
@@ -8,21 +8,23 @@ import numpy as np
 import pandas as pd
 import os
 import pickle
-
-import cUtility as cu
-from samplers import DirichletProcessSampler, pt_dp_sample_cluster
-from data import Projection, euclidean_to_angular, euclidean_to_hypercube,     \
-                euclidean_to_simplex, MixedDataBase, MixedData
-from model_sdpppgln import bincount2D_vectorized, cluster_covariance_mat
-from projgamma import logd_loggamma_paired, pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_cumdirmultinom_mx_ma_inplace_unstable, pt_logd_prodgamma_my_st,           \
-    logd_gamma_my,  pt_logd_loggamma_mx_st, pt_logd_mvnormal_mx_st,            \
-    pt_logd_cumdirmultinom_mx_ma, pt_logd_cumdirmultinom_paired_yt,            \
-    pt_logd_projgamma_my_mt, pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt, logd_mvnormal_mx_st, \
-    logd_invwishart_ms, GammaPrior, NormalPrior, InvWishartPrior
-from cov import PerObsTemperedOnlineCovariance
-                
 from multiprocessing import Pool
 from energy import limit_cpu
+
+EPS = np.finfo(float).eps
+
+import cUtility as cu
+from samplers import DirichletProcessSampler, cumsoftmax2d, pt_dp_sample_cluster, bincount2D_vectorized
+from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
+    euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere
+from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 \
+    pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_mvnormal_mx_st,   \
+    logd_gamma_my, logd_mvnormal_mx_st, logd_invwishart_ms,                     \
+    pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
+    pt_logd_projgamma_paired_yt       
+from cov import PerObsTemperedOnlineCovariance
+                
+
 
 def category_matrix(cats):
     catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
@@ -101,32 +103,6 @@ class Chain(DirichletProcessSampler, Projection):
         log_likelihood = self.log_delta_likelihood(zeta)
         p = uniform(size = (self.nDat, self.nTemp))
         pt_dp_sample_cluster(delta, log_likelihood, p, eta)
-        # curr_cluster_state = bincount2D_vectorized(delta, self.max_clust_count)
-        # cand_cluster_state = (curr_cluster_state == 0)
-        # log_likelihood = self.log_delta_likelihood(zeta)
-        # tidx = np.arange(self.nTemp)
-        # p = uniform(size = (self.nDat, self.nTemp))
-        # p += tidx[None,:]
-        # scratch = np.empty(curr_cluster_state.shape)
-        # for i in range(self.nDat):
-        #     curr_cluster_state[tidx, delta.T[i]] -= 1
-        #     scratch[:] = 0
-        #     scratch += curr_cluster_state
-        #     scratch += cand_cluster_state * \
-        #               (eta / (cand_cluster_state.sum(axis = 1) + 1e-9))[:,None]
-        #     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        #         np.log(scratch, out = scratch)
-        #     scratch += log_likelihood[i]
-        #     np.nan_to_num(scratch, False, -np.inf)
-        #     scratch -= scratch.max(axis = 1)[:,None]
-        #     with np.errstate(under = 'ignore'):
-        #         np.exp(scratch, out = scratch)
-        #     np.cumsum(scratch, axis = 1, out = scratch)
-        #     scratch /= scratch.T[-1][:,None]
-        #     scratch += tidx[:,None]
-        #     delta.T[i] = np.searchsorted(scratch.ravel(), p[i]) % self.max_clust_count
-        #     curr_cluster_state[tidx, delta.T[i]] += 1
-        #     cand_cluster_state[tidx, delta.T[i]] = False
         return
 
     def clean_delta_zeta(self, delta, zeta):
@@ -478,7 +454,7 @@ class Chain(DirichletProcessSampler, Projection):
             'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
             }
         # try to add outcome / radius to dictionary
-        for attr in ['Y','R']:
+        for attr in ['Y','R','P']:
             if hasattr(self.data, attr):
                 out[attr] = self.data.__dict__[attr]
         # write to disk
@@ -645,6 +621,79 @@ class Result(object):
         pis = rhos / nrho
         return pis
 
+    def generate_new_conditional_posterior_predictive_spheres(self, Vnew, Wnew):
+        rhos   = self.generate_new_conditional_posterior_predictive_gammas(Vnew, Wnew)
+        CatMat = category_matrix(self.data.Cats)
+        shro   = rhos @ CatMat.T
+        nrho   = np.einsum('snc,cd->snd', shro, CatMat) # (s,n,d)
+        pis    = rhos / nrho
+        return pis
+    
+    def generate_new_conditional_posterior_predictive_radii(self, Vnew, Wnew):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+        radii = znew[:,:,:self.nCol].sum(axis = 2)
+        return gamma(radii)
+    
+    def generate_new_conditional_posterior_predictive_gammas(self, Vnew, Wnew):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+        return gamma(znew)
+
+    def generate_new_conditional_posterior_predictive_hypercube(self, Vnew, Wnew):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+        Ypnew = euclidean_to_psphere(Vnew, 10)
+        R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
+        G = gamma(znew[:,:,self.nCol:])
+        return euclidean_to_hypercube(np.hstack((R[:,:,None] * Ypnew, G)))
+    
+    def generate_new_conditional_posterior_predictive_euclidean(self, Vnew, Wnew):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+        Ypnew = euclidean_to_psphere(Vnew, 10)
+        R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
+        G = gamma(znew[:,:,self.nCol:])
+        return np.hstack((R[:,:,None] * Ypnew, G))
+
+    def generate_new_conditional_posterior_predictive_zetas(self, Vnew, Wnew):
+        n = Vnew.shape[0]
+        Ypnew = euclidean_to_psphere(Vnew, 10)
+        
+        max_clust_count = self.samples.delta.max() + 20
+        zetas = np.einsum(
+            'sab,sjb->sja',
+            cholesky(self.samples.Sigma),
+            normal(size = (self.nSamp, max_clust_count, self.tCol)),
+            )
+        zetas += self.samples.mu[:,None,:]
+        np.exp(zetas, out = zetas)
+        weights = np.zeros((self.nSamp, max_clust_count))
+        for s in range(self.nSamp):
+            zetas[s][:self.samples.zeta[s].shape[0]] = self.samples.zeta[s]
+            weights[s] = np.bincount(self.samples.delta, minlength=max_clust_count)
+        weights += (weights == 0) * (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))
+        np.log(weights, out = weights)
+        loglik = np.zeros((n, self.nSamp, max_clust_count))
+        sigma_ph = np.ones((1, max_clust_count, self.nCol))
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            pt_logd_projgamma_my_mt_inplace_unstable(
+                loglik, Ypnew , zetas[None,:,:self.nCol], sigma_ph,
+                )
+            pt_logd_cumdircategorical_mx_ma_inplace_unstable(
+                loglik, Wnew, zetas[None,:,self.nCol:], self.CatMat,
+                )
+        np.nan_to_num(out, False, -np.inf)
+        # combine logprior weights and likelihood under cluster
+        weights = weights[None] + loglik
+        np.exp(weights, out = weights) # unnormalized cluster probability
+        for s in range(self.nSamp):
+            weights[s] = cumsoftmax2d(weights[s])
+        p = uniform(size = (n, self.nSamp))
+        dnew = np.empty((n, self.nSamp), dtype = int)
+        znew = np.empty((n, self.nSamp, self.tCol))
+        for i in range(n):
+            for s in range(self.nSamp):
+                dnew[i,s] = multinomial(1, pvals = weights[i,s])
+                znew[i,s] = zetas[s,dnew[i,s]]
+        return znew
+    
     def load_data(self, path):        
         with open(path, 'rb') as file:
             out = pickle.load(file)
@@ -664,14 +713,16 @@ class Result(object):
         self.tCol   = self.nCol + self.nCat
         self.nCats  = cats.shape[0]
         self.cats   = cats
+        self.CatMat = category_matrix(self.data.Cats)
         
         if 'Y' in out.keys():
-            self.data.fill_outcome(out['Y'])
-        
+            self.data.fill_outcome(out['Y'])        
         if 'R' in out.keys():
             self.data.R = out['R']
+        if 'P' in out.keys():
+            self.data.P = out['P']
 
-        self.samples       = Samples(
+        self.samples = Samples(
             self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats
             )
         self.samples.delta = deltas

@@ -70,6 +70,33 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
     c_Sigma = None
     c_xbar  = None
     c_n     = None
+    c_A     = None
+    c_b     = None
+    c_xbar  = None
+
+    def cluster_covariance2(self, dmat):
+        """
+        dmat : np.array((nDat, nTemp, nClust))          (cluster indicator; true or false)
+
+        self.A = np.array((nDat, nTemp, nCol, nCol))    (sum of X'X)
+        self.b = np.array((nDat, nTemp, nCol))          (sum of X)
+        self.c_Sigma = np.array((nTemp, nClust, nCol, nCol))  (cluster covariance matrix)
+        """
+        self.c_A[:] = 0.
+        self.c_b[:] = 0.
+        self.c_xbar[:] = 0.
+        self.c_n[:] = 0.
+        
+        self.c_A += np.einsum('ntcd,ntj->tjcd', self.A, dmat)
+        self.c_b += np.einsum('ntd,ntj->tjd',   self.b, dmat)
+        self.c_n += dmat.sum(axis = 0) * self.n
+        self.c_xbar[:] = self.c_b / self.c_n
+        self.c_Sigma += self.c_A
+        self.c_Sigma -= np.einsum('tjc,tjd->tjcd', self.c_xbar, self.c_b)
+        self.c_Sigma -= np.einsum('tjd,tjd->tjcd', self.c_b, self.c_xbar)
+        self.c_Sigma += self.c_n * np.einsum('tjc,tjd->tjcd', self.c_xbar, self.c_xbar)
+        self.c_Sigma /= self.c_n
+        return self.c_Sigma
 
     def cluster_covariance(self, delta):
         """ 

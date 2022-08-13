@@ -133,7 +133,6 @@ def bincount2D_jit(arr, M):
             out[t,arr[t,n]] += 1
     return out
 
-
 @njit(fastmath = True, parallel = True)
 def cumsoftmax2d(arr):
     T = arr.shape[0]
@@ -188,8 +187,6 @@ def pt_dp_logpost(arr, logl, curr_state, cand_state, eta):
             arr[t,j] = math.log(arr[t,j])
     arr += logl
     return
-
-
 
 def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     """

@@ -7,7 +7,7 @@ from numpy.linalg import norm
 from math import pi, sqrt, exp
 from scipy.special import erf, erfinv
 
-epsilon = 1e-30
+EPS = np.finfo(float).eps
 
 def angular_to_hypercube(theta):
     """ Assuming data in polar, casts to euclidean then divides by row max
@@ -20,10 +20,15 @@ def angular_to_simplex(theta):
     return euclidean_to_simplex(euc)
 
 def euclidean_to_simplex(euc):
-    return ((euc + epsilon).T / (euc + epsilon).sum(axis = 1)).T
+    return ((euc + EPS).T / (euc + EPS).sum(axis = 1)).T
 
 def euclidean_to_hypercube(euc):
-    return ((euc + epsilon).T / (euc + epsilon).max(axis = 1)).T
+    return ((euc + EPS).T / (euc + EPS).max(axis = 1)).T
+
+def euclidean_to_psphere(euc, p = 10, epsilon = 1e-6):
+    Yp = ((euc.T + EPS) / ((euc + EPS)**p).sum(axis = 1)**(1/p)).T
+    Yp[Yp <= epsilon] = epsilon
+    return Yp
 
 def angular_to_euclidean(theta):
     """ casts angles in radians onto unit hypersphere in Euclidean space """
@@ -331,10 +336,7 @@ class MixedData(MixedDataBase, Data_From_Raw, Categorical, Outcome):
 
 class Projection(object):
     def set_projection(self):
-        self.data.Yp = (
-            self.data.V.T / (self.data.V**self.p).sum(axis = 1)**(1/self.p)
-            ).T
-        self.data.Yp[self.data.Yp <= 1e-6] = 1e-6
+        self.data.Yp = euclidean_to_psphere(self.data.V, self.p)
         return
     pass
 
