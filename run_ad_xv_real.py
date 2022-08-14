@@ -17,7 +17,7 @@ cardio = {
     'eta_rate'  : '1e2',
     }
 cover = {
-    'source'    : './ad/cover/data_xv{}_is.csv.csv',
+    'source'    : './ad/cover/data_xv{}_is.csv',
     'outcome'   : './ad/cover/outcome_xv{}_is.csv',
     'results'   : './ad/cover/results_xv{}.pkl',
     'quantile'  : '0.998',
