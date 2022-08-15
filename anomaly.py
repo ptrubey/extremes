@@ -487,38 +487,38 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    # results  = []
-    # basepath = './ad'
-    # datasets = ['cardio','cover','mammography','pima','satellite']
-    # resbases = {'mdppprgln' : 'results_mdppprgln_*.pkl'}
-    # for model in resbases.keys():
-    #     for dataset in datasets:
-    #         files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
-    #         for file in files:
-    #             results.append((model, file))
-    # metrics = []
-    # for result in results:
-    #     print('Processing Result {}'.format(result[1]).ljust(80), end = '')
-    #     extant_result = ResultFactory(*result)
-    #     extant_result.p = 10.
-    #     extant_result.pools_open()
-    #     extant_metric = extant_result.get_scoring_metrics()
-    #     extant_result.pools_closed()
-    #     del extant_result
-    #     extant_metric['path'] = result[1]
-    #     metrics.append(extant_metric)
-    #     gc.collect()
+    results  = []
+    basepath = './ad'
+    datasets = ['cardio','cover','mammography','pima','satellite']
+    resbases = {'mdppprgln' : 'results_mdppprgln_*.pkl'}
+    for model in resbases.keys():
+        for dataset in datasets:
+            files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+            for file in files:
+                results.append((model, file))
+    metrics = []
+    for result in results:
+        print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+        extant_result = ResultFactory(*result)
+        extant_result.p = 10.
+        extant_result.pools_open()
+        extant_metric = extant_result.get_scoring_metrics()
+        extant_result.pools_closed()
+        del extant_result
+        extant_metric['path'] = result[1]
+        metrics.append(extant_metric)
+        gc.collect()
     
-    # df = pd.concat(metrics)
-    # df.to_csv('./ad/performance.csv')
+    df = pd.concat(metrics)
+    df.to_csv('./ad/performance.csv')
 
-    path = './simulated/lnad/results_mdppprgln.pkl'
-    print('Processing Result {}'.format(path).ljust(80), end = '')
-    extant_result = ResultFactory('mdppprgln', path)
-    extant_result.p = 10
-    extant_result.pools_open()
-    scores = extant_result.get_scoring_metrics()
-    extant_result.pools_closed()
-    raise
+    # path = './simulated/lnad/results_mdppprgln.pkl'
+    # print('Processing Result {}'.format(path).ljust(80), end = '')
+    # extant_result = ResultFactory('mdppprgln', path)
+    # extant_result.p = 10
+    # extant_result.pools_open()
+    # scores = extant_result.get_scoring_metrics()
+    # extant_result.pools_closed()
+    # raise
 
 # EOF   
