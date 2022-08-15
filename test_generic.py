@@ -5,6 +5,7 @@ from pandas import read_csv
 from energy import limit_cpu
 import models
 import os
+import numpy as np
 
 if __name__ == '__main__':
     p = argparser()
@@ -19,6 +20,7 @@ if __name__ == '__main__':
     Chain  = models.Chains[p.model]
     Result = models.Results[p.model]
     raw = read_csv(p.in_path).values
+    raw = raw[~np.isnan(raw).any(axis = 1)] # equivalent to na.omit
 
     ## Initialize Data
     if eval(p.cats):
