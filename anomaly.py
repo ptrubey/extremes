@@ -21,6 +21,7 @@ from time import sleep
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
+from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 from data import euclidean_to_hypercube, Projection
 # Custom Modules
 from energy import limit_cpu, euclidean_dmat_per_obs, hypercube_dmat_per_obs,       \
@@ -31,11 +32,16 @@ np.seterr(divide = 'ignore')
 
 EPS = np.finfo(float).eps 
 
-from classify import Classifier
+# from classify import Classifier
 
-def auc(scores, actual):
-    c = Classifier(scores, actual)
-    return (c.auroc, c.auprc)
+def metric_auc(scores, actual):
+    auroc = roc_auc_score(actual, scores)
+    precision, recall, thresholds = precision_recall_curve(actual, scores)
+    auprc = auc(recall, precision)
+    pass
+    # c = Classifier(scores, actual)
+    # return (c.auroc, c.auprc)
+    return(auroc, auprc)
 
 class Anomaly(Projection):
     """ 
@@ -438,7 +444,7 @@ class Anomaly(Projection):
         return out
     def get_scoring_metrics(self):
         scores = self.get_scores()
-        aucs = np.array([auc(score, self.data.Y) for score in scores.values.T]).T
+        aucs = np.array([metric_auc(score, self.data.Y) for score in scores.values.T]).T
         metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
         metrics['Metric'] = ('AuROC','AuPRC')
         metrics['EnergyScore'] = self.energy_score()
@@ -481,38 +487,38 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    results  = []
-    basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite']
-    resbases = {'mdppprgln' : 'results_mdppprgln_*.pkl'}
-    for model in resbases.keys():
-        for dataset in datasets:
-            files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
-            for file in files:
-                results.append((model, file))
-    metrics = []
-    for result in results:
-        print('Processing Result {}'.format(result[1]).ljust(80), end = '')
-        extant_result = ResultFactory(*result)
-        extant_result.p = 10.
-        extant_result.pools_open()
-        extant_metric = extant_result.get_scoring_metrics()
-        extant_result.pools_closed()
-        del extant_result
-        extant_metric['path'] = result[1]
-        metrics.append(extant_metric)
-        gc.collect()
+    # results  = []
+    # basepath = './ad'
+    # datasets = ['cardio','cover','mammography','pima','satellite']
+    # resbases = {'mdppprgln' : 'results_mdppprgln_*.pkl'}
+    # for model in resbases.keys():
+    #     for dataset in datasets:
+    #         files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+    #         for file in files:
+    #             results.append((model, file))
+    # metrics = []
+    # for result in results:
+    #     print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+    #     extant_result = ResultFactory(*result)
+    #     extant_result.p = 10.
+    #     extant_result.pools_open()
+    #     extant_metric = extant_result.get_scoring_metrics()
+    #     extant_result.pools_closed()
+    #     del extant_result
+    #     extant_metric['path'] = result[1]
+    #     metrics.append(extant_metric)
+    #     gc.collect()
     
-    df = pd.concat(metrics)
-    df.to_csv('./ad/performance.csv')
+    # df = pd.concat(metrics)
+    # df.to_csv('./ad/performance.csv')
 
-    # path = './simulated/lnad/results_mdppprgln.pkl'
-    # print('Processing Result {}'.format(path).ljust(80), end = '')
-    # extant_result = ResultFactory('mdppprgln', path)
-    # extant_result.p = 10
-    # extant_result.pools_open()
-    # scores = extant_result.get_scoring_metrics()
-    # extant_result.pools_closed()
-    # raise
+    path = './simulated/lnad/results_mdppprgln.pkl'
+    print('Processing Result {}'.format(path).ljust(80), end = '')
+    extant_result = ResultFactory('mdppprgln', path)
+    extant_result.p = 10
+    extant_result.pools_open()
+    scores = extant_result.get_scoring_metrics()
+    extant_result.pools_closed()
+    raise
 
 # EOF   
