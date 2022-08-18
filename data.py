@@ -9,6 +9,14 @@ from scipy.special import erf, erfinv
 
 EPS = np.finfo(float).eps
 
+def category_matrix(cats):
+    """ Forms a Boolean Category Matrix
+        dims = [(# categorical vars), sum(# categories per var)]
+    (c, sum(p_i)) """
+    catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
+    CatMat = (catvec[:, None] == np.arange(len(cats))).T
+    return CatMat
+
 def angular_to_hypercube(theta):
     """ Assuming data in polar, casts to euclidean then divides by row max
     to achieve projection onto hypercube. """
@@ -29,6 +37,12 @@ def euclidean_to_psphere(euc, p = 10, epsilon = 1e-6):
     Yp = ((euc.T + EPS) / ((euc + EPS)**p).sum(axis = 1)**(1/p)).T
     Yp[Yp <= epsilon] = epsilon
     return Yp
+
+def euclidean_to_catprob(euc, catmat):
+    seuc = (euc @ catmat.T) + EPS
+    neuc = np.einsum('snc,cd->snd', seuc, catmat)
+    pis = euc / neuc
+    return pis
 
 def angular_to_euclidean(theta):
     """ casts angles in radians onto unit hypersphere in Euclidean space """

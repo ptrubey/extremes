@@ -4,6 +4,8 @@ Module for implementing anomaly detection algorithms.
 Implements classic anomaly detection algorithms, as well as custom anomaly detection algorithms for extreme data.
 """
 from inspect import Attribute
+from nis import cat
+from unicodedata import category
 from xml.dom.minidom import Attr
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 import re, os, argparse, glob, gc
@@ -22,11 +24,13 @@ from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
-from data import euclidean_to_hypercube, Projection
+from data import Projection, category_matrix, euclidean_to_catprob,             \
+    euclidean_to_hypercube
 # Custom Modules
-from energy import limit_cpu, euclidean_dmat_per_obs, hypercube_dmat_per_obs,       \
-    hypercube_distance_matrix, euclidean_distance_matrix, manhattan_dmat_per_obs,   \
-    mixed_energy_score, real_energy_score, simp_energy_score, kde_per_obs
+from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
+    hypercube_distance_matrix, euclidean_distance_matrix,                       \
+    euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
+    mixed_energy_score, real_energy_score, simp_energy_score
 from models import Results
 np.seterr(divide = 'ignore')
 
@@ -127,32 +131,65 @@ class Anomaly(Projection):
             raise            
 
     ## Latent Distance per Observation (Summary)
-    @property
-    def euclidean_distance(self):
-        mr = self.r.mean(axis = 0)
-        mrho = self.rho.mean(axis = 0) 
-        Y = np.hstack((mr[:,None] * self.data.Yp, mrho))
-        return euclidean_distance_matrix(
-            self.generate_posterior_predictive_gammas(), Y, self.pool,
+    def euclidean_distance(self, V = None, W = None):
+        znew  = self.generate_new_conditional_posterior_predictive_zetas(V, W)
+        if hasattr(self.data, 'V') and (V is not None):            
+            shape = znew[:,:,:self.nCol].sum(axis = 2)
+            radii = gamma(shape).mean(axis = 1)
+            Y1 = radii[:,None] * V
+        else:
+            Y1 = np.zeros((self.nDat, 0))
+        if hasattr(self.data, 'W') and (W is not None):
+            Y2 = gamma(znew[:,:,self.nCol:])
+        else:
+            Y2 = np.zeros((self.nDat, 0))
+        Y = np.hstack((Y1,Y2))
+        dmat = euclidean_distance_matrix(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            Y,
+            self.pool,
             )
-    @property
-    def hypercube_distance(self):
-        mr = self.r.mean(axis = 0)
-        mrho = self.rho.mean(axis = 0)
-        Y = np.hstack((mr[:,None] * self.data.Yp, mrho))
-        V = euclidean_to_hypercube(Y)
-        return hypercube_distance_matrix(
-            self.generate_posterior_predictive_gammas(), V, self.pool,
+        return dmat
+    def hypercube_distance(self, V = None, W = None):
+        znew  = self.generate_new_conditional_posterior_predictive_zetas(V, W)
+        if hasattr(self.data, 'V') and (V is not None):            
+            shape = znew[:,:,:self.nCol].sum(axis = 2)
+            radii = gamma(shape).mean(axis = 1)
+            Y1 = radii[:,None] * V
+        else:
+            Y1 = np.zeros((self.nDat, 0))
+        if hasattr(self.data, 'W') and (W is not None):
+            Y2 = gamma(znew[:,:,self.nCol:])
+        else:
+            Y2 = np.zeros((self.nDat, 0))
+        Y = np.hstack((Y1,Y2))
+        VV = euclidean_to_hypercube(Y)
+        dmat = hypercube_distance_matrix(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            VV,
+            self.pool,
             )
-    @property
-    def hypercube_distance_real(self):
-        Vnew = euclidean_to_hypercube(
-            self.generate_posterior_predictive_gammas()[:,:self.nCol],
-            )
-        return hypercube_distance_matrix(Vnew, self.data.V, self.pool)
-    
+        return dmat
+    def mixed_distance(self, V = None, W = None):
+        Gcon = self.generate_new_conditional_posterior_predictive_gammas(V,W)
+        Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        catmat = category_matrix(self.data.cats)
+        if hasattr(self.data, 'V') and (V is not None):
+            Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
+            dmat_r = hypercube_distance_matrix(Vnew, V, self.pool)
+        else:
+            damt_r = np.zeros((W.shape[0], Gnew.shape[0]))
+        if hasattr(self.data, 'W') and (W is not None):
+            mrho = Gcon[:,:,self.nCol:].mean(axis = 1)
+            pi_new = euclidean_to_catprob(Gnew, catmat)
+            pi_con = euclidean_to_catprob(mrho, catmat)
+
+            dmat_c = manhattan_distance_matrix(pi_new, pi_con, self.pool)
+        else:
+            dmat_c = np.zeros((V.shape[0], Gnew.shape[0]))
+        return dmat_r, dmat_c
+
     # Latent Distance per Observation (Sample)
-    @property
     def sphere_distance_latent(self, V = None, W = None):
         pi_new = self.generate_posterior_predictive_spheres(10) # (s,d)
         if (V is None) and (W is None):

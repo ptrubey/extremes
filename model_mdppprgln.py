@@ -16,20 +16,14 @@ EPS = np.finfo(float).eps
 import cUtility as cu
 from samplers import DirichletProcessSampler, cumsoftmax2d, pt_dp_sample_cluster, bincount2D_vectorized
 from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
-    euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere
+    euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
+    category_matrix, euclidean_to_catprob
 from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 \
     pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_mvnormal_mx_st,   \
     logd_gamma_my, logd_mvnormal_mx_st, logd_invwishart_ms,                     \
     pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
     pt_logd_projgamma_paired_yt       
 from cov import PerObsTemperedOnlineCovariance
-                
-
-
-def category_matrix(cats):
-    catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
-    CatMat = (catvec[:, None] == np.arange(len(cats))).T
-    return CatMat
 
 Prior = namedtuple('Prior', 'eta mu Sigma')
 
@@ -565,10 +559,11 @@ class Result(object):
     def generate_posterior_predictive_spheres(self, n_per_sample):
         rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:] # (s,D)
         CatMat = category_matrix(self.data.Cats) # (C,d)
-        shro = rhos @ CatMat.T # (s,C)
-        nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)
-        pis = rhos / (nrho + np.finfo(float).eps)
-        return pis
+        return euclidean_to_catprob(rhos, CatMat)
+        # shro = rhos @ CatMat.T # (s,C)
+        # nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)
+        # pis = rhos / (nrho + np.finfo(float).eps)
+        # return pis
 
     def write_posterior_predictive(self, path, n_per_sample = 1):
         colnames_y = ['Y_{}'.format(i) for i in range(self.nCol)]
@@ -622,7 +617,9 @@ class Result(object):
         return pis
 
     def generate_new_conditional_posterior_predictive_spheres(self, Vnew, Wnew):
-        rhos   = self.generate_new_conditional_posterior_predictive_gammas(Vnew, Wnew)
+        rhos   = self.generate_new_conditional_posterior_predictive_gammas(
+            Vnew, Wnew,
+            )[:,:,self.nCol:]
         CatMat = category_matrix(self.data.Cats)
         shro   = rhos @ CatMat.T
         nrho   = np.einsum('snc,cd->snd', shro, CatMat) # (s,n,d)

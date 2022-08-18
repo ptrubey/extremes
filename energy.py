@@ -135,6 +135,10 @@ def euclidean_distance_matrix(predictions, targets, pool):
     res = pool.map(euclidean_distance_unsummed, zip(repeat(predictions), targets))
     return np.array(list(res))
 
+def manhattan_distance_matrix(predictions, targets, pool):
+    res = pool.map(manhattan_distance_unsummed, zip(repeat(predictions), targets))
+    return np.array(list(res))
+
 def mixed_distance(real_pred, real_targ, cat_pred, cat_targ, pool):
     """
     predictions, targets = named tuples (with elements V, W)
