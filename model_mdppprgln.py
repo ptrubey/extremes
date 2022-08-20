@@ -643,7 +643,7 @@ class Result(object):
         weights = np.zeros((self.nSamp, max_clust_count))
         for s in range(self.nSamp):
             zetas[s][:self.samples.zeta[s].shape[0]] = self.samples.zeta[s]
-            weights[s] = np.bincount(self.samples.delta, minlength=max_clust_count)
+            weights[s] = np.bincount(self.samples.delta, minlength = max_clust_count)
         weights += (weights == 0) * (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))
         np.log(weights, out = weights)
         loglik = np.zeros((n, self.nSamp, max_clust_count))
@@ -657,7 +657,7 @@ class Result(object):
                 )
         np.nan_to_num(out, False, -np.inf)
         # combine logprior weights and likelihood under cluster
-        weights = weights[None] + loglik
+        weights = weights[None] + loglik # (n, nSamp, maxclustcount)
         np.exp(weights, out = weights) # unnormalized cluster probability
         for s in range(self.nSamp):
             weights[s] = cumsoftmax2d(weights[s])
