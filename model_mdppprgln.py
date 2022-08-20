@@ -560,28 +560,7 @@ class Result(object):
         rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:] # (s,D)
         CatMat = category_matrix(self.data.Cats) # (C,d)
         return euclidean_to_catprob(rhos, CatMat)
-        # shro = rhos @ CatMat.T # (s,C)
-        # nrho = np.einsum('sc,cd->sd', shro, CatMat) # (s,d)
-        # pis = rhos / (nrho + np.finfo(float).eps)
-        # return pis
-
-    def write_posterior_predictive(self, path, n_per_sample = 1):
-        colnames_y = ['Y_{}'.format(i) for i in range(self.nCol)]
-        colnames_p = [
-            ['p_{}_{}'.format(i,j) for j in range(catlength)]
-            for i, catlength in enumerate(self.cats)
-            ]
-        colnames_p = list(chain(*colnames_p))
-
-        thetas = pd.DataFrame(
-                self.generate_posterior_predictive_hypercube(n_per_sample),
-                # self.generate_posterior_predictive_angular(n_per_sample),
-                #columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
-                columns = colnames_y + colnames_p
-                )
-        thetas.to_csv(path, index = False)
-        return
-
+        
     def generate_conditional_posterior_predictive_radii(self):
         """ r | zeta, V ~ Gamma(r | sum(zeta), sum(V)) """
         # As = np.einsum('il->i', zeta[delta].T[:self.nCol].T)
@@ -597,13 +576,13 @@ class Result(object):
 
     def generate_conditional_posterior_predictive_gammas(self):
         """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
-        zetas = np.array([
+        zetas = np.swapaxes(np.array([
             zeta[delta]
             for delta, zeta 
             in zip(self.samples.delta, self.samples.zeta)
-            ]) # (s,n,d)
+            ]),0,1) # (n,s,d)
         W = np.hstack((np.zeros((self.nDat, self.nCol)), self.data.W)) # (n,d)
-        return gamma(shape = zetas + W[None,:,:])
+        return gamma(shape = zetas + W[:,None,:])
 
     def generate_conditional_posterior_predictive_spheres(self):
         """ pi | zeta, delta = normalized rho

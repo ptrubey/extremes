@@ -178,7 +178,7 @@ class Anomaly(Projection):
             Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
             dmat_r = hypercube_distance_matrix(Vnew, V, self.pool)
         else:
-            damt_r = np.zeros((W.shape[0], Gnew.shape[0]))
+            dmat_r = np.zeros((W.shape[0], Gnew.shape[0]))
         if hasattr(self.data, 'W') and (W is not None):
             mrho = Gcon[:,:,self.nCol:].mean(axis = 1)
             pi_new = euclidean_to_catprob(Gnew, catmat)
@@ -190,6 +190,19 @@ class Anomaly(Projection):
         return dmat_r, dmat_c
 
     # Latent Distance per Observation (Sample)
+    def mixed_distance_latent(self, V = None, W = None):
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(V,W)
+        Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        catmat = category_matrix(self.data.cats)
+        if hasattr(self.data, 'V') and (V is not None):
+            pass
+        else:
+            dmat_r = np.zeros((W.shape[0], Gnew.shape[0]))
+        if hasattr(self.data, 'W') and (W is not None):
+            pass
+        else:
+            dmat_c = np.zeros((V.shape[0], Gnew.shape[0]))
+        return dmat_r, dmat_c
     def sphere_distance_latent(self, V = None, W = None):
         pi_new = self.generate_posterior_predictive_spheres(10) # (s,d)
         if (V is None) and (W is None):
@@ -225,26 +238,18 @@ class Anomaly(Projection):
         return hypercube_dmat_per_obs(V_con[:,s], V_new, self.pool)
     
     @cached_property
-    def postpred_latent_euclidean(self):
-        Y = self.generate_posterior_predictive_gammas()
-        return Y
-    @cached_property
     def latent_euclidean_bandwidth(self):
-        Y = self.postpred_latent_euclidean
+        Y = self.generate_posterior_predictive_gammas(1)
         YY = euclidean_dmat_per_obs(Y[None], Y, self.pool)
         return np.sqrt((YY**2).sum() / (2 * Y.shape[0] * (Y.shape[0] - 1)))
-    @cached_property
-    def postpred_latent_hypercube(self):
-        return euclidean_to_hypercube(self.postpred_latent_euclidean)
     @cached_property
     def latent_sphere_bandwidth(self):
         P = self.generate_posterior_predictive_spheres(1)
         PP = manhattan_dmat_per_obs(P[None], P, self.pool)
         return np.sqrt((PP**2).sum() / (2 * P.shape[0] * (P.shape[0] - 1)))
-
     @cached_property
     def latent_hypercube_bandwidth(self):
-        V = self.postpred_latent_hypercube
+        V = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(1))
         VV = hypercube_dmat_per_obs(V[None], V, self.pool)
         return np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1) ))
     @cached_property
@@ -321,112 +326,88 @@ class Anomaly(Projection):
         return raw.max() - raw + 1
 
     ## Extreme Anomaly Metrics:
-    def average_euclidean_distance_to_postpred(self, **kwargs):
-        # return self.euclidean_distance.mean(axis = 1)
-        return self.euclidean_distance_latent.mean(axis = (1,2))
-    def average_hypercube_distance_to_postpred(self, **kwargs):
-        # return self.hypercube_distance.mean(axis = 1)
-        return self.hypercube_distance_latent.mean(axis = (1,2))
-    def average_sphere_distance_to_postpred(self, **kwargs):
-        return self.sphere_distance_latent.mean(axis = 1)
-    def knn_hypercube_distance_to_postpred(self, k = 5, **kwargs):
-        knn = np.array(list(map(np.sort, self.hypercube_distance)))[:,k, 0]
-        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
-            n = self.data.V.shape[0]
-            p = self.data.V.shape[1] + self.data.W.shape[1]
-        elif hasattr(self.data.V):
-            n = self.data.V.shape[0]
-            p = self.data.V.shape[1]
-        elif hasattr(self.data.W):
-            n = self.data.W.shape[0]
-            p = self.data.W.shape[1]
-        else:
-            raise
+    def knn_hypercube_distance_to_postpred(self, V = None, W = None, k = 5, **kwargs):
+        knn = np.array(list(map(np.sort, self.hypercube_distance(V, W))))[:, k, 0]
+        n = V.shape[0]
+        p = self.tCol
         inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
-    def knn_euclidean_distance_to_postpred(self, k = 5, **kwargs):
-        knn = np.array(list(map(np.sort, self.euclidean_distance)))[:, k, 0]
-        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
-            n = self.data.V.shape[0]
-            p = self.data.V.shape[1] + self.data.W.shape[1]
-        elif hasattr(self.data.V):
-            n = self.data.V.shape[0]
-            p = self.data.V.shape[1]
-        elif hasattr(self.data.W):
-            n = self.data.W.shape[0]
-            p = self.data.W.shape[1]
-        else:
-            raise
+    def knn_euclidean_distance_to_postpred(self, V = None, W = None, k = 5, **kwargs):
+        knn = np.array(list(map(np.sort, self.euclidean_distance(V, W))))[:, k, 0]
+        n = V.shape[0]
+        p = self.tCol
         inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
         return 1 / inv_scores
     def populate_cones(self, epsilon):
-        postpred = euclidean_to_hypercube(self.generate_posterior_predictive_gammas())
+        postpred = euclidean_to_hypercube(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            )
         C_damex = (postpred > epsilon)
-        cones = defaultdict(lambda: 1e-10)
+        cones = defaultdict(lambda: EPS)
         for row in C_damex:
             cones[tuple(row)] += 1 / postpred.shape[0]
         return cones
-    def cone_density(self, epsilon = 0.5, **kwargs):
+    def cone_density(self, V = None, W = None, epsilon = 0.5, **kwargs):
         cone_prob = self.populate_cones(epsilon)
         scores = np.empty(self.data.nDat)
-        try:
-            Y = euclidean_to_hypercube(
-                    np.hstack((
-                        self.samples.r.mean(axis = 0)[:, None] * self.data.V, 
-                        self.samples.rho.mean(axis = 0)
-                        ))
-                    )
-        except AttributeError:
-            Y = self.data.V
+        znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
+        rho_new = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
+        r_new = gamma(znew[:,:,:self.nCol].sum(axis = 2)).mean(axis = 1)
+        Vnew = euclidean_to_hypercube(np.hstack((r_new * V, rho_new)))
         for i in range(self.nDat):
-            scores[i] = cone_prob[tuple(Y[i] > epsilon)]
+            scores[i] = 1 / cone_prob[tuple(Vnew[i] > epsilon)]
         return scores
-    def hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        # temporary code:
+    def hypercube_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
         h = self.latent_hypercube_bandwidth
-        # h = gmean(self.hypercube_distance.ravel())
+        Z = self.hypercube_distance(V, W) / h
         if kernel == 'gaussian':
-            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.hypercube_distance / h)**2).mean(axis = (1,2)) + EPS)
+            return 1 / (np.exp(- 0.5 * (Z**2)).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 2 * h / (np.exp(-np.abs(self.hypercube_distance / h)).mean(axis = (1,2)) + EPS)
+            return 1 / (np.exp(-np.abs(Z)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
-    def euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        # h = np.sqrt((self.euclidean_distance**2).mean()) * self.data.nDat**(-1/5)
+    def euclidean_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
         h = self.latent_euclidean_bandwidth
+        Z = self.euclidean_distance(V, W) / h
         if kernel == 'gaussian':
-            return np.sqrt(2 * np.pi) * h / (np.exp(-(self.euclidean_distance / h)**2).mean(axis = (1,2)) + EPS)
+            return 1 / (np.exp(- 0.5 * Z**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 2 * h / (np.exp(-np.abs(self.euclidean_distance / h)).mean(axis = (1,2)) + EPS)
+            return 1 / (np.exp(-np.abs(Z)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
-    def latent_simplex_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        """ computes mean kde for  """
-        h = self.latent_sphere_bandwidth
-        pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1)
-        pi_new = self.generate_posterior_predictive_spheres(10)
-        inv_scores =  kde_per_obs(pi_con, pi_new, h, 'manhattan', self.pool)
-        return 1 / (inv_scores + EPS)
-    def latent_euclidean_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
+    # def latent_simplex_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    #     """ computes mean kde for  """
+    #     h = self.latent_sphere_bandwidth
+    #     pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1)
+    #     pi_new = self.generate_posterior_predictive_spheres(10)
+    #     inv_scores =  kde_per_obs(pi_con, pi_new, h, 'manhattan', self.pool)
+    #     return 1 / (inv_scores + EPS)
+    def latent_euclidean_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
         h = self.latent_euclidean_bandwidth
-        R = self.generate_conditional_posterior_predictive_radii()   # (s,n)
-        Y1 = R[:,:,None] * self.data.V[None,:,:]                     # (s,n,d1),
-        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
-        Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n,s,d) 
-        Y_new = self.generate_posterior_predictive_gammas(self.postpred_per_samp)          # (s,d)
-        inv_scores = kde_per_obs(Y_con, Y_new, h, 'euclidean', self.pool)
+        Znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
+        Rnew = gamma(Znew[:,:,:self.nCol].sum(axis = 2))
+        Y1 = Rnew[:,:,None] * V[None,:,:]
+        Y2 = gamma(Znew[:,:,self.nCol:])
+        Ycon = np.concatenate((Y1,Y2), axis = 2)
+        Ynew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        inv_scores = kde_per_obs(Ycon, Ynew, h, 'euclidean', self.pool)
         return 1 / (inv_scores + EPS)
-    def latent_hypercube_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
-        h = self.latent_hypercube_bandwidth
-        R = self.generate_conditional_posterior_predictive_radii() # (s,n)
-        Y1 = R[:,:,None] * self.data.V[None,:,:] # (s,n,d1),
-        Y2 = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:] # (s,n,d2)
-        Y_con = np.swapaxes(np.concatenate((Y1,Y2), axis = 2), 0, 1) # (n, s, d)
-        V_con = np.array(list(map(euclidean_to_hypercube, Y_con)))
-        V_new = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(self.postpred_per_samp))
-        inv_scores = kde_per_obs(V_con, V_new, h, 'hypercube', self.pool)
+    def latent_hypercube_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+        h = self.latent_euclidean_bandwidth
+        Znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
+        Rnew = gamma(Znew[:,:,:self.nCol].sum(axis = 2))
+        Y1 = Rnew[:,:,None] * V[None,:,:]
+        Y2 = gamma(Znew[:,:,self.nCol:])
+        Vcon = np.array(list(map(
+            euclidean_to_hypercube, 
+            np.concatenate((Y1,Y2), axis = 2),
+            )))
+        Vnew = euclidean_to_hypercube(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            )
+        inv_scores = kde_per_obs(Vcon, Vnew, h, 'hypercube', self.pool)
         return 1 / (inv_scores + EPS)
     def mixed_latent_kernel_density_estimate(self, kernel = 'gaussian', **kwargs):
         h_real, h_simp = self.latent_mixed_bandwidth
@@ -442,24 +423,6 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    def combined_knn_hypercube_distance_to_postpred(self, **kwargs):
-        return self.knn_hypercube_distance_to_postpred(**kwargs) * self.data.R
-    def combined_knn_euclidean_distance_to_postpred(self, **kwargs):
-        return self.knn_euclidean_distance_to_postpred(**kwargs) * self.data.R
-    def combined_cone_density(self, **kwargs):
-        return self.cone_density(**kwargs) * self.data.R
-    def combined_hypercube_kernel_density_estimate(self, **kwargs):
-        return self.hypercube_kernel_density_estimate(**kwargs) * self.data.R
-    def combined_euclidean_kernel_density_estimate(self, **kwargs):
-        return self.euclidean_kernel_density_estimate(**kwargs) * self.data.R
-    def combined_latent_simplex_kernel_density_estimate(self, **kwargs):
-        return self.latent_simplex_kernel_density_estimate(**kwargs) * self.data.R
-    def combined_latent_euclidean_kernel_density_estimate(self, **kwargs):
-        return self.latent_euclidean_kernel_density_estimate(**kwargs) * self.data.R
-    def combined_latent_hypercube_kernel_density_estimate(self, **kwargs):
-        return self.latent_hypercube_kernel_density_estimate(**kwargs) * self.data.R
-    def combined_mixed_latent_kernel_density_estimate(self, **kwargs):
-        return self.mixed_latent_kernel_density_estimate(**kwargs) * self.data.R
 
     # scoring metrics
     @property
@@ -477,32 +440,30 @@ class Anomaly(Projection):
             'hkde'   : self.hypercube_kernel_density_estimate,
             'lhkde'  : self.latent_hypercube_kernel_density_estimate,
             'lekde'  : self.latent_euclidean_kernel_density_estimate,
-            'lskde'  : self.latent_simplex_kernel_density_estimate,
+            # 'lskde'  : self.latent_simplex_kernel_density_estimate,
             'mlkde'  : self.mixed_latent_kernel_density_estimate,
             }
         return metrics
-    def get_scores(self):
+    def get_scores(self, V, W):
         metrics = self.scoring_metrics.keys()
         density_metrics = ['khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','mlkde']
         out = pd.DataFrame()
         for metric in metrics:
             print('s' + '\b'*11 + metric.ljust(10), end = '')
             sleep(1)
-            out[metric] = self.scoring_metrics[metric]().ravel()
+            out[metric] = self.scoring_metrics[metric](V,W).ravel()
             if hasattr(self.data, 'R'):
                 if metric in density_metrics:
                     out['c' + metric] = out[metric] * self.data.R
         print('s' + '\b'*11 + 'Done'.ljust(10))
         return out
-    def get_scoring_metrics(self):
-        scores = self.get_scores()
+    def get_scoring_metrics(self, V = None, W = None):
+        scores = self.get_scores(V, W)
         aucs = np.array([metric_auc(score, self.data.Y) for score in scores.values.T]).T
         metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
         metrics['Metric'] = ('AuROC','AuPRC')
         metrics['EnergyScore'] = self.energy_score()
         return metrics
-    def get_scores_new(self):
-        pass
 
 def ResultFactory(model, path):
     class Result(Results[model], Anomaly):

@@ -27,23 +27,30 @@ def angular_to_simplex(theta):
     euc = angular_to_euclidean(theta)
     return euclidean_to_simplex(euc)
 
+# modified to work on 3d arrays
 def euclidean_to_simplex(euc):
-    return ((euc + EPS).T / (euc + EPS).sum(axis = 1)).T
+    """ projects R_+^d to S_1^{d-1} """
+    return (euc + EPS) / (euc + EPS).sum(axis = -1)[...,None]
 
 def euclidean_to_hypercube(euc):
-    return ((euc + EPS).T / (euc + EPS).max(axis = 1)).T
+    return (euc + EPS) / (euc + EPS).max(axis = -1)[...,None]
 
 def euclidean_to_psphere(euc, p = 10, epsilon = 1e-6):
-    Yp = ((euc.T + EPS) / ((euc + EPS)**p).sum(axis = 1)**(1/p)).T
+    Yp = (euc + EPS) / (((euc + EPS)**p).sum(axis = -1)**(1/p))[...,None]
     Yp[Yp <= epsilon] = epsilon
     return Yp
 
 def euclidean_to_catprob(euc, catmat):
+    """ 
+    euc    : (n,s,d) or (s,d)
+    catmat : (c,d)
+    """
     seuc = (euc @ catmat.T) + EPS
-    neuc = np.einsum('snc,cd->snd', seuc, catmat)
+    neuc = np.einsum('...c,cd->...d', seuc, catmat)
     pis = euc / neuc
     return pis
 
+# stuck on 2d
 def angular_to_euclidean(theta):
     """ casts angles in radians onto unit hypersphere in Euclidean space """
     coss = np.hstack((np.cos(theta), np.ones(shape = (theta.shape[0], 1))))
