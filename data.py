@@ -292,7 +292,8 @@ class Multinomial(Data, Outcome):
         self.nDat = self.W.shape[0]
         return
     
-    def to_multinomial_new(self, W, index):
+    @staticmethod
+    def to_multinomial_new(W, index):
         return W[index]
     
     def __init__(self, raw, cats, index = None, outcome = 'None'):
@@ -330,13 +331,14 @@ class Categorical(Multinomial, Outcome):
         self.fill_multinomial(W, np.array(cats), index)
         return
     
-    def to_categorical_new(self, raw, values, index):
+    @staticmethod
+    def to_categorical_new(raw, values, index):
         dummies = []
         assert raw.shape[1] == len(values)
         for i in range(raw.shape[1]):
             dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
         W = np.vstack(dummies).T
-        return self.to_multinomial_new(W, index)
+        return Multinomial.to_multinomial_new(W, index)
     
     def __init__(self, raw, values = None, index = None, outcome = 'None'):
         self.fill_categorical(raw, values, index)
@@ -345,6 +347,22 @@ class Categorical(Multinomial, Outcome):
         return
 
 class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
+    def to_mixed_new(self, raw):
+        if hasattr(self, 'P'):
+            Z = scale_pareto(raw[:,:self.nCol], self.P)
+            V, R, I = Data_From_Raw.to_hypercube(Z)
+            W = Categorical.to_categorical_new(
+                raw[:,self.nCol:], self.values, I,
+                )
+            return V, W, R
+        else:
+            assert((raw[:,:self.nCol].max() - 1)**2 < 1e-10)
+            V = raw[:,:self.nCol]
+            W = Categorical.to_categorical_new(
+                raw[:,self.nCol:], self.values, np.arange(V.shape[0]),
+                )
+        return V, W, np.ones(V.shape[0])
+    
     def __init__(self, raw_sphere, raw_multinomial, cats = None, outcome = 'None'):
         self.fill_sphere(raw_sphere)
         self.fill_multinomial(raw_multinomial, cats)

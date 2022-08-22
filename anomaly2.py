@@ -457,9 +457,9 @@ class Anomaly(Projection):
                     out['c' + metric] = out[metric] * self.data.R
         print('s' + '\b'*11 + 'Done'.ljust(10))
         return out
-    def get_scoring_metrics(self, V = None, W = None):
+    def get_scoring_metrics(self, Y, V = None, W = None):
         scores = self.get_scores(V, W)
-        aucs = np.array([metric_auc(score, self.data.Y) for score in scores.values.T]).T
+        aucs = np.array([metric_auc(score, Y) for score in scores.values.T]).T
         metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
         metrics['Metric'] = ('AuROC','AuPRC')
         metrics['EnergyScore'] = self.energy_score()
@@ -502,6 +502,7 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
+    import re
     results  = []
     basepath = './ad'
     datasets = ['cardio','cover','mammography','pima','satellite']
@@ -513,15 +514,31 @@ if __name__ == '__main__':
                 results.append((model, file))
     metrics = []
     for result in results:
-        print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+        print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
         extant_result = ResultFactory(*result)
         extant_result.p = 10.
         extant_result.pools_open()
-        extant_metric = extant_result.get_scoring_metrics()
+        extant_metric_is = extant_result.get_scoring_metrics(
+            extant_result.data.Y, extant_result.data.V, extant_result.data.W,
+            )
+        print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
+        cv = re.search('xv(\d+).pkl', result[1]).group(1)
+        oos_raw = pd.read_csv(
+            os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
+            ).values
+        oos_Y = pd.read_csv(
+            os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
+            ).values.ravel()
+        oos_V, oos_W, oos_R = extant_result.to_mixed_new(oos_raw)        
+        extant_metric_oos = extant_result.get_scoring_metrics(oos_Y, oos_V, oos_W)
         extant_result.pools_closed()
         del extant_result
-        extant_metric['path'] = result[1]
-        metrics.append(extant_metric)
+        extant_metric_is['path'] = result[1]
+        extant_metric_oos['path'] = result[1]
+        extant_metric_is['InSamp'] = True
+        extant_metric_oos['InSamp'] = False
+        metrics.append(extant_metric_is)
+        metrics.append(extant_metric_oos)
         gc.collect()
     
     df = pd.concat(metrics)
