@@ -223,6 +223,11 @@ class Data_From_Raw(Data, Outcome):
         P = np.apply_along_axis(lambda x: compute_gp_parameters(x, q), 0, raw)
         Z = scale_pareto(raw, P)
         return Z, P
+
+    def to_pareto_new(self, raw, P):
+        Z = scale_pareto(raw, P)
+        V, R, I = self.to_hypercube(Z)
+        return V, R, I
     
     def fill_real(self, raw, decluster, quantile):
         # if input is pandas dataframe, then take numpy array representation
@@ -287,6 +292,9 @@ class Multinomial(Data, Outcome):
         self.nDat = self.W.shape[0]
         return
     
+    def to_multinomial_new(self, W, index):
+        return W[index]
+    
     def __init__(self, raw, cats, index = None, outcome = 'None'):
         if index is None:
             index = np.arange(raw.shape[0])
@@ -318,8 +326,17 @@ class Categorical(Multinomial, Outcome):
             dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
             cats.append(len(values[i]))
         W = np.vstack(dummies).T
+        self.values = values
         self.fill_multinomial(W, np.array(cats), index)
         return
+    
+    def to_categorical_new(self, raw, values, index):
+        dummies = []
+        assert raw.shape[1] == len(values)
+        for i in range(raw.shape[1]):
+            dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
+        W = np.vstack(dummies).T
+        return self.to_multinomial_new(W, index)
     
     def __init__(self, raw, values = None, index = None, outcome = 'None'):
         self.fill_categorical(raw, values, index)
@@ -336,6 +353,11 @@ class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
         return
 
 class MixedData(MixedDataBase, Data_From_Raw, Categorical, Outcome):
+    def to_mixed_new(self, raw):
+        V, R, I = self.to_pareto_new(raw[:,:self.nCol], self.P)
+        W = self.to_categorical_new(raw[:,self.nCol:], self.values, I)
+        return V, W, R
+
     def __init__(self, raw, cat_vars = [], sphere = False,
             decluster = False, quantile = 0.95, values = None,
             outcome = 'None',

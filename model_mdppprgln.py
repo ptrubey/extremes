@@ -448,7 +448,7 @@ class Chain(DirichletProcessSampler, Projection):
             'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
             }
         # try to add outcome / radius to dictionary
-        for attr in ['Y','R','P']:
+        for attr in ['Y','R','P','values']:
             if hasattr(self.data, attr):
                 out[attr] = self.data.__dict__[attr]
         # write to disk
