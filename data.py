@@ -8,6 +8,7 @@ from math import pi, sqrt, exp
 from scipy.special import erf, erfinv
 
 EPS = np.finfo(float).eps
+MAX = np.finfo(float).max
 
 def category_matrix(cats):
     """ Forms a Boolean Category Matrix
@@ -201,8 +202,10 @@ class Data_From_Raw(Data, Outcome):
         obsv for which the row max > 1) onto the unit hypercube. returns those
         projections, the row max, and the indices in the original data
         corresponding to the observations """
+        par[np.isinf(par)] = MAX
         R = par.max(axis = 1)
-        V = par / R[:,None] # (par.T / R).T
+        with np.errstate(divide = 'ignore'):
+            V = par / R[:,None] # (par.T / R).T
         if decluster:
             I = cluster_max_row_ids(R)
         else:
@@ -347,21 +350,23 @@ class Categorical(Multinomial, Outcome):
         return
 
 class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
-    def to_mixed_new(self, raw):
+    def to_mixed_new(self, raw_data, raw_out, decluster = False):
         if hasattr(self, 'P'):
-            Z = scale_pareto(raw[:,:self.nCol], self.P)
-            V, R, I = Data_From_Raw.to_hypercube(Z)
+            Z = scale_pareto(raw_data[:,:self.nCol], self.P)
+            V, R, I = Data_From_Raw.to_hypercube(Z, decluster = decluster)
             W = Categorical.to_categorical_new(
-                raw[:,self.nCol:], self.values, I,
+                raw_data[:,self.nCol:], self.values, I,
                 )
-            return V, W, R
+            Y = raw_out[I]
+            return Y, V, W, R
         else:
-            assert((raw[:,:self.nCol].max() - 1)**2 < 1e-10)
-            V = raw[:,:self.nCol]
+            assert((raw_data[:,:self.nCol].max() - 1)**2 < 1e-10)
+            V = raw_data[:,:self.nCol]
             W = Categorical.to_categorical_new(
-                raw[:,self.nCol:], self.values, np.arange(V.shape[0]),
+                raw_data[:,self.nCol:], self.values, np.arange(V.shape[0]),
                 )
-        return V, W, np.ones(V.shape[0])
+            Y = raw_out
+        return Y, V, W, np.ones(V.shape[0])
     
     def __init__(self, raw_sphere, raw_multinomial, cats = None, outcome = 'None'):
         self.fill_sphere(raw_sphere)
@@ -371,11 +376,6 @@ class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
         return
 
 class MixedData(MixedDataBase, Data_From_Raw, Categorical, Outcome):
-    def to_mixed_new(self, raw):
-        V, R, I = self.to_pareto_new(raw[:,:self.nCol], self.P)
-        W = self.to_categorical_new(raw[:,self.nCol:], self.values, I)
-        return V, W, R
-
     def __init__(self, raw, cat_vars = [], sphere = False,
             decluster = False, quantile = 0.95, values = None,
             outcome = 'None',

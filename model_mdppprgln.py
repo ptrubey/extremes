@@ -422,13 +422,15 @@ class Chain(DirichletProcessSampler, Projection):
         if os.path.exists(path):
             os.remove(path)
         # assemble data
-        zetas  = np.vstack([
-            np.hstack((np.ones((zeta[0].shape[0], 1)) * i, zeta[0]))
-            for i, zeta in enumerate(self.samples.zeta[(nBurn+1) :: nThin])
-            ])
+        deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
+        dmax = deltas.max(axis = 1) + 1
+        zetas = []
+        for i, zeta in enumerate(self.samples.zeta[(nBurn+1)::nThin]):
+            zetas.append(np.hstack((np.ones(dmax[i], 1) * i, zeta[0][:dmax[i]])))
+        zetas  = np.vstack(zetas)
         mus    = self.samples.mu[(nBurn+1) :: nThin, 0]
         Sigmas = self.samples.Sigma[(nBurn+1) :: nThin, 0]
-        deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
+        
         etas   = self.samples.eta[(nBurn+1) :: nThin, 0]
         # make output dictionary
         out = {
@@ -642,31 +644,32 @@ class Result(object):
         np.exp(zetas, out = zetas)
         weights = np.zeros((self.nSamp, max_clust_count))
         for s in range(self.nSamp):
-            zetas[s][:self.samples.zeta[s].shape[0]] = self.samples.zeta[s]
-            weights[s] = np.bincount(self.samples.delta, minlength = max_clust_count)
-        weights += (weights == 0) * (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))
+            weights[s] = np.bincount(self.samples.delta[s], minlength = max_clust_count)
+            zetas[s][np.where(weights[s] > 0)[0]] = self.samples.zeta[s][np.where(weights[s] > 0)[0]]
+            
+        weights += (weights == 0) * (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))[:,None]
         np.log(weights, out = weights)
         loglik = np.zeros((n, self.nSamp, max_clust_count))
         sigma_ph = np.ones((1, max_clust_count, self.nCol))
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             pt_logd_projgamma_my_mt_inplace_unstable(
-                loglik, Ypnew , zetas[None,:,:self.nCol], sigma_ph,
+                loglik, Ypnew , zetas[:,:,:self.nCol], sigma_ph,
                 )
             pt_logd_cumdircategorical_mx_ma_inplace_unstable(
-                loglik, Wnew, zetas[None,:,self.nCol:], self.CatMat,
+                loglik, Wnew, zetas[:,:,self.nCol:], self.CatMat,
                 )
-        np.nan_to_num(out, False, -np.inf)
+        np.nan_to_num(loglik, False, -np.inf)
         # combine logprior weights and likelihood under cluster
         weights = weights[None] + loglik # (n, nSamp, maxclustcount)
+        weights -= weights.max(axis = 2)[:,:,None]
         np.exp(weights, out = weights) # unnormalized cluster probability
-        for s in range(self.nSamp):
-            weights[s] = cumsoftmax2d(weights[s])
-        p = uniform(size = (n, self.nSamp))
-        dnew = np.empty((n, self.nSamp), dtype = int)
+        np.cumsum(weights, axis = 2, out = weights)
+        weights /= weights[:,:,-1][:,:,None]  # normalized cluster cumulative probability
+        p = uniform(size = (n, self.nSamp, 1))
+        dnew = (p > weights).sum(axis = 2)  # new deltas
         znew = np.empty((n, self.nSamp, self.tCol))
         for i in range(n):
             for s in range(self.nSamp):
-                dnew[i,s] = multinomial(1, pvals = weights[i,s])
                 znew[i,s] = zetas[s,dnew[i,s]]
         return znew
     
@@ -691,12 +694,15 @@ class Result(object):
         self.cats   = cats
         self.CatMat = category_matrix(self.data.Cats)
         
-        if 'Y' in out.keys():
-            self.data.fill_outcome(out['Y'])        
-        if 'R' in out.keys():
-            self.data.R = out['R']
-        if 'P' in out.keys():
-            self.data.P = out['P']
+        # if 'Y' in out.keys():
+        #     self.data.fill_outcome(out['Y'])
+        for key in ['Y','R','P','values']:
+            if key in out.keys():
+                self.data.__dict__[key] = out[key] 
+        # if 'R' in out.keys():
+        #     self.data.R = out['R']
+        # if 'P' in out.keys():
+        #     self.data.P = out['P']
 
         self.samples = Samples(
             self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats

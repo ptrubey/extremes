@@ -34,17 +34,17 @@ from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           
 from models import Results
 np.seterr(divide = 'ignore')
 
-EPS = np.finfo(float).eps 
+EPS = np.finfo(float).eps
+MAX = np.finfo(float).max
 
 # from classify import Classifier
 
 def metric_auc(scores, actual):
+    scores[np.isinf(scores)] = MAX
+    scores[scores > MAX] = MAX
     auroc = roc_auc_score(actual, scores)
     precision, recall, thresholds = precision_recall_curve(actual, scores)
     auprc = auc(recall, precision)
-    pass
-    # c = Classifier(scores, actual)
-    # return (c.auroc, c.auprc)
     return(auroc, auprc)
 
 class Anomaly(Projection):
@@ -140,7 +140,7 @@ class Anomaly(Projection):
         else:
             Y1 = np.zeros((self.nDat, 0))
         if hasattr(self.data, 'W') and (W is not None):
-            Y2 = gamma(znew[:,:,self.nCol:])
+            Y2 = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
         else:
             Y2 = np.zeros((self.nDat, 0))
         Y = np.hstack((Y1,Y2))
@@ -159,7 +159,7 @@ class Anomaly(Projection):
         else:
             Y1 = np.zeros((self.nDat, 0))
         if hasattr(self.data, 'W') and (W is not None):
-            Y2 = gamma(znew[:,:,self.nCol:])
+            Y2 = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
         else:
             Y2 = np.zeros((self.nDat, 0))
         Y = np.hstack((Y1,Y2))
@@ -297,7 +297,7 @@ class Anomaly(Projection):
             dat = self.data.W
         else:
             raise
-        lof = LocalOutlierFactor(n_neighbors = k).fit(dat)
+        lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
         if (V is None) and (W is None):
             raw = lof.negative_outlier_factor_.copy()
         elif (V is not None) and (W is not None):
@@ -348,13 +348,14 @@ class Anomaly(Projection):
             cones[tuple(row)] += 1 / postpred.shape[0]
         return cones
     def cone_density(self, V = None, W = None, epsilon = 0.5, **kwargs):
+        n = V.shape[0]
         cone_prob = self.populate_cones(epsilon)
-        scores = np.empty(self.data.nDat)
+        scores = np.empty(n)
         znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
         rho_new = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
         r_new = gamma(znew[:,:,:self.nCol].sum(axis = 2)).mean(axis = 1)
-        Vnew = euclidean_to_hypercube(np.hstack((r_new * V, rho_new)))
-        for i in range(self.nDat):
+        Vnew = euclidean_to_hypercube(np.hstack((r_new[:,None] * V, rho_new)))
+        for i in range(n):
             scores[i] = 1 / cone_prob[tuple(Vnew[i] > epsilon)]
         return scores
     def hypercube_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
@@ -388,7 +389,7 @@ class Anomaly(Projection):
         h = self.latent_euclidean_bandwidth
         Znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
         Rnew = gamma(Znew[:,:,:self.nCol].sum(axis = 2))
-        Y1 = Rnew[:,:,None] * V[None,:,:]
+        Y1 = Rnew[:,:,None] * V[:,None,:]
         Y2 = gamma(Znew[:,:,self.nCol:])
         Ycon = np.concatenate((Y1,Y2), axis = 2)
         Ynew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
@@ -398,12 +399,9 @@ class Anomaly(Projection):
         h = self.latent_euclidean_bandwidth
         Znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
         Rnew = gamma(Znew[:,:,:self.nCol].sum(axis = 2))
-        Y1 = Rnew[:,:,None] * V[None,:,:]
+        Y1 = Rnew[:,:,None] * V[:,None,:]
         Y2 = gamma(Znew[:,:,self.nCol:])
-        Vcon = np.array(list(map(
-            euclidean_to_hypercube, 
-            np.concatenate((Y1,Y2), axis = 2),
-            )))
+        Vcon = euclidean_to_hypercube(np.concatenate((Y1,Y2), axis = 2))
         Vnew = euclidean_to_hypercube(
             self.generate_posterior_predictive_gammas(self.postpred_per_samp),
             )
@@ -441,10 +439,10 @@ class Anomaly(Projection):
             'lhkde'  : self.latent_hypercube_kernel_density_estimate,
             'lekde'  : self.latent_euclidean_kernel_density_estimate,
             # 'lskde'  : self.latent_simplex_kernel_density_estimate,
-            'mlkde'  : self.mixed_latent_kernel_density_estimate,
+            # 'mlkde'  : self.mixed_latent_kernel_density_estimate,
             }
         return metrics
-    def get_scores(self, V, W):
+    def get_scores(self, V, W, R):
         metrics = self.scoring_metrics.keys()
         density_metrics = ['khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','mlkde']
         out = pd.DataFrame()
@@ -452,18 +450,22 @@ class Anomaly(Projection):
             print('s' + '\b'*11 + metric.ljust(10), end = '')
             sleep(1)
             out[metric] = self.scoring_metrics[metric](V,W).ravel()
-            if hasattr(self.data, 'R'):
+            if type(R) is np.ndarray:
                 if metric in density_metrics:
-                    out['c' + metric] = out[metric] * self.data.R
+                    with np.errstate(over='ignore'):
+                        out['c' + metric] = out[metric] * R**2
         print('s' + '\b'*11 + 'Done'.ljust(10))
         return out
-    def get_scoring_metrics(self, Y, V = None, W = None):
-        scores = self.get_scores(V, W)
+    def get_scoring_metrics(self, Y, V = None, W = None, R = None):
+        scores = self.get_scores(V, W, R)
         aucs = np.array([metric_auc(score, Y) for score in scores.values.T]).T
         metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
         metrics['Metric'] = ('AuROC','AuPRC')
         metrics['EnergyScore'] = self.energy_score()
         return metrics
+    def set_postpred_per_sample(self, n):
+        self.postpred_per_samp = n
+        return
 
 def ResultFactory(model, path):
     class Result(Results[model], Anomaly):
@@ -505,8 +507,9 @@ if __name__ == '__main__':
     import re
     results  = []
     basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite']
-    resbases = {'mdppprgln' : 'results_*.pkl'}
+    # datasets = ['cardio','cover','mammography','pima','satellite']
+    datasets = ['cardio','mammography','pima']
+    resbases = {'mdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
             files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
@@ -517,20 +520,24 @@ if __name__ == '__main__':
         print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
         extant_result = ResultFactory(*result)
         extant_result.p = 10.
+        extant_result.set_postpred_per_sample(20)
         extant_result.pools_open()
         extant_metric_is = extant_result.get_scoring_metrics(
-            extant_result.data.Y, extant_result.data.V, extant_result.data.W,
+            extant_result.data.Y, extant_result.data.V, 
+            extant_result.data.W, extant_result.data.R,
             )
         print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
         cv = re.search('xv(\d+).pkl', result[1]).group(1)
         oos_raw = pd.read_csv(
             os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
             ).values
-        oos_Y = pd.read_csv(
+        oos_raw = oos_raw[~np.isnan(oos_raw).any(axis = 1)]
+        oos_out = pd.read_csv(
             os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
             ).values.ravel()
-        oos_V, oos_W, oos_R = extant_result.to_mixed_new(oos_raw)        
-        extant_metric_oos = extant_result.get_scoring_metrics(oos_Y, oos_V, oos_W)
+        oos_out = oos_out[~np.isnan(oos_out)]
+        oos_Y, oos_V, oos_W, oos_R = extant_result.data.to_mixed_new(oos_raw, oos_out)        
+        extant_metric_oos = extant_result.get_scoring_metrics(oos_Y, oos_V, oos_W, oos_R)
         extant_result.pools_closed()
         del extant_result
         extant_metric_is['path'] = result[1]
