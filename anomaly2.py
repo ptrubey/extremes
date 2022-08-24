@@ -3,10 +3,10 @@ Module for implementing anomaly detection algorithms.
 
 Implements classic anomaly detection algorithms, as well as custom anomaly detection algorithms for extreme data.
 """
-from inspect import Attribute
-from nis import cat
-from unicodedata import category
-from xml.dom.minidom import Attr
+# from inspect import Attribute
+# from nis import cat
+# from unicodedata import category
+# from xml.dom.minidom import Attr
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 import re, os, argparse, glob, gc
 # builtins explicitly called
@@ -19,6 +19,7 @@ from itertools import repeat
 from collections import defaultdict
 from functools import cached_property
 from time import sleep
+from math import ceil
 # Competing Anomaly Detection Algorithms
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
@@ -504,10 +505,26 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
+    raise
+    res_path = './ad/cardio/results_xv5.pkl'
+    os_data_path = './ad/cardio/data_xv5_os.csv'
+    os_out_path = './ad/cardio/outcome_xv5_os.csv'
+    res = ResultFactory('mdppprgln', res_path)
+
+    raise
+
+    os_raw = pd.read_csv(os_data_path).values
+    os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+    os_out = pd.read_Csv(os_out_path).values.ravel()
+    os_out = os_out[~np.isnan(os_out)]
+    
+    Y, V, W, R = res.data.to_mixed_new(os_raw, os_out)
+
+    raise
     import re
     results  = []
     basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite']
+    datasets = ['cardio'] # ,'cover','mammography','pima','satellite']
     # datasets = ['cardio','mammography','pima']
     resbases = {'mdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
@@ -517,11 +534,13 @@ if __name__ == '__main__':
                 results.append((model, file))
     metrics = []
     for result in results:
+        pool = Pool(processes = ceil(0.9 * cpu_count()), initializer = limit_cpu)
         print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
         extant_result = ResultFactory(*result)
         extant_result.p = 10.
         extant_result.set_postpred_per_sample(20)
-        extant_result.pools_open()
+        # extant_result.pools_open()
+        extant_result.pool = pool
         extant_metric_is = extant_result.get_scoring_metrics(
             extant_result.data.Y, extant_result.data.V, 
             extant_result.data.W, extant_result.data.R,
@@ -538,7 +557,7 @@ if __name__ == '__main__':
         oos_out = oos_out[~np.isnan(oos_out)]
         oos_Y, oos_V, oos_W, oos_R = extant_result.data.to_mixed_new(oos_raw, oos_out)        
         extant_metric_oos = extant_result.get_scoring_metrics(oos_Y, oos_V, oos_W, oos_R)
-        extant_result.pools_closed()
+        # extant_result.pools_closed()
         del extant_result
         extant_metric_is['path'] = result[1]
         extant_metric_oos['path'] = result[1]
@@ -551,6 +570,7 @@ if __name__ == '__main__':
     df = pd.concat(metrics)
     df.to_csv('./ad/performance.csv')
 
+    raise
     # path = './simulated/lnad/results_mdppprgln.pkl'
     # print('Processing Result {}'.format(path).ljust(80), end = '')
     # extant_result = ResultFactory('mdppprgln', path)
