@@ -14,7 +14,7 @@ from energy import limit_cpu
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import DirichletProcessSampler, cumsoftmax2d, pt_dp_sample_cluster, bincount2D_vectorized
+from samplers import DirichletProcessSampler, pt_dp_sample_cluster, bincount2D_vectorized
 from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
     euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
     category_matrix, euclidean_to_catprob

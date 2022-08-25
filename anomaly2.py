@@ -450,11 +450,14 @@ class Anomaly(Projection):
         for metric in metrics:
             print('s' + '\b'*11 + metric.ljust(10), end = '')
             sleep(1)
-            out[metric] = self.scoring_metrics[metric](V,W).ravel()
+            temp = self.scoring_metrics[metric](V,W).ravel()
+            temp[np.isnan(temp)] = MAX
+            temp[temp > MAX] = MAX
+            out[metric] = np.log(temp)
             if type(R) is np.ndarray:
                 if metric in density_metrics:
                     with np.errstate(over='ignore'):
-                        out['c' + metric] = out[metric] * R**2
+                        out['c' + metric] = out[metric] + 2 * np.log(R)# * R**2
         print('s' + '\b'*11 + 'Done'.ljust(10))
         return out
     def get_scoring_metrics(self, Y, V = None, W = None, R = None):
@@ -505,27 +508,26 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    raise
-    res_path = './ad/cardio/results_xv5.pkl'
-    os_data_path = './ad/cardio/data_xv5_os.csv'
-    os_out_path = './ad/cardio/outcome_xv5_os.csv'
-    res = ResultFactory('mdppprgln', res_path)
+    # res_path = './ad/cardio/results_xv5.pkl'
+    # os_data_path = './ad/cardio/data_xv5_os.csv'
+    # os_out_path = './ad/cardio/outcome_xv5_os.csv'
+    # res = ResultFactory('mdppprgln', res_path)
 
-    raise
-
-    os_raw = pd.read_csv(os_data_path).values
-    os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
-    os_out = pd.read_Csv(os_out_path).values.ravel()
-    os_out = os_out[~np.isnan(os_out)]
+    # os_raw = pd.read_csv(os_data_path).values
+    # os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+    # os_out = pd.read_csv(os_out_path).values.ravel()
+    # os_out = os_out[~np.isnan(os_out)]
     
-    Y, V, W, R = res.data.to_mixed_new(os_raw, os_out)
+    # Y, V, W, R = res.data.to_mixed_new(os_raw, os_out)
 
-    raise
+    # pool = Pool(processes = ceil(0.9 * cpu_count()), initializer = limit_cpu)
+    # res.pool = pool
+    # ISamp = res.get_scoring_metrics(res.data.Y, res.data.V, res.data.W, res.data.R)
+    # OSamp = res.get_scoring_metrics(Y,V,W,R)
     import re
     results  = []
     basepath = './ad'
-    datasets = ['cardio'] # ,'cover','mammography','pima','satellite']
-    # datasets = ['cardio','mammography','pima']
+    datasets = ['cardio','cover','mammography','pima','satellite']
     resbases = {'mdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
