@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import numpy as np
 import sqlite3 as sql
 import pandas as pd
@@ -34,11 +35,13 @@ def euclidean_to_simplex(euc):
     return (euc + EPS) / (euc + EPS).sum(axis = -1)[...,None]
 
 def euclidean_to_hypercube(euc):
-    return (euc + EPS) / (euc + EPS).max(axis = -1)[...,None]
+    V = (euc + EPS) / (euc + EPS).max(axis = -1)[...,None]
+    V[V < EPS] = EPS
+    return V
 
-def euclidean_to_psphere(euc, p = 10, epsilon = 1e-6):
+def euclidean_to_psphere(euc, p = 10):
     Yp = (euc + EPS) / (((euc + EPS)**p).sum(axis = -1)**(1/p))[...,None]
-    Yp[Yp <= epsilon] = epsilon
+    Yp[Yp < EPS] = EPS
     return Yp
 
 def euclidean_to_catprob(euc, catmat):
@@ -68,7 +71,7 @@ def euclidean_to_angular(hyp):
         # (even if by *tiny* amount) than numerator
         # temp = np.sqrt((hyp[:,i:] * hyp[:,i:]).sum(axis = 1))
         temp = hyp[:,i] / norm(hyp[:,i:], axis = 1)
-        temp[temp > (1 - 1e-7)] = 1 - 1e-7
+        temp[temp > (1 - EPS)] = 1 - EPS
         # tdiff = temp - hyp[:,i]
         # temp[np.where(tdiff < 1e-7)[0]] = 1e-7
         # then theta is arccos of that ratio
@@ -157,10 +160,10 @@ class Data(Transformer):
         return angular_to_euclidean(theta)
 
     @staticmethod
-    def cast_to_cube(A, eps = 1e-6):
+    def cast_to_cube(A):
         V = A / (pi / 2.)
-        V[V > (1 - eps)] = 1 - eps
-        V[V < eps] = eps
+        V[V > (1 - EPS)] = 1 - EPS
+        V[V < EPS] = EPS
         return V
 
     def fill_out(self):
@@ -206,6 +209,7 @@ class Data_From_Raw(Data, Outcome):
         R = par.max(axis = 1)
         with np.errstate(divide = 'ignore'):
             V = par / R[:,None] # (par.T / R).T
+            V[V < EPS] = EPS
         if decluster:
             I = cluster_max_row_ids(R)
         else:
