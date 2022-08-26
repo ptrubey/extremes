@@ -28,7 +28,7 @@ cover = {
     }
 mammography = {
     'source'    : './ad/mammography/data_xv{}_is.csv',
-    'outcome'   : './ad/mammography/outcome_xv{}.csv',
+    'outcome'   : './ad/mammography/outcome_xv{}_is.csv',
     'results'   : './ad/mammography/results_xv{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8]',

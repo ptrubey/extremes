@@ -571,8 +571,6 @@ if __name__ == '__main__':
     
     df = pd.concat(metrics)
     df.to_csv('./ad/performance.csv')
-
-    raise
     # path = './simulated/lnad/results_mdppprgln.pkl'
     # print('Processing Result {}'.format(path).ljust(80), end = '')
     # extant_result = ResultFactory('mdppprgln', path)
