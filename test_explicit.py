@@ -11,20 +11,20 @@ class Heap(object):
         return
 
 p = Heap({
-    'in_path' : './simulated/sphere/data_m8_r3.csv',
-    'out_path' : './simulated/sphere/results_spppgln_8_3.pkl',
-    'model' : 'sdpppgln',
-    'outcome' : 'None',
+    'in_path' : './ad/annthyroid/data.csv',
+    'out_path' : './ad/annthyroid/results.pkl',
+    'model' : 'mdppprgln',
+    'outcome' : './ad/annthyroid/outcome.csv',
     'nSamp' : '30000',
     'nKeep' : '15000',
     'nThin' : '15',
-    'cats'  : '[]',
+    'cats'  : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
     'nMix'  : 30,
     'eta_shape' : '2',
     'eta_rate' : '5e-1',
-    'sphere' : 'True',
+    'sphere' : 'False',
     'quantile' : 0.95,
-    'decluster' : 'True',
+    'decluster' : 'False',
     'p' : '10',
     'maxclust' : '300',
     })

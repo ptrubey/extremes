@@ -46,8 +46,18 @@ satellite = {
     'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
     'decluster' : 'False',
     }
+##
+annthyroid = {
+    'source'    : './ad/annthyroid/data.csv',
+    'outcome'   : './ad/annthyroid/outcome.csv',
+    'results'   : './ad/annthyroid/results_{}_{}_{}.pkl',
+    'quantile'  : '0.95',
+    'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
+    'decluster' : 'False',
+    }
 
-datasets = [cardio, cover, mammography, pima, satellite]
+datasets = [cardio, cover, mammography, pima, satellite, annthyroid]
+# datasets = [annthyroid]
 eta_alphas = ['2']
 eta_betas = ['1e-1','1e0','1e1','1e2']
 stepping = '1.03'

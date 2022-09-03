@@ -232,19 +232,21 @@ def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
     cand_cluster_state = (curr_cluster_state == 0)
     scratch = np.empty(curr_cluster_state.shape)
     temps = np.arange(T)
-    for n in range(N):
-        curr_cluster_state[temps, delta.T[n]] -= 1
-        scratch[:] = curr_cluster_state
-        scratch += cand_cluster_state * (eta / (cand_cluster_state.sum(axis = 1) + EPS))[:,None]
-        np.log(scratch, out = scratch)
-        scratch += log_likelihood[n]
-        scratch -= scratch.max(axis = 1)[:,None]
-        np.exp(scratch, out = scratch)
-        np.cumsum(scratch, axis = 1, out = scratch)
-        scratch /= scratch[:,-1][:,None]
-        delta.T[n] = (prob[n][:,None] > scratch).sum()
-        curr_cluster_state[temps, delta.T[n]] += 1
-        cand_cluster_state[temps, delta.T[n]] = False
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        for n in range(N):
+            curr_cluster_state[temps, delta.T[n]] -= 1
+            scratch[:] = curr_cluster_state
+            scratch += cand_cluster_state * (eta / (cand_cluster_state.sum(axis = 1) + EPS))[:,None]
+            np.log(scratch, out = scratch)
+            scratch[np.isnan(scratch)] = -np.inf
+            scratch += log_likelihood[n]
+            scratch -= scratch.max(axis = 1)[:,None]
+            np.exp(scratch, out = scratch)
+            np.cumsum(scratch, axis = 1, out = scratch)
+            scratch /= scratch[:,-1][:,None]
+            delta.T[n] = (prob[n][:,None] > scratch).sum(axis = 1)
+            curr_cluster_state[temps, delta.T[n]] += 1
+            cand_cluster_state[temps, delta.T[n]] = False
     return
 
 
