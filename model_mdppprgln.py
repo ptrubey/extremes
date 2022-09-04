@@ -425,7 +425,7 @@ class Chain(DirichletProcessSampler, Projection):
         deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
         dmax = deltas.max(axis = 1) + 1
         zetas = np.vstack([
-            np.hstack((np.ones((dmax[i], 1) * i, zeta[0][:dmax[i]])))
+            np.hstack((np.ones((dmax[i], 1)) * i, zeta[0][:dmax[i]]))
             for i, zeta in enumerate(self.samples.zeta[(nBurn + 1)::nThin])
             ])
         # zetas = []
