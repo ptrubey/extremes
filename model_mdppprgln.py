@@ -424,10 +424,14 @@ class Chain(DirichletProcessSampler, Projection):
         # assemble data
         deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
         dmax = deltas.max(axis = 1) + 1
-        zetas = []
-        for i, zeta in enumerate(self.samples.zeta[(nBurn+1)::nThin]):
-            zetas.append(np.hstack((np.ones(dmax[i], 1) * i, zeta[0][:dmax[i]])))
-        zetas  = np.vstack(zetas)
+        zetas = np.vstack([
+            np.hstack((np.ones((dmax[i], 1) * i, zeta[0][:dmax[i]])))
+            for i, zeta in enumerate(self.samples.zeta[(nBurn + 1)::nThin])
+            ])
+        # zetas = []
+        # for i, zeta in enumerate(self.samples.zeta[(nBurn+1)::nThin]):
+        #     zetas.append(np.hstack((np.ones((dmax[i], 1)) * i, zeta[0][:dmax[i]])))
+        # zetas  = np.vstack(zetas)
         mus    = self.samples.mu[(nBurn+1) :: nThin, 0]
         Sigmas = self.samples.Sigma[(nBurn+1) :: nThin, 0]
         
