@@ -56,10 +56,21 @@ satellite = {
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
     }
+annthyroid = {
+    'source'    : './ad/annthyroid/data_xv{}_is.csv',
+    'outcome'   : './ad/annthyroid/outcome_xv{}_is.csv',
+    'results'   : './ad/annthyroid/results_xv{}.pkl',
+    'quantile'  : '0.95',
+    'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
+    'decluster' : 'False',
+    'eta_shape' : '2',
+    'eta_rate'  : '1e2',
+    }
 
-datasets = [cardio, cover, mammography, pima, satellite]
+# datasets = [cardio, cover, mammography, pima, satellite,annthyroid]
+datasets = ['annthyroid']
 stepping = '1.08'
-ntemps = '3'
+ntemps = '5'
 
 if __name__ == '__main__':
     processes = []
