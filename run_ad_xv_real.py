@@ -68,7 +68,7 @@ annthyroid = {
     }
 
 # datasets = [cardio, cover, mammography, pima, satellite,annthyroid]
-datasets = ['annthyroid']
+datasets = [annthyroid]
 stepping = '1.08'
 ntemps = '5'
 
