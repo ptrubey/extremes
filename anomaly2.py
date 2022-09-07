@@ -527,7 +527,7 @@ if __name__ == '__main__':
     import re
     results  = []
     basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite']
+    datasets = ['cardio','cover','mammography','pima','satellite','annthyroid']
     resbases = {'mdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
