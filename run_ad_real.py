@@ -55,9 +55,17 @@ annthyroid = {
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
     'decluster' : 'False',
     }
+yeast = {
+    'source'    : './ad/yeast/data.csv',
+    'outcome'   : './ad/yeast/outcome.csv',
+    'results'   : './ad/yeast/results_{}_{}_{}.pkl',
+    'quantile'  : '0.90',
+    'cats'      : '[4,5]',
+    'decluster' : 'False',
+    }
 
-datasets = [cardio, cover, mammography, pima, satellite, annthyroid]
-# datasets = [annthyroid]
+# datasets = [cardio, cover, mammography, pima, satellite, annthyroid, yeast]
+datasets = [yeast]
 eta_alphas = ['2']
 eta_betas = ['1e-1','1e0','1e1','1e2']
 stepping = '1.03'

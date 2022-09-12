@@ -55,8 +55,8 @@ class Samples_(object):
     delta = None
     eta   = None
 
-    def __init__(self, nSamp, nDat, nCol, nCat):
-        tCol = nCol + nCat 
+    def __init__(self, nSamp, nDat, nCat):
+        tCol = nCat 
         self.zeta  = [None] * (nSamp)
         self.mu    = np.empty((nSamp, tCol))
         self.Sigma = np.empty((nSamp, tCol, tCol))
