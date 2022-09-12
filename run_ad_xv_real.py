@@ -66,6 +66,16 @@ annthyroid = {
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
     }
+yeast = {
+    'source'    : './ad/yeast/data_xv{}_is.csv',
+    'outcome'   : './ad/yeast/outcome_xv{}_is.csv',
+    'results'   : './ad/yeast/results_xv{}.pkl',
+    'quantile'  : '0.90',
+    'cats'      : '[4,5]',
+    'decluster' : 'False',
+    'eta_shape' : '2',
+    'eta_rate'  : '1e2',
+    }
 
 # datasets = [cardio, cover, mammography, pima, satellite,annthyroid]
 datasets = [annthyroid]
