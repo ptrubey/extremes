@@ -77,8 +77,8 @@ yeast = {
     'eta_rate'  : '1e2',
     }
 
-# datasets = [cardio, cover, mammography, pima, satellite,annthyroid]
-datasets = [annthyroid]
+# datasets = [cardio, cover, mammography, pima, satellite,annthyroid,yeast]
+datasets = [yeast]
 stepping = '1.08'
 ntemps = '5'
 
