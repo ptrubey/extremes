@@ -447,7 +447,6 @@ class Chain(DirichletProcessSampler, Projection):
         assert type(data) is Categorical
         self.data = data
         self.max_clust_count = max_clust_count
-        self.p = p
         self.nCat = self.data.nCat
         self.tCol = self.nCat # shortcut
         self.nDat = self.data.nDat
