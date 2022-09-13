@@ -76,10 +76,22 @@ yeast = {
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
     }
+## 
+solarflare = {
+    'source'    : './ad/solarflare/data_xv{}_is.csv',
+    'outcome'   : './ad/solarflare/outcome_xv{}_is.csv',
+    'results'   : './ad/solarflare/results_xv{}.pkl',
+    'quantile'  : 'None',
+    'cats'      : 'None',
+    'decluster' : 'False',
+    'eta_shape' : '2',
+    'eta_rate'  : '1e2',
+    }
+
 
 # datasets = [cardio, cover, mammography, pima, satellite,annthyroid,yeast]
 datasets = [yeast]
-stepping = '1.08'
+stepping = '1.1'
 ntemps = '5'
 
 if __name__ == '__main__':

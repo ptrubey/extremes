@@ -1,5 +1,5 @@
 from argparser import argparser_generic as argparser
-from data import Data_From_Raw, Data_From_Sphere, MixedData
+from data import Data_From_Raw, Data_From_Sphere, MixedData, Categorical
 from projgamma import GammaPrior
 from pandas import read_csv
 from energy import limit_cpu
@@ -23,7 +23,9 @@ if __name__ == '__main__':
     raw = raw[~np.isnan(raw).any(axis = 1)] # equivalent to na.omit
 
     ## Initialize Data
-    if eval(p.cats):
+    if p.model.startswith('c'):
+        data = Categorical(raw)
+    elif eval(p.cats):
         if eval(p.sphere):
             data = MixedData(raw, eval(p.cats), eval(p.sphere))
         else:

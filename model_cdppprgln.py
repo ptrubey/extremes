@@ -14,15 +14,14 @@ from energy import limit_cpu
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import DirichletProcessSampler, pt_dp_sample_cluster, bincount2D_vectorized
-from data import Categorical, Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
-    euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
-    category_matrix, euclidean_to_catprob
+from samplers import DirichletProcessSampler, pt_dp_sample_cluster,             \
+    bincount2D_vectorized
+from data import Categorical, Multinomial, Projection, category_matrix,         \
+    euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_catprob
 from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 \
     pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_mvnormal_mx_st,   \
     logd_gamma_my, logd_mvnormal_mx_st, logd_invwishart_ms,                     \
-    pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable, \
-    pt_logd_projgamma_paired_yt       
+    pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable
 from cov import PerObsTemperedOnlineCovariance
 
 Prior = namedtuple('Prior', 'eta mu Sigma')
@@ -120,7 +119,7 @@ class Chain(DirichletProcessSampler, Projection):
 
     def sample_zeta_new(self, mu, Sigma_chol):
         """ Sample new zetas as log-normal (sample normal, then exponentiate) """
-        sizes = (self.nTemp, self.max_clust_count, self.nCat + self.nCol)
+        sizes = (self.nTemp, self.max_clust_count, self.tCol)
         out = np.empty(sizes)
         np.einsum('tzy,tjy->tjz', np.triu(Sigma_chol), normal(size = sizes), out = out)
         out += mu[:,None,:]
@@ -177,8 +176,7 @@ class Chain(DirichletProcessSampler, Projection):
         C = np.einsum('tjd,tje->tde', diff, diff)
         _psi = self.priors.Sigma.psi + C * self.itl[:,None,None]
         _nu  = self.priors.Sigma.nu + n * self.itl
-        tCol = self.nCol + self.nCat
-        out = np.empty((self.nTemp, tCol, tCol))
+        out = np.empty((self.nTemp, self.tCol, self.tCol))
         for i in range(self.nTemp):
             out[i] = invwishart.rvs(df = _nu[i], scale = _psi[i])
         return out
@@ -441,10 +439,10 @@ class Chain(DirichletProcessSampler, Projection):
             prior_eta   = GammaPrior(2., 0.5),
             prior_mu    = (0, 3.),
             prior_Sigma = (10, 0.5),
-            p           = 10,
             max_clust_count = 300,
             ntemps      = 3,
-            stepping    = 1.05,
+            stepping    = 1.2,
+            **kwargs,
             ):
         assert type(data) is Categorical
         self.data = data
@@ -505,7 +503,7 @@ class Result(object):
         return np.vstack(new_gammas)
 
     def generate_posterior_predictive_spheres(self, n_per_sample):
-        rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:] # (s,D)
+        rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:]
         CatMat = category_matrix(self.data.Cats) # (C,d)
         return euclidean_to_catprob(rhos, CatMat)
     
@@ -590,10 +588,15 @@ class Result(object):
         np.exp(zetas, out = zetas)
         weights = np.zeros((self.nSamp, max_clust_count))
         for s in range(self.nSamp):
-            weights[s] = np.bincount(self.samples.delta[s], minlength = max_clust_count)
-            zetas[s][np.where(weights[s] > 0)[0]] = self.samples.zeta[s][np.where(weights[s] > 0)[0]]
+            weights[s] = np.bincount(
+                self.samples.delta[s], 
+                minlength = max_clust_count,
+                )
+            zetas[s][np.where(weights[s] > 0)[0]] = \
+                self.samples.zeta[s][np.where(weights[s] > 0)[0]]
             
-        weights += (weights == 0) * (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))[:,None]
+        weights += (weights == 0) * \
+            (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))[:,None]
         np.log(weights, out = weights)
         loglik = np.zeros((n, self.nSamp, max_clust_count))
         sigma_ph = np.ones((1, max_clust_count, self.nCol))
@@ -610,7 +613,8 @@ class Result(object):
         weights -= weights.max(axis = 2)[:,:,None]
         np.exp(weights, out = weights) # unnormalized cluster probability
         np.cumsum(weights, axis = 2, out = weights)
-        weights /= weights[:,:,-1][:,:,None]  # normalized cluster cumulative probability
+        weights /= weights[:,:,-1][:,:,None]  # normalized cluster 
+                                              #     cumulative probability
         p = uniform(size = (n, self.nSamp, 1))
         dnew = (p > weights).sum(axis = 2)  # new deltas
         znew = np.empty((n, self.nSamp, self.tCol))
@@ -630,28 +634,31 @@ class Result(object):
         Sigmas = out['Sigmas']
         cats   = out['cats']
         
-        self.data = MixedDataBase(out['V'], out['W'], out['cats'])
+        self.data   = Multinomial(out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
+        assert self.nDat == self.data.nDat
         self.nCat   = self.data.nCat
-        self.nCol   = self.data.nCol
-        self.tCol   = self.nCol + self.nCat
+        self.tCol   = self.nCat
         self.nCats  = cats.shape[0]
         self.cats   = cats
         self.CatMat = category_matrix(self.data.Cats)
         
-        for key in ['Y','R','P','values']:
+        for key in ['Y','values']:
             if key in out.keys():
                 self.data.__dict__[key] = out[key] 
 
-        self.samples = Samples(
-            self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats
+        self.samples = Samples_(
+            self.nSamp, self.nDat, self.nCat,
             )
         self.samples.delta = deltas
         self.samples.eta   = etas
         self.samples.mu    = mus
         self.samples.Sigma = Sigmas
-        self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
+        self.samples.zeta  = [
+            zetas[np.where(zetas.T[0] == i)[0], 1:] 
+            for i in range(self.nSamp)
+            ]
 
         if 'swap_y' in out.keys():
             self.swap_y = out['swap_y']
@@ -685,22 +692,20 @@ class Heap(object):
         return
 
 if __name__ == '__main__':
-    from data import MixedData
+    from data import Categorical
     from projgamma import GammaPrior
     from pandas import read_csv
     import os
 
     # p = argparser()
     d = {
-        'in_data_path'    : './ad/mammography/data.csv',
-        'in_outcome_path' : './ad/mammography/outcome.csv',
-        'out_path' : './ad/mammography/results_mdppprgln_test.pkl',
-        'cat_vars' : '[5,6,7,8]',
-        'decluster' : 'False',
-        'quantile' : 0.95,
-        'nSamp' : 5000,
-        'nKeep' : 2000,
-        'nThin' : 3,
+        'in_data_path'    : './ad/solarflare/data.csv',
+        'in_outcome_path' : './ad/solarflare/outcome.csv',
+        'out_path'        : './ad/solarflare/results_cdppprgln_test.pkl',
+        'decluster'       : 'False',
+        'nSamp' : 1000,
+        'nKeep' : 500,
+        'nThin' : 5,
         'eta_alpha' : 2.,
         'eta_beta' : 1.,
         }
@@ -708,18 +713,14 @@ if __name__ == '__main__':
 
     raw = read_csv(p.in_data_path).values
     out = read_csv(p.in_outcome_path).values
-    data = MixedData(
-        raw, 
-        cat_vars = np.array(eval(p.cat_vars), dtype = int), 
-        decluster = eval(p.decluster), 
-        quantile = float(p.quantile),
+    data = Categorical(
+        raw,
         outcome = out,
         )
     data.fill_outcome(out)
-    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10, ntemps = 3)
+    model = Chain(data, prior_eta = GammaPrior(2, 1), ntemps = 6)
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
     res = Result(p.out_path)
-    # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF
