@@ -43,7 +43,7 @@ MAX = np.finfo(float).max
 def metric_auc(scores, actual):
     scores[np.isinf(scores)] = MAX
     scores[scores > MAX] = MAX
-    auroc = roc_auc_score(actual, scores)
+    auroc = roc_auc_score(actual.astype(bool), scores)
     precision, recall, thresholds = precision_recall_curve(actual, scores)
     auprc = auc(recall, precision)
     return(auroc, auprc)
@@ -527,7 +527,8 @@ if __name__ == '__main__':
     import re
     results  = []
     basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite','annthyroid']
+    datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
+    # datasets = ['yeast']
     resbases = {'mdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
