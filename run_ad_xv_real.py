@@ -15,6 +15,7 @@ cardio = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 cover = {
     'source'    : './ad/cover/data_xv{}_is.csv',
@@ -25,6 +26,7 @@ cover = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 mammography = {
     'source'    : './ad/mammography/data_xv{}_is.csv',
@@ -35,6 +37,7 @@ mammography = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 pima = {
     'source'    : './ad/pima/data_xv{}_is.csv',
@@ -45,6 +48,7 @@ pima = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 satellite = {
     'source'    : './ad/satellite/data_xv{}_is.csv',
@@ -55,6 +59,7 @@ satellite = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 annthyroid = {
     'source'    : './ad/annthyroid/data_xv{}_is.csv',
@@ -65,6 +70,7 @@ annthyroid = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 yeast = {
     'source'    : './ad/yeast/data_xv{}_is.csv',
@@ -75,6 +81,7 @@ yeast = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'mdppprgln',
     }
 ## 
 solarflare = {
@@ -86,11 +93,12 @@ solarflare = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
+    'model'     : 'cdppprgln',
     }
 
 
 # datasets = [cardio, cover, mammography, pima, satellite,annthyroid,yeast]
-datasets = [yeast]
+datasets = [solarflare]
 stepping = '1.1'
 ntemps = '5'
 
@@ -106,7 +114,7 @@ if __name__ == '__main__':
                 'test_generic.py', 
                 dataset['source'].format(xv),
                 dataset['results'].format(xv),
-                'mdppprgln',
+                dataset['model'],
                 '--outcome', dataset['outcome'].format(xv),
                 '--cats', dataset['cats'],
                 '--quantile', dataset['quantile'],
