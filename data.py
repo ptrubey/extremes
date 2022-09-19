@@ -299,8 +299,15 @@ class Multinomial(Data, Outcome):
         self.nDat = self.W.shape[0]
         return
     
+    def to_categorical_new(self, raw_data, raw_out, index = None):
+        if index is None:
+            index = np.arange(raw_data.shape[0])
+        W = Categorical.to_categorical(raw_data, self.values, index)
+        Y = raw_out[index]
+        return Y, W
+    
     @staticmethod
-    def to_multinomial_new(W, index):
+    def to_multinomial(W, index):
         return W[index]
     
     def __init__(self, raw, cats, index = None, outcome = 'None'):
@@ -339,14 +346,21 @@ class Categorical(Multinomial, Outcome):
         return
     
     @staticmethod
-    def to_categorical_new(raw, values, index):
+    def to_categorical(raw, values, index):
         dummies = []
         assert raw.shape[1] == len(values)
         for i in range(raw.shape[1]):
             dummies.append(np.vstack([raw.T[i] == j for j in values[i]]))
         W = np.vstack(dummies).T
-        return Multinomial.to_multinomial_new(W, index)
+        return Multinomial.to_multinomial(W, index)
     
+    def to_categorical_new(self, raw_data, raw_out, index = None):
+        if index is None:
+            index = np.arange(raw_data.shape[0])
+        W = self.to_categorical(raw_data, self.values, index)
+        Y = raw_out[index]
+        return Y, W
+
     def __init__(self, raw, values = None, index = None, outcome = 'None'):
         self.fill_categorical(raw, values, index)
         if type(outcome) is np.ndarray:
@@ -358,7 +372,7 @@ class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
         if hasattr(self, 'P'):
             Z = scale_pareto(raw_data[:,:self.nCol], self.P)
             V, R, I = Data_From_Raw.to_hypercube(Z, decluster = decluster)
-            W = Categorical.to_categorical_new(
+            W = Categorical.to_categorical(
                 raw_data[:,self.nCol:], self.values, I,
                 )
             Y = raw_out[I]
@@ -366,7 +380,7 @@ class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
         else:
             assert((raw_data[:,:self.nCol].max() - 1)**2 < 1e-10)
             V = raw_data[:,:self.nCol]
-            W = Categorical.to_categorical_new(
+            W = Categorical.to_categorical(
                 raw_data[:,self.nCol:], self.values, np.arange(V.shape[0]),
                 )
             Y = raw_out
