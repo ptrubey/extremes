@@ -14,8 +14,7 @@ from energy import limit_cpu
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import DirichletProcessSampler, bincount2D_vectorized,            \
-    pt_dp_sample_chi_bgsb, pt_dp_sample_concentration_bgsb, pt_dp_sample_cluster_bgsb
+from samplers import DirichletProcessSampler, pt_dp_sample_cluster, bincount2D_vectorized
 from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
     euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
     category_matrix, euclidean_to_catprob
@@ -34,9 +33,9 @@ class Samples(object):
     Sigma = None
     delta = None
     eta   = None
-    chi   = None
+    lzhist = None
 
-    def __init__(self, nSamp, nDat, nCol, nCat, nTemp, nTrunc):
+    def __init__(self, nSamp, nDat, nCol, nCat, nTemp):
         """
         nCol: number of 
         nCat: number of categorical columns
@@ -48,18 +47,16 @@ class Samples(object):
         self.Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
         self.eta   = np.empty((nSamp + 1, nTemp))
-        self.chi   = np.empty((nSamp + 1, nTemp, nTrunc))
         return
 
 def Samples_(Samples):
-    def __init__(self, nSamp, nDat, nCol, nCat, nTrunc):
+    def __init__(self, nSamp, nDat, nCol, nCat):
         tCol = nCol + nCat 
         self.zeta  = [None] * (nSamp)
         self.mu    = np.empty((nSamp, tCol))
         self.Sigma = np.empty((nSamp, tCol, tCol))
         self.delta = np.empty((nSamp, nDat))
         self.eta   = np.empty((nSamp))
-        self.chi   = np.empty((nSamp, nTrunc))
         return
 
 class Chain(DirichletProcessSampler, Projection):
@@ -79,9 +76,6 @@ class Chain(DirichletProcessSampler, Projection):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
     @property
-    def curr_chi(self):
-        return self.samples.chi[self.curr_iter]
-    @property
     def curr_cluster_count(self):
         return self.curr_delta[0].max() + 1
     def average_cluster_count(self, ns):
@@ -99,10 +93,11 @@ class Chain(DirichletProcessSampler, Projection):
     swap_attempts = None
     swap_succeeds = None
 
-    def sample_delta(self, chi, zeta):
+    def sample_delta(self, delta, zeta, eta):
         log_likelihood = self.log_delta_likelihood(zeta)
-        delta = pt_dp_sample_cluster_bgsb(chi, log_likelihood)
-        return delta
+        p = uniform(size = (self.nDat, self.nTemp))
+        pt_dp_sample_cluster(delta, log_likelihood, p, eta)
+        return
 
     def clean_delta_zeta(self, delta, zeta):
         """
@@ -208,11 +203,18 @@ class Chain(DirichletProcessSampler, Projection):
         out += _mu
         return out
 
-    def sample_chi(self, delta, eta):
-        return pt_dp_sample_chi_bgsb(delta, eta, self.max_clust_count)
-    
-    def sample_eta(self, chi):
-        return pt_dp_sample_concentration_bgsb(chi, *self.priors.eta)
+    def sample_eta(self, curr_eta, delta):
+        """
+        curr_eta : (t)
+        delta    : (t x n)
+        """
+        g = beta(curr_eta + 1, self.nDat)
+        aa = self.priors.eta.a + delta.max(axis = 1) + 1
+        bb = self.priors.eta.b - np.log(g)
+        eps = (aa - 1) / (self.nDat  * bb + aa - 1)
+        id = uniform(self.nTemp) > eps
+        aaa = aa * id + (aa - 1) * (1 - id)
+        return gamma(shape = aaa, scale = 1 / bb)
 
     def log_delta_likelihood(self, zeta):
         out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
@@ -294,7 +296,7 @@ class Chain(DirichletProcessSampler, Projection):
 
     def initialize_sampler(self, ns):
         # Samples
-        self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nTemp, self.max_clust_count)
+        self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nTemp)
         self.samples.mu[0] = 0.
         self.samples.Sigma[0] = np.eye(self.tCol) * 2.
         self.samples.zeta[0] = gamma(
@@ -302,9 +304,8 @@ class Chain(DirichletProcessSampler, Projection):
                 size = (self.nTemp, self.max_clust_count, self.tCol),
                 )
         self.samples.eta[0] = 10.
-        self.samples.chi[0] = 0.1
         self.samples.delta[0] = choice(
-            self.max_clust_count - 50, 
+            self.max_clust_count - 20, 
             size = (self.nTemp, self.nDat),
             )
         # Iterator
@@ -383,7 +384,6 @@ class Chain(DirichletProcessSampler, Projection):
         Sigma = self.curr_Sigma
         Sigma_cho = cholesky(self.curr_Sigma)
         Sigma_inv = inv(Sigma)
-        chi   = self.curr_chi
         eta   = self.curr_eta
         
         # Adaptive Metropolis Update
@@ -399,17 +399,16 @@ class Chain(DirichletProcessSampler, Projection):
         zeta[cand_clusters] = self.sample_zeta_new(mu, Sigma_cho)[cand_clusters]
         
         # Update cluster assignments and re-index
-        delta = self.sample_delta(chi, zeta)
+        self.sample_delta(delta, zeta, eta)
         self.clean_delta_zeta(delta, zeta)
         self.samples.delta[ci] = delta
-        self.samples.chi[ci] = self.sample_chi(self.curr_delta, eta)
-        self.samples.eta[ci] = self.sample_eta(self.curr_chi)
         
         # do rest of sampling
         extant_clusters = (cluster_state > 0)
         self.samples.zeta[ci] = self.sample_zeta(zeta, delta, mu, Sigma_cho, Sigma_inv)
         self.samples.mu[ci] = self.sample_mu(zeta, Sigma_inv, extant_clusters)
         self.samples.Sigma[ci] = self.sample_Sigma(zeta, mu, extant_clusters)
+        self.samples.eta[ci] = self.sample_eta(eta, self.curr_delta)
 
         # Attempt Swap:
         if self.curr_iter >= self.swap_start:
@@ -429,8 +428,13 @@ class Chain(DirichletProcessSampler, Projection):
             np.hstack((np.ones((dmax[i], 1)) * i, zeta[0][:dmax[i]]))
             for i, zeta in enumerate(self.samples.zeta[(nBurn + 1)::nThin])
             ])
+        # zetas = []
+        # for i, zeta in enumerate(self.samples.zeta[(nBurn+1)::nThin]):
+        #     zetas.append(np.hstack((np.ones((dmax[i], 1)) * i, zeta[0][:dmax[i]])))
+        # zetas  = np.vstack(zetas)
         mus    = self.samples.mu[(nBurn+1) :: nThin, 0]
         Sigmas = self.samples.Sigma[(nBurn+1) :: nThin, 0]
+        
         etas   = self.samples.eta[(nBurn+1) :: nThin, 0]
         # make output dictionary
         out = {
@@ -470,7 +474,7 @@ class Chain(DirichletProcessSampler, Projection):
             prior_mu    = (0, 3.),
             prior_Sigma = (10, 0.5),
             p           = 10,
-            max_clust_count = 200,
+            max_clust_count = 300,
             ntemps      = 3,
             stepping    = 1.05,
             ):
@@ -694,14 +698,18 @@ class Result(object):
         self.cats   = cats
         self.CatMat = category_matrix(self.data.Cats)
         
+        # if 'Y' in out.keys():
+        #     self.data.fill_outcome(out['Y'])
         for key in ['Y','R','P','values']:
             if key in out.keys():
                 self.data.__dict__[key] = out[key] 
-        
-        self.max_clust_count = deltas.max() + 10
+        # if 'R' in out.keys():
+        #     self.data.R = out['R']
+        # if 'P' in out.keys():
+        #     self.data.P = out['P']
 
         self.samples = Samples(
-            self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats, self.max_clust_count,
+            self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats
             )
         self.samples.delta = deltas
         self.samples.eta   = etas

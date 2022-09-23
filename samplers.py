@@ -14,8 +14,8 @@ DirichletProcessSampler assumes the existence of:
 """
 import time
 import numpy as np
+from numpy.random import beta, uniform, gamma
 import math
-# from numba import jit, njit, prange, int32, set_num_threads
 import warnings
 
 # set_num_threads(4)
@@ -102,124 +102,7 @@ class DirichletProcessSampler(BaseSampler):
         print(ps)
         return
 
-# # @jit
-# def dp_sample_cluster(delta, log_likelihood, prob, eta):
-#     N = delta.shape[0]; J = log_likelihood.shape[1]
-#     curr_cluster_state = np.bincount(delta, minlength=J)
-#     cand_cluster_state = (curr_cluster_state == 0) * 1
-#     scratch = np.empty(J)
-#     ncandcluster = sum(cand_cluster_state)
-#     for n in range(N):
-#         scratch[:] = 0
-#         curr_cluster_state[delta[n]] -= 1 
-#         scratch += curr_cluster_state
-#         scratch += cand_cluster_state * (eta / (ncandcluster + 1e-9))
-#         with np.errstate(divide = 'ignore'):
-#             np.log(scratch, out = scratch)
-#         scratch += log_likelihood[n]
-#         scratch -= scratch.max()
-#         np.cumsum(scratch, out = scratch)
-#         delta[n] = np.searchsorted(scratch, prob[n] * scratch[-1])
-#         curr_cluster_state[delta[n]]+= 1
-#         if cand_cluster_state[delta[n]]:
-#             ncandcluster -= 1
-#             cand_cluster_state[delta[n]] = 0
-#     return delta
-
-# # @njit(parallel = True)
-# def bincount2D_jit(arr, M):
-#     T = arr.shape[0]
-#     N = arr.shape[1]
-#     out = np.zeros((T, M), dtype = int32)
-#     for t in prange(T):
-#         for n in range(N):
-#             out[t,arr[t,n]] += 1
-#     return out
-
-# # @njit(fastmath = True, parallel = True)
-# def cumsoftmax2d(arr):
-#     T = arr.shape[0]
-#     J = arr.shape[1]
-#     scratch = np.empty(T)
-#     for t in prange(T):
-#         scratch[t] = np.max(arr[t])
-#         for j in range(J):
-#             arr[t,j] = math.exp(arr[t,j] - scratch[t])
-#         arr[t] = np.nancumsum(arr[t])
-#         scratch[t] = arr[t,J-1]
-#         for j in range(J):
-#             arr[t,j] /= scratch[t]
-#     return
-
-# # @njit
-# def down_1(cluster_state, dvec):
-#     for t, d in enumerate(dvec):
-#         cluster_state[t,d] -= 1
-#     return
-
-# # @njit
-# def up_1(cluster_state, dvec):
-#     for t, d in enumerate(dvec):
-#         cluster_state[t,d] += 1
-#     return
-
-# # @njit
-# def null_cand(cluster_state, dvec):
-#     for t, d in enumerate(dvec):
-#         cluster_state[t,d] = False
-#     return
-
-# # @njit
-# def sum2d(arr):
-#     m = np.zeros(arr.shape[0])
-#     for j in range(arr.shape[1]):
-#         m += arr.T[j]
-#     return m
-
-# # @njit(parallel = True, fastmath = True)
-# def pt_dp_logpost(arr, logl, curr_state, cand_state, eta):
-#     T = arr.shape[0]
-#     arr[:] = 0.
-#     arr += curr_state
-#     n_cand = sum2d(cand_state)
-#     cand_weight = np.zeros(T)
-#     for t in prange(T):
-#         cand_weight[t] = eta[t] / n_cand[t]
-#         arr[t] += cand_state[t] * cand_weight[t]
-#         for j in range(arr.shape[1]):
-#             arr[t,j] = math.log(arr[t,j])
-#     arr += logl
-#     return
-
-# def pt_dp_sample_cluster_old(delta, log_likelihood, prob, eta):
-#     """
-#     Args:
-#         delta          : (T x N)
-#         log_likelihood : (N x T x J)
-#         prob ([type])  : (N x T)
-#         eta ([type])   : (T)
-#     """
-#     T = delta.shape[0]
-#     N = delta.shape[1]
-#     J = log_likelihood.shape[2]
-#     with warnings.catch_warnings():
-#         warnings.filterwarnings("ignore", message="The TBB threading layer requires TBB version")
-#         curr_cluster_state = bincount2D_jit(delta, J)
-#         cand_cluster_state = (curr_cluster_state == 0)
-#         prob += np.expand_dims(np.arange(T),0)
-#         scratch = np.empty(curr_cluster_state.shape)
-#         for n in range(N):
-#             down_1(curr_cluster_state, delta.T[n])
-#             pt_dp_logpost(scratch, log_likelihood[n], 
-#                         curr_cluster_state, cand_cluster_state, eta)
-#             cumsoftmax2d(scratch)
-#             scratch += np.expand_dims(np.arange(T), 1)
-#             delta.T[n] = np.searchsorted(scratch.ravel(), prob[n]) % J
-#             up_1(curr_cluster_state, delta.T[n])
-#             null_cand(cand_cluster_state, delta.T[n])
-#     return
-
-def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
+def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
     """
     Args:
         delta          : (T x N)
@@ -227,7 +110,7 @@ def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
         prob ([type])  : (N x T)
         eta ([type])   : (T)
     """
-    T, N, J = delta.shape[0], delta.shape[1], log_likelihood.shape[2]
+    N, T, J = log_likelihood.shape
     curr_cluster_state = bincount2D_vectorized(delta, J)
     cand_cluster_state = (curr_cluster_state == 0)
     scratch = np.empty(curr_cluster_state.shape)
@@ -249,6 +132,65 @@ def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
             cand_cluster_state[temps, delta.T[n]] = False
     return
 
+def pt_dp_sample_chi_bgsb(delta, eta, J):
+    """
+    Args: 
+        delta : (T, N)
+        eta   : (T)
+        J     : Scalar (Blocked-Gibbs Stick-Breaking Truncation Point)
+    Out:
+        chi   : (T, J)
+    """
+    clustcount = bincount2D_vectorized(delta, J)
+    chi = beta(
+        a = 1 + clustcount,
+        b = eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount,
+        )
+    return chi
+
+def pt_dp_sample_concentration_bgsb(chi, a, b):
+    """
+    Gibbs Sampler for Concentration Parameter under
+        Blocked-Gibbs Sticking-Breaking Representation of DP
+    Args:
+        chi : (T, J)
+        a   : scalar
+        b   : scalar
+    Out:
+        eta : (T)
+    """
+    eta = gamma(
+        shape = a + chi.shape[1] - 1,
+        scale = 1 / (b - np.log(1 - chi[:,:-1]).sum(axis = 1)),
+        )
+    return eta
+
+def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
+    """
+    Args:
+        chi            : (T, J)
+        log_likelihood : (N x T x J)
+        eta ([type])   : (T)
+    ---
+    Updates delta in-place
+    """
+    N, T, J = log_likelihood.shape
+    scratch = np.zeros((N, T, J))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        scratch += (  # log prior
+            + np.log(chi) 
+            + np.hstack((np.zeros((T,1)), np.log(1 - chi[:,:-1]).cumsum(axis = 1)))
+            )[None]
+        scratch += log_likelihood # log likelihood
+        scratch[np.isnan(scratch)] = -np.inf
+        scratch -= scratch.max(axis = 2)[:,:,None]
+        np.exp(scratch, out = scratch)
+        np.cumsum(scratch, axis = 2, out = scratch)
+        scratch /= scratch[:,:,-1][:,:,None]
+    delta = (uniform(size = (N,T))[:,:,None] > scratch).sum(axis = 2).T
+    return delta
+
+pt_dp_sample_cluster = pt_dp_sample_cluster_crp8
 
 if __name__ == '__main__':
     pass
