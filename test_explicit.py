@@ -1,6 +1,7 @@
-from data import Data_From_Raw, Data_From_Sphere, MixedData
+from data import Categorical, Data_From_Raw, Data_From_Sphere, MixedData
 from projgamma import GammaPrior
 from pandas import read_csv
+import numpy as np
 from energy import limit_cpu
 import models
 import os
@@ -11,14 +12,14 @@ class Heap(object):
         return
 
 p = Heap({
-    'in_path' : './ad/annthyroid/data.csv',
-    'out_path' : './ad/annthyroid/results.pkl',
-    'model' : 'mdppprgln',
-    'outcome' : './ad/annthyroid/outcome.csv',
-    'nSamp' : '30000',
-    'nKeep' : '15000',
-    'nThin' : '15',
-    'cats'  : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
+    'in_path' : './ad/solarflare/data_xv1_is.csv',
+    'out_path' : './ad/annthyroid/results_xv1.pkl',
+    'model' : 'cdppprgln',
+    'outcome' : './ad/annthyroid/outcome_xv1_is.csv',
+    'nSamp' : '2000',
+    'nKeep' : '1000',
+    'nThin' : '10',
+    'cats'  : 'None',
     'nMix'  : 30,
     'eta_shape' : '2',
     'eta_rate' : '5e-1',
@@ -41,9 +42,13 @@ if __name__ == '__main__':
     Chain  = models.Chains[p.model]
     Result = models.Results[p.model]
     raw    = read_csv(p.in_path).values
+    raw    = raw[~np.isnan(raw).any(axis = 1)] # equivalent to na.omit
+
 
     ## Initialize Data
-    if eval(p.cats):
+    if p.model.startswith('c'):
+        data = Categorical(raw)
+    elif eval(p.cats):
         if eval(p.sphere):
             data = MixedData(raw, eval(p.cats), eval(p.sphere))
         else:
