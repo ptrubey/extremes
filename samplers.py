@@ -192,6 +192,28 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
 
 pt_dp_sample_cluster = pt_dp_sample_cluster_crp8
 
+def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
+    """
+    Args:
+        delta : (T x N)
+        disc  : (T)
+        conc  : (T)
+        trunc : Scalar (Blocked Gibbs Stick-Breaking Truncation Point)
+    Out:
+        chi   : (T, trunc)
+    """
+    clustcount = bincount2D_vectorized(delta, trunc)
+    shape1 = 1 + clustcount - disc
+    shape2 = (
+        + conc[:, None] 
+        + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount
+        + (np.arange(trunc) + 1)[None,:] * disc[:,None]
+        )
+    chi = beta(a = shape1, b = shape2)
+    return chi
+
+pt_py_sample_cluster_bgsb = pt_dp_sample_cluster_bgsb
+
 if __name__ == '__main__':
     pass
 
