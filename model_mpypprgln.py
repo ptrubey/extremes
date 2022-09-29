@@ -461,7 +461,7 @@ class Chain(DirichletProcessSampler, Projection):
             prior_eta   = GammaPrior(2., 0.5),
             prior_mu    = (0, 3.),
             prior_Sigma = (10, 0.5),
-            prior_chi   = GEMPrior(0.05, 5),
+            prior_chi   = GEMPrior(0.2, 5),
             p           = 10,
             max_clust_count = 200,
             ntemps      = 3,
