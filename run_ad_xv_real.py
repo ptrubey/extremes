@@ -11,7 +11,7 @@ cardio = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : '',
+    'model'     : 'mpypprgln',
     }
 cover = {
     'source'    : './ad/cover/data_xv{}_is.csv',
