@@ -205,14 +205,27 @@ def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
     clustcount = bincount2D_vectorized(delta, trunc)
     shape1 = 1 + clustcount - disc
     shape2 = (
-        + conc[:, None] 
+        + conc
         + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount
-        + (np.arange(trunc) + 1)[None,:] * disc[:,None]
+        + (np.arange(trunc) + 1)[None,:] * disc
         )
     chi = beta(a = shape1, b = shape2)
     return chi
 
 pt_py_sample_cluster_bgsb = pt_dp_sample_cluster_bgsb
+
+def pt_logd_gem_mx_st(chi, conc, disc):
+    """ 
+    Log-density for Griffith, Engen, & McCloskey distribution.
+    Args:
+        chi  : (T, J)
+        conc : scalar
+        disc : scalar
+    """
+    raise
+
+
+
 
 if __name__ == '__main__':
     pass

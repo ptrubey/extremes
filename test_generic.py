@@ -66,7 +66,7 @@ if __name__ == '__main__':
         data.fill_outcome(outcome)
     
     ## Initialize Chain
-    if p.model[:3] in ('sdp','mdp','cdp'):
+    if p.model[:3] in ('sdp','mdp','cdp','mpy'):
         model = Chain(
                     data, 
                     prior_eta = GammaPrior(float(p.eta_shape), float(p.eta_rate)), 
