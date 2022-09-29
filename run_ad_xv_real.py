@@ -2,10 +2,6 @@ import sys, os
 import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
-# models = ['mdppprgln','mdppprg']
-models = ['mdppprgln']
-
-
 cardio = {
     'source'    : './ad/cardio/data_xv{}_is.csv',
     'outcome'   : './ad/cardio/outcome_xv{}_is.csv',
@@ -15,7 +11,7 @@ cardio = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : '',
     }
 cover = {
     'source'    : './ad/cover/data_xv{}_is.csv',
@@ -26,7 +22,7 @@ cover = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : 'mpypprgln',
     }
 mammography = {
     'source'    : './ad/mammography/data_xv{}_is.csv',
@@ -37,7 +33,7 @@ mammography = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : 'mpypprgln',
     }
 pima = {
     'source'    : './ad/pima/data_xv{}_is.csv',
@@ -48,7 +44,7 @@ pima = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : 'mpypprgln',
     }
 satellite = {
     'source'    : './ad/satellite/data_xv{}_is.csv',
@@ -59,7 +55,7 @@ satellite = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : 'mpypprgln',
     }
 annthyroid = {
     'source'    : './ad/annthyroid/data_xv{}_is.csv',
@@ -70,7 +66,7 @@ annthyroid = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : 'mpypprgln',
     }
 yeast = {
     'source'    : './ad/yeast/data_xv{}_is.csv',
@@ -81,7 +77,7 @@ yeast = {
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
-    'model'     : 'mdppprgln',
+    'model'     : 'mpypprgln',
     }
 ## 
 solarflare = {
@@ -97,8 +93,8 @@ solarflare = {
     }
 
 
-# datasets = [cardio, cover, mammography, pima, satellite,annthyroid,yeast]
-datasets = [solarflare]
+datasets = [cardio, cover, mammography, pima, satellite, annthyroid, yeast]
+# datasets = [solarflare]
 stepping = '1.1'
 ntemps = '5'
 
