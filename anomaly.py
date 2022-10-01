@@ -3,13 +3,10 @@ Module for implementing anomaly detection algorithms.
 
 Implements classic anomaly detection algorithms, as well as custom anomaly detection algorithms for extreme data.
 """
-# from inspect import Attribute
-# from nis import cat
-# from unicodedata import category
-# from xml.dom.minidom import Attr
+# builtins imported as package
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
 import re, os, argparse, glob, gc
-# builtins explicitly called
+# builtins explicitly imported
 from multiprocessing import pool as mcpool, cpu_count, Pool # get_context
 from scipy.integrate import trapezoid
 from scipy.special import gamma as gamma_func
@@ -20,14 +17,14 @@ from collections import defaultdict
 from functools import cached_property
 from time import sleep
 from math import ceil
+from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
 # Competing Anomaly Detection Algorithms
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
-from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
+# Custom Modules
 from data import Projection, category_matrix, euclidean_to_catprob,             \
     euclidean_to_hypercube
-# Custom Modules
 from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
     hypercube_distance_matrix, euclidean_distance_matrix,                       \
     euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
@@ -35,12 +32,22 @@ from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           
 from models import Results
 np.seterr(divide = 'ignore')
 
+# Globals
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
-# from classify import Classifier
-
 def metric_auc(scores, actual):
+    """  
+    metric_auc(scores, actual)
+    ---
+    Compute Area-Under-the-Curve statistics for ROC and PRC
+    ---
+    Args:
+        scores : (N) vector, float
+        actual : (N) vector, int/bool
+    ---
+    Out:  tuple: (AuROC, AuPRC)
+    """
     scores[np.isinf(scores)] = MAX
     scores[scores > MAX] = MAX
     try:
@@ -49,7 +56,7 @@ def metric_auc(scores, actual):
         return (np.nan, np.nan)
     precision, recall, thresholds = precision_recall_curve(actual, scores)
     auprc = auc(recall, precision)
-    return(auroc, auprc)
+    return (auroc, auprc)
 
 class Anomaly(Projection):
     """ 
@@ -81,7 +88,7 @@ class Anomaly(Projection):
         self.pool.join()
         del self.pool
         return
-
+    
     @property
     def zeta_sigma(self):
         zetas = np.array([
@@ -98,7 +105,6 @@ class Anomaly(Projection):
         except AttributeError:
             sigmas = np.ones(zetas.shape)
         return zetas, sigmas
-
     @property
     def r(self):
         zetas, sigmas = self.zeta_sigma
@@ -183,7 +189,7 @@ class Anomaly(Projection):
             )
         return dmat
     def mixed_distance(self, V = None, W = None):
-        Gcon = self.generate_new_conditional_posterior_predictive_gammas(V,W)
+        Gcon = self.generate_new_conditional_posterior_predictive_gammas(Vnew = V, Wnew = W)
         Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
         catmat = category_matrix(self.data.cats)
         if hasattr(self.data, 'V') and (V is not None):
@@ -518,9 +524,10 @@ if __name__ == '__main__':
     import re
     results  = []
     basepath = './ad'
-    # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid']
+    datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
     # resbases = {'mdppprgln' : 'results_xv*.pkl'}
-    datasets = ['solarflare']
+    resbases = {'mpypprgln' : 'results_xv*.pkl'}
+    # datasets = ['solarflare']
     resbases = {'cdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
