@@ -424,7 +424,7 @@ class Anomaly(Projection):
         return metrics
     def get_scores(self, V, W, R):
         metrics = self.scoring_metrics.keys()
-        density_metrics = ['khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','mlkde']
+        density_metrics = ['khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','lmkde']
         out = pd.DataFrame()
         for metric in metrics:
             print('s' + '\b'*11 + metric.ljust(10), end = '')

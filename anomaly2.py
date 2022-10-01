@@ -379,13 +379,6 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    # def latent_simplex_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
-    #     """ computes mean kde for  """
-    #     h = self.latent_sphere_bandwidth
-    #     pi_con = np.swapaxes(self.generate_conditional_posterior_predictive_spheres(), 0, 1)
-    #     pi_new = self.generate_posterior_predictive_spheres(10)
-    #     inv_scores =  kde_per_obs(pi_con, pi_new, h, 'manhattan', self.pool)
-    #     return 1 / (inv_scores + EPS)
     def latent_euclidean_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
         h = self.latent_euclidean_bandwidth
         Znew = self.generate_new_conditional_posterior_predictive_zetas(V, W)
