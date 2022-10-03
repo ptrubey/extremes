@@ -102,6 +102,18 @@ class DirichletProcessSampler(BaseSampler):
         print(ps)
         return
 
+class StickBreakingSampler(DirichletProcessSampler):
+    @property
+    def curr_cluster_count(self):
+        return (np.bincount(self.curr_delta) > 0).sum()
+    
+    def average_cluster_count(self, ns):
+        cc = bincount2D_vectorized(
+            self.samples.delta[(ns//2):], 
+            self.samples.delta.max() + 1,
+            )
+        return (cc > 0).sum(axis = 1).mean()
+
 def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
     """
     Args:

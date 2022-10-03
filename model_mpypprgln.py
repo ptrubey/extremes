@@ -13,7 +13,7 @@ from energy import limit_cpu
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import DirichletProcessSampler, bincount2D_vectorized,            \
+from samplers import StickBreakingSampler, bincount2D_vectorized,            \
     pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
 from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
     euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
@@ -42,24 +42,26 @@ class Samples(object):
         nCats: number of categorical variables        
         """
         tCol = nCol + nCat
-        self.zeta  = [None] * (nSamp + 1)
+        # self.zeta  = [None] * (nSamp + 1)
+        self.zeta  = np.empty((nSamp + 1, nTemp, nTrunc, tCol))
         self.mu    = np.empty((nSamp + 1, nTemp, tCol))
         self.Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
         self.chi   = np.empty((nSamp + 1, nTemp, nTrunc))
         return
 
-def Samples_(Samples):
+class Samples_(Samples):
     def __init__(self, nSamp, nDat, nCol, nCat, nTrunc):
         tCol = nCol + nCat 
-        self.zeta  = [None] * (nSamp)
+        # self.zeta  = [None] * (nSamp)
+        self.zeta  = np.empty((nSamp, nTrunc, tCol))
         self.mu    = np.empty((nSamp, tCol))
         self.Sigma = np.empty((nSamp, tCol, tCol))
         self.delta = np.empty((nSamp, nDat))
         self.chi   = np.empty((nSamp, nTrunc))
         return
 
-class Chain(DirichletProcessSampler, Projection):
+class Chain(StickBreakingSampler, Projection):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
@@ -77,11 +79,14 @@ class Chain(DirichletProcessSampler, Projection):
         return self.samples.chi[self.curr_iter]
     @property
     def curr_cluster_count(self):
-        return self.curr_delta[0].max() + 1
+        return (np.bincount(self.curr_delta[0]) > 0).sum()
     def average_cluster_count(self, ns):
-        acc = self.samples.delta[(ns//2):][:,0].max(axis = 1).mean() + 1
-        return '{:.2f}'.format(acc)
-
+        cc = bincount2D_vectorized(
+            self.samples.delta[(ns//2):,0], 
+            self.samples.delta[:,0].max() + 1,
+            )
+        return '{:.2f}'.format((cc > 0).sum(axis = 1).mean())
+    
     # Adaptive Metropolis Placeholders
     am_cov_c  = None
     am_mean_c = None
@@ -97,24 +102,6 @@ class Chain(DirichletProcessSampler, Projection):
         log_likelihood = self.log_delta_likelihood(zeta)
         delta = pt_py_sample_cluster_bgsb(chi, log_likelihood)
         return delta
-
-    def clean_delta_zeta(self, delta, zeta):
-        """
-        Find populated clusters, re-index them, 
-        keep only parameters associated with extant clusters
-        ---
-        inputs:
-            delta : cluster indicator vector (n)
-            zeta  : cluster parameter matrix (J x d)
-        outputs:
-            delta : cluster indicator vector (n)
-            zeta  : cluster parameter matrix (J* x d)
-        """
-        # Find populated clusters, re-index them
-        for t in range(self.nTemp):
-            keep, delta[t] = np.unique(delta[t], return_inverse = True)
-            zeta[t][:keep.shape[0]] = zeta[t,keep]
-        return
 
     def sample_zeta_new(self, mu, Sigma_chol):
         """ Sample new zetas as log-normal (sample normal, then exponentiate) """
@@ -391,7 +378,6 @@ class Chain(DirichletProcessSampler, Projection):
         
         # Update cluster assignments and re-index
         delta = self.sample_delta(chi, zeta)
-        self.clean_delta_zeta(delta, zeta)
         self.samples.delta[ci] = delta
         self.samples.chi[ci] = self.sample_chi(self.curr_delta)
         
@@ -414,12 +400,7 @@ class Chain(DirichletProcessSampler, Projection):
             os.remove(path)
         # assemble data
         deltas = self.samples.delta[(nBurn+1) :: nThin, 0]
-        dmax = deltas.max(axis = 1) + 1
-        zetas = np.vstack([
-            np.hstack((np.ones((dmax[i], 1)) * i, zeta[0][:dmax[i]]))
-            for i, zeta in enumerate(self.samples.zeta[(nBurn + 1)::nThin])
-            ])
-
+        zetas  = self.samples.zeta[(nBurn+1) :: nThin, 0]
         mus    = self.samples.mu[(nBurn+1) :: nThin, 0]
         Sigmas = self.samples.Sigma[(nBurn+1) :: nThin, 0]
         chis   = self.samples.chi[(nBurn+1) :: nThin, 0]
@@ -509,26 +490,19 @@ class Chain(DirichletProcessSampler, Projection):
 class Result(object):
     def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
         new_gammas = []
+        njs = np.zeros(self.max_clust_count, dtype = int)
+        ljs = np.zeros(self.max_clust_count)
+        prob = np.zeros(self.max_clust_count)
         for s in range(self.nSamp):
-            dmax = self.samples.delta[s].max()
-            njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
-            ljs = np.zeros(njs.shape)
+            njs[:] = np.bincount(self.samples.delta[s], minlength = self.max_clust_count)
+            ljs[:] = 0
             ljs += njs
             ljs -= (njs > 0) * self.GEMPrior.discount
             ljs += (njs == 0) * self.GEMPrior.concentration / m
-            ljs += (njs == 0) * self.GEMPrior.discount * (dmax + 1) / m
-            new_zetas = np.empty((m, self.nCol + self.nCat))
-            np.einsum(
-                'zy,jy->jz', 
-                cholesky(self.samples.Sigma[s]), 
-                normal(size = (m, self.nCol + self.nCat)),
-                out = new_zetas,
-                )
-            new_zetas += self.samples.mu[s][None,:]
-            np.exp(new_zetas, out = new_zetas)
-            prob = ljs / ljs.sum()
+            ljs += (njs == 0) * self.GEMPrior.discount * (njs > 0).sum() / m
+            prob[:] = ljs / ljs.sum()
             deltas = cu.generate_indices(prob, n_per_sample)
-            zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
+            zeta = self.samples.zeta[s][deltas]
             new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
 
@@ -631,19 +605,9 @@ class Result(object):
     def generate_new_conditional_posterior_predictive_zetas(self, Vnew, Wnew):
         n = Vnew.shape[0]
         Ypnew = euclidean_to_psphere(Vnew, 10)
-        
-        max_clust_count = self.samples.delta.max() + 20
-        zetas = np.einsum(
-            'sab,sjb->sja',
-            cholesky(self.samples.Sigma),
-            normal(size = (self.nSamp, max_clust_count, self.tCol)),
-            )
-        zetas += self.samples.mu[:,None,:]
-        np.exp(zetas, out = zetas)
-        weights = np.zeros((self.nSamp, max_clust_count))
+        weights = np.zeros((self.nSamp, self.max_clust_count))
         for s in range(self.nSamp):
-            weights[s] = np.bincount(self.samples.delta[s], minlength = max_clust_count)
-            zetas[s][np.where(weights[s] > 0)[0]] = self.samples.zeta[s][np.where(weights[s] > 0)[0]]
+            weights[s] = np.bincount(self.samples.delta[s], minlength = self.max_clust_count)
 
         weights -= (weights > 0) * self.GEMPrior.discount
         weights += (weights == 0) * (
@@ -651,14 +615,14 @@ class Result(object):
             + self.GEMPrior.discount * (weights > 0).sum(axis = 1)[:,None]
             ) / ((weights == 0).sum(axis = 1) + EPS)[:,None]
         np.log(weights, out = weights)
-        loglik = np.zeros((n, self.nSamp, max_clust_count))
-        sigma_ph = np.ones((1, max_clust_count, self.nCol))
+        loglik = np.zeros((n, self.nSamp, self.max_clust_count))
+        sigma_ph = np.ones((1, self.max_clust_count, self.nCol))
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             pt_logd_projgamma_my_mt_inplace_unstable(
-                loglik, Ypnew , zetas[:,:,:self.nCol], sigma_ph,
+                loglik, Ypnew , self.samples.zeta[:,:,:self.nCol], sigma_ph,
                 )
             pt_logd_cumdircategorical_mx_ma_inplace_unstable(
-                loglik, Wnew, zetas[:,:,self.nCol:], self.CatMat,
+                loglik, Wnew, self.samples.zeta[:,:,self.nCol:], self.CatMat,
                 )
         np.nan_to_num(loglik, False, -np.inf)
         # combine logprior weights and likelihood under cluster
@@ -672,7 +636,7 @@ class Result(object):
         znew = np.empty((n, self.nSamp, self.tCol))
         for i in range(n):
             for s in range(self.nSamp):
-                znew[i,s] = zetas[s,dnew[i,s]]
+                znew[i,s] = self.samples.zeta[s,dnew[i,s]]
         return znew
     
     def load_data(self, path):        
@@ -701,16 +665,15 @@ class Result(object):
                 self.data.__dict__[key] = out[key]
 
         self.GEMPrior = GEMPrior(*out['GEM'])
-
-        self.max_clust_count = deltas.max() + 10
-
-        self.samples = Samples(
-            self.nSamp, self.nDat, self.nCol, self.nCat, self.nCats, self.max_clust_count,
+        self.max_clust_count = chis.shape[-1]
+        self.samples = Samples_(
+            self.nSamp, self.nDat, self.nCol, self.nCat, self.max_clust_count,
             )
         self.samples.delta = deltas
         self.samples.mu    = mus
         self.samples.Sigma = Sigmas
-        self.samples.zeta  = [zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)]
+        self.samples.chi   = chis
+        self.samples.zeta  = zetas
 
         if 'swap_y' in out.keys():
             self.swap_y = out['swap_y']
