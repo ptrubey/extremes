@@ -2,7 +2,6 @@ import model_sdpppg as sdpppg
 import model_sdppprg as sdppprg
 import model_sdppprgln as sdppprgln
 import model_sdpppgln as sdpppgln
-# import model_mdppprg as mdppprg
 import model_cdppprg as cdppprg
 import model_cdppprgln as cdppprgln
 import model_mdppprg_pt as mdppprg
