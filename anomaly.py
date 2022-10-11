@@ -211,7 +211,7 @@ class Anomaly(Projection):
     @cached_property
     def hypercube_bandwidth(self):
         """hypercube bandwidth for only hypercube section"""
-        V = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(1)[:,:,:self.nCol])
+        V = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(1)[:,:self.nCol])
         VV = hypercube_dmat_per_obs(V[None], V, self.pool)
         return np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1)))
     @cached_property
@@ -462,19 +462,6 @@ def ResultFactory(model, path):
 
     return Result(path)
 
-def MixedResultFactory(path):
-    if 'mdppprgln' in path:
-        class Result(Results['mdppprgln'], Anomaly):
-            pass
-        return Result(path)
-    elif 'mdppprg' in path:
-        class Result(Results['mdppprg'], Anomaly):
-            pass
-        return Result(path)
-    else: 
-        raise ValueError('Wrong!')
-    pass
-
 def plot_log_inverse_scores(scores):
     plt.plot(np.sort(np.log(1/scores)))
     plt.show()
@@ -493,55 +480,28 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
-    # res_path     = './ad/solarflare/results_xv5.pkl'
-    # is_data_path = './ad/solarflare/data_xv5_is.csv'
-    # is_out_path = './ad/solarflare/outcome_xv5_is.csv'
-    # os_data_path = './ad/solarflare/data_xv5_os.csv'
-    # os_out_path  = './ad/solarflare/outcome_xv5_os.csv'
-
-    # is_data_raw = pd.read_csv(is_data_path).values
-    # is_data_raw = is_data_raw[~np.isnan(is_data_raw).any(axis = 1)]
-    # os_data_raw = pd.read_csv(os_data_path).values
-    # os_data_raw = os_data_raw[~np.isnan(os_data_raw).any(axis = 1)]
-    # is_out_raw = pd.read_csv(is_out_path).values.ravel()
-    # is_out_raw = is_out_raw[~np.isnan(is_out_raw.astype(float))].astype(int)
-    # os_out_raw = pd.read_csv(os_out_path).values.ravel()
-    # os_out_raw = os_out_raw[~np.isnan(os_out_raw.astype(float))].astype(int)
-
-    # res = ResultFactory('cdppprgln', res_path)
-    # res.pools_open()
-        
-    # Y_is, W_is = res.data.to_categorical_new(is_data_raw, is_out_raw)
-    # Y_os, W_os = res.data.to_categorical_new(os_data_raw, os_out_raw)
-    
-    # is_metrics = res.get_scoring_metrics(Y_is, None, W_is, None)
-    # os_metrics = res.get_scoring_metrics(Y_os, None, W_os, None)
-
-    # res.pools_closed()
-
-    # raise
-
     import re
     results  = []
     basepath = './ad'
     datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
     # resbases = {'mdppprgln' : 'results_xv*.pkl'}
+    # datasets = ['cardio','mammography','pima','annthyroid','yeast']
     resbases = {'mpypprgln' : 'results_xv*.pkl'}
     # datasets = ['solarflare']
-    resbases = {'cdppprgln' : 'results_xv*.pkl'}
+    # resbases = {'cdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
         for dataset in datasets:
             files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
             for file in files:
                 results.append((model, file))
     metrics = []
-    pool = Pool(processes = ceil(0.9 * cpu_count()), initializer = limit_cpu)
+    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
     for result in results:
         extant_result = ResultFactory(*result)
         extant_result.set_postpred_per_sample(20)
         extant_result.pool = pool
 
-        cv = re.search('xv(\d+).pkl', result[1]).group(1)
+        cv = re.search('xv(\d+)', result[1]).group(1)
         
         is_raw = pd.read_csv(
             os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
@@ -561,13 +521,13 @@ if __name__ == '__main__':
             ).values.ravel()
         os_out = os_out[~np.isnan(os_out.astype(float))].astype(int)
 
-        Y_is, W_is = extant_result.data.to_categorical_new(is_raw, is_out)
-        Y_os, W_os = extant_result.data.to_categorical_new(os_raw, os_out)
+        is_data = extant_result.data.to_mixed_new(is_raw, is_out)
+        os_data = extant_result.data.to_mixed_new(os_raw, os_out)
 
         print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
-        extant_metric_is = extant_result.get_scoring_metrics(Y_is, None, W_is, None)
+        extant_metric_is = extant_result.get_scoring_metrics(*is_data)
         print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
-        extant_metric_os = extant_result.get_scoring_metrics(Y_os, None, W_os, None)
+        extant_metric_os = extant_result.get_scoring_metrics(*os_data)
 
         # extant_result.pools_closed()
         del extant_result
@@ -580,6 +540,6 @@ if __name__ == '__main__':
         gc.collect()
     
     df = pd.concat(metrics)
-    df.to_csv('./ad/performance_class_xv.csv')
+    df.to_csv('./ad/performance_py_xv.csv')
 
 # EOF   
