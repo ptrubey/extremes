@@ -108,7 +108,7 @@ if __name__ == '__main__':
                 '--nSamp', '30000', '--nKeep', '20000', '--nThin', '20',
                 '--prior_chi', prior_chi,
                 # '--eta_shape', dataset['eta_shape'],
-                '--eta_rate', dataset['eta_rate'],
+                # '--eta_rate', dataset['eta_rate'],
                 '--decluster', dataset['decluster'],
                 '--ntemps', ntemps, 
                 '--stepping', stepping,
