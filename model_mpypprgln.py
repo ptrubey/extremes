@@ -720,9 +720,9 @@ if __name__ == '__main__':
         'cat_vars' : '[5,6,7,8]',
         'decluster' : 'False',
         'quantile' : 0.95,
-        'nSamp' : 5000,
-        'nKeep' : 2000,
-        'nThin' : 3,
+        'nSamp' : 10000,
+        'nKeep' : 5000,
+        'nThin' : 5,
         'eta_alpha' : 2.,
         'eta_beta' : 1.,
         }
@@ -738,7 +738,7 @@ if __name__ == '__main__':
         outcome = out,
         )
     data.fill_outcome(out)
-    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10, ntemps = 3)
+    model = Chain(data, prior_chi = GEMPrior(0.1, 1), p = 10, ntemps = 6)
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
     res = Result(p.out_path)

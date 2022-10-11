@@ -6,7 +6,7 @@ cardio = {
     'source'    : './ad/cardio/data_xv{}_is.csv',
     'outcome'   : './ad/cardio/outcome_xv{}_is.csv',
     'results'   : './ad/cardio/results_xv{}.pkl',
-    'quantile'  : '0.95',
+    'quantile'  : '0.85',
     'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
     'decluster' : 'False',
     'eta_shape' : '2',
@@ -17,7 +17,7 @@ cover = {
     'source'    : './ad/cover/data_xv{}_is.csv',
     'outcome'   : './ad/cover/outcome_xv{}_is.csv',
     'results'   : './ad/cover/results_xv{}.pkl',
-    'quantile'  : '0.998',
+    'quantile'  : '0.98',
     'cats'      : '[9,10,11,12]',
     'decluster' : 'False',
     'eta_shape' : '2',
@@ -61,7 +61,7 @@ annthyroid = {
     'source'    : './ad/annthyroid/data_xv{}_is.csv',
     'outcome'   : './ad/annthyroid/outcome_xv{}_is.csv',
     'results'   : './ad/annthyroid/results_xv{}.pkl',
-    'quantile'  : '0.95',
+    'quantile'  : '0.85',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
     'decluster' : 'False',
     'eta_shape' : '2',
@@ -93,7 +93,8 @@ solarflare = {
     }
 
 
-datasets = [cardio, cover, mammography, pima, satellite, annthyroid, yeast]
+# datasets = [cardio, cover, mammography, pima, satellite, annthyroid, yeast]
+datasets = [cardio, cover, mammography, annthyroid, yeast]
 # datasets = [solarflare]
 stepping = '1.1'
 ntemps = '5'
