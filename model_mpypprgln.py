@@ -25,7 +25,7 @@ from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 
     pt_logd_projgamma_paired_yt
 from cov import PerObsTemperedOnlineCovariance
 
-Prior = namedtuple('Prior', 'eta mu Sigma chi')
+Prior = namedtuple('Prior', 'mu Sigma chi')
 GEMPrior = namedtuple('GEMPrior', 'discount concentration')
 
 class Samples(object):
@@ -439,10 +439,9 @@ class Chain(StickBreakingSampler, Projection):
     def __init__(
             self,
             data,
-            prior_eta   = GammaPrior(2., 0.5),
             prior_mu    = (0, 3.),
             prior_Sigma = (10, 0.5),
-            prior_chi   = GEMPrior(0.2, 5),
+            prior_chi   = (0.1, 1),
             p           = 10,
             max_clust_count = 200,
             ntemps      = 3,
@@ -469,7 +468,8 @@ class Chain(StickBreakingSampler, Projection):
             self.tCol + prior_Sigma[0],
             np.eye(self.tCol) * prior_Sigma[1],
             )
-        self.priors = Prior(prior_eta, _prior_mu, _prior_Sigma, prior_chi)
+        _prior_chi = GEMPrior(*prior_chi)
+        self.priors = Prior(_prior_mu, _prior_Sigma, _prior_chi)
         self.set_projection()
         self.categorical_considerations()
 

@@ -44,6 +44,7 @@ def argparser_generic():
     p.add_argument('--maxclust', default = '300')
     p.add_argument('--ntemps', default = '3')
     p.add_argument('--stepping', default = '1.05')
+    p.add_argument('--prior_chi', default = '[1e-1,1e0]')
     return p.parse_args()
 
 def argparser_simulation():
