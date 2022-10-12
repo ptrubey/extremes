@@ -360,8 +360,8 @@ class Anomaly(Projection):
             raise ValueError('requested kernel not available')
         pass
     def latent_sphere_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
-        if V is not None:
-            return np.array([np.nan] * W.shape[0])
+        # if V is not None:
+        #     return np.array([np.nan] * W.shape[0])
         h = self.latent_sphere_bandwidth
         Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
         Gcon = gamma(Zcon[:,:,self.nCol:] + W[:,None])
@@ -480,6 +480,29 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
+    # basepath = './ad/cardio'
+
+    # result = ResultFactory('mpypprgln', os.path.join(basepath, 'results_xv1_1e-1_1e0.pkl'))
+    # result.pools_open()
+
+    # is_raw = pd.read_csv(os.path.join(basepath, 'data_xv1_is.csv')).values
+    # os_raw = pd.read_csv(os.path.join(basepath, 'data_xv1_os.csv')).values
+    # is_out  = pd.read_csv(os.path.join(basepath, 'outcome_xv1_is.csv')).values.ravel()
+    # os_out  = pd.read_csv(os.path.join(basepath, 'outcome_xv1_os.csv')).values.ravel()
+    # is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
+    # os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+    # is_out  = is_out[~np.isnan(is_out)].astype(int)
+    # os_out  = os_out[~np.isnan(os_out)].astype(int)
+
+    # is_data = result.data.to_mixed_new(is_raw, is_out)
+    # os_data = result.data.to_mixed_new(os_raw, os_out)
+    
+    # metric_is = result.get_scoring_metrics(*is_data)
+    # metric_os = result.get_scoring_metrics(*os_data)
+
+    # result.pools_closed()
+
+    # raise
     import re
     results  = []
     basepath = './ad'
