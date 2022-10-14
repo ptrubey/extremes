@@ -407,7 +407,7 @@ class Anomaly(Projection):
         Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
         Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
         S1 = kde_per_obs(V[None], Vnew, h_real, 'hypercube', self.pool)
-        S2 = self.latent_sphere_kernel_density_estimate(V, W)
+        S2 = 1 / self.latent_sphere_kernel_density_estimate(V, W)
         return 1 / (S1 * S2  + EPS)
         
     # scoring metrics
