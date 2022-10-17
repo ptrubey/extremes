@@ -3,7 +3,7 @@ import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
 discount = '1e-1'
-concentration = '1e0'
+concentration = '1e1'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
 cardio = {
@@ -27,7 +27,7 @@ cover = {
 mammography = {
     'source'    : './ad/mammography/data_xv{}_is.csv',
     'outcome'   : './ad/mammography/outcome_xv{}_is.csv',
-    'results'   : './ad/mammography/results_xv{}_{}.pkl',
+    'results'   : './ad/mammography/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8]',
     'decluster' : 'False',
@@ -36,7 +36,7 @@ mammography = {
 pima = {
     'source'    : './ad/pima/data_xv{}_is.csv',
     'outcome'   : './ad/pima/outcome_xv{}_is.csv',
-    'results'   : './ad/pima/results_xv{}_{}.pkl',
+    'results'   : './ad/pima/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[7,8,9,10,11,12]',
     'decluster' : 'False',
@@ -45,7 +45,7 @@ pima = {
 satellite = {
     'source'    : './ad/satellite/data_xv{}_is.csv',
     'outcome'   : './ad/satellite/outcome_xv{}_is.csv',
-    'results'   : './ad/satellite/results_xv{}_{}.pkl',
+    'results'   : './ad/satellite/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
     'decluster' : 'False',
@@ -54,7 +54,7 @@ satellite = {
 annthyroid = {
     'source'    : './ad/annthyroid/data_xv{}_is.csv',
     'outcome'   : './ad/annthyroid/outcome_xv{}_is.csv',
-    'results'   : './ad/annthyroid/results_xv{}_{}.pkl',
+    'results'   : './ad/annthyroid/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
     'decluster' : 'False',
@@ -63,7 +63,7 @@ annthyroid = {
 yeast = {
     'source'    : './ad/yeast/data_xv{}_is.csv',
     'outcome'   : './ad/yeast/outcome_xv{}_is.csv',
-    'results'   : './ad/yeast/results_xv{}_{}.pkl',
+    'results'   : './ad/yeast/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[4,5]',
     'decluster' : 'False',
@@ -75,7 +75,7 @@ yeast = {
 solarflare = {
     'source'    : './ad/solarflare/data_xv{}_is.csv',
     'outcome'   : './ad/solarflare/outcome_xv{}_is.csv',
-    'results'   : './ad/solarflare/results_xv{}_{}.pkl',
+    'results'   : './ad/solarflare/results_xv{}_{}_{}.pkl',
     'quantile'  : 'None',
     'cats'      : 'None',
     'decluster' : 'False',
