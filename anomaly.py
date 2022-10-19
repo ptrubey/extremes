@@ -9,7 +9,7 @@ import re, os, argparse, glob, gc
 # builtins explicitly imported
 from multiprocessing import pool as mcpool, cpu_count, Pool # get_context
 from scipy.integrate import trapezoid
-from scipy.special import gamma as gamma_func
+from scipy.special import gamma as gamma_func, gammaln
 from scipy.stats import gmean
 from numpy.random import gamma, choice
 from itertools import repeat
@@ -304,8 +304,16 @@ class Anomaly(Projection):
         except AttributeError:
             n = W.shape[0]
         p = self.tCol
-        inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
-        return 1 / inv_scores
+        log_scores = (
+            + np.log(k/n)
+            + gammaln((p-1)/2 + 1)
+            - ((p-1)/2) * np.log(np.pi)
+            - (p-1) * np.log(knn)
+            )        
+        with np.errstate(under = 'ignore', over='ignore'):
+            scores = np.exp(log_scores)
+        scores[np.isnan(scores)] = MAX
+        return scores
     def knn_euclidean_distance_to_postpred(self, V = None, W = None, k = 5, **kwargs):
         knn = np.array(list(map(np.sort, self.euclidean_distance(V = V, W = W))))[:, k, 0]
         try:
@@ -313,8 +321,16 @@ class Anomaly(Projection):
         except AttributeError:
             n = W.shape[0]
         p = self.tCol
-        inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
-        return 1 / inv_scores
+        log_scores = (
+            + np.log(k/n)
+            + gammaln((p-1)/2 + 1)
+            - ((p-1)/2) * np.log(np.pi)
+            - (p-1) * np.log(knn)
+            )        
+        with np.errstate(under = 'ignore', over='ignore'):
+            scores = np.exp(log_scores)
+        scores[np.isnan(scores)] = MAX
+        return scores
     def populate_cones(self, epsilon):
         postpred = euclidean_to_hypercube(
             self.generate_posterior_predictive_gammas(self.postpred_per_samp),
@@ -506,9 +522,9 @@ if __name__ == '__main__':
     import re
     results  = []
     basepath = './ad'
-    datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
+    # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
     # resbases = {'mdppprgln' : 'results_xv*.pkl'}
-    # datasets = ['cardio','mammography','pima','annthyroid','yeast']
+    datasets = ['cardio','cover','mammography','annthyroid','yeast']
     resbases = {'mpypprgln' : 'results_xv*.pkl'}
     # datasets = ['solarflare']
     # resbases = {'cdppprgln' : 'results_xv*.pkl'}
