@@ -23,7 +23,7 @@ cover = {
 mammography = {
     'source'    : './ad/mammography/data.csv',
     'quantile'  : '0.95',
-    'cats'      : '[5,6,7,8]',
+    'cats'      : '[5,6,7,8,9]',
     'name'      : 'mammography',
     }
 pima = {
@@ -41,17 +41,17 @@ satellite = {
 annthyroid = {
     'source'    : './ad/annthyroid/data.csv',
     'quantile'  : '0.85',
-    'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
+    'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
     'name'      : 'annthyroid',
     }
 yeast = {
     'source'    : './ad/yeast/data.csv',
     'quantile'  : '0.90',
-    'cats'      : '[4,5]',
+    'cats'      : '[4,5,8,9,10]',
     'name'      : 'yeast',
     }
 
-datasets = [cardio, cover, mammography, pima, satellite, annthyroid, yeast]
+datasets = [cardio, cover, mammography, annthyroid, yeast]
 summaries = []
 
 for dataset in datasets:
