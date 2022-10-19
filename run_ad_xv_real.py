@@ -3,7 +3,7 @@ import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
 discount = '1e-1'
-concentration = '1e1'
+concentration = '1e0'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
 cardio = {
@@ -29,8 +29,7 @@ mammography = {
     'outcome'   : './ad/mammography/outcome_xv{}_is.csv',
     'results'   : './ad/mammography/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.95',
-    # 'cats'      : '[5,6,7,8]',
-    'cats'      : '[6,7,8,9,10]',
+    'cats'      : '[5,6,7,8,9]',
     'decluster' : 'False',
     'model'     : 'mpypprgln',
     }
@@ -57,8 +56,7 @@ annthyroid = {
     'outcome'   : './ad/annthyroid/outcome_xv{}_is.csv',
     'results'   : './ad/annthyroid/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.85',
-    # 'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20]',
-    'cats'      : '[7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22]',
+    'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
     'decluster' : 'False',
     'model'     : 'mpypprgln',
     }
@@ -67,8 +65,7 @@ yeast = {
     'outcome'   : './ad/yeast/outcome_xv{}_is.csv',
     'results'   : './ad/yeast/results_xv{}_{}_{}.pkl',
     'quantile'  : '0.90',
-    # 'cats'      : '[4,5]',
-    'cats'      : '[5,6,9,10,11]',
+    'cats'      : '[4,5,8,9,10]',
     'decluster' : 'False',
     'eta_shape' : '2',
     'eta_rate'  : '1e2',
