@@ -525,7 +525,8 @@ if __name__ == '__main__':
     # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
     # resbases = {'mdppprgln' : 'results_xv*.pkl'}
     datasets = ['cardio','cover','mammography','annthyroid','yeast']
-    resbases = {'mpypprgln' : 'results*.pkl'}
+    # resbases = {'mpypprgln' : 'results*.pkl'}
+    resbases = {'mpypprgln' : 'results_xv*.pkl'}
     # datasets = ['solarflare']
     # resbases = {'cdppprgln' : 'results_xv*.pkl'}
     for model in resbases.keys():
@@ -584,7 +585,7 @@ if __name__ == '__main__':
         extant_metric_is = extant_result.get_scoring_metrics(*is_data)
         print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
         extant_metric_os = extant_result.get_scoring_metrics(*os_data)
-        
+
         del extant_result
         extant_metric_is['path'] = result[1]
         extant_metric_os['path'] = result[1]
