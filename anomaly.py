@@ -533,8 +533,9 @@ if __name__ == '__main__':
         for dataset in datasets:
             files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
             for file in files:
-                if not 'xv' in file:
-                    results.append((model, file))
+                results.append((model, file))
+                # if not 'xv' in file:
+                #     results.append((model, file))
     metrics = []
     pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
     for result in results:
