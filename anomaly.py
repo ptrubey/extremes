@@ -525,6 +525,7 @@ if __name__ == '__main__':
     # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
     # resbases = {'mdppprgln' : 'results_xv*.pkl'}
     datasets = ['cardio','cover','mammography','annthyroid','yeast']
+    # resbases = {'mpypprgln' : 'results*.pkl'}
     resbases = {'mpypprgln' : 'results_xv*.pkl'}
     # datasets = ['solarflare']
     # resbases = {'cdppprgln' : 'results_xv*.pkl'}
@@ -533,6 +534,8 @@ if __name__ == '__main__':
             files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
             for file in files:
                 results.append((model, file))
+                # if not 'xv' in file:
+                #     results.append((model, file))
     metrics = []
     pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
     for result in results:
@@ -540,8 +543,24 @@ if __name__ == '__main__':
         extant_result.set_postpred_per_sample(20)
         extant_result.pool = pool
 
+        # Normal Code
+        # raw = pd.read_csv(
+        #         os.path.join(os.path.split(result[1])[0], 'data.csv'),
+        #         ).values
+        # raw = raw[~np.isnan(raw).any(axis = 1)]
+        # out = pd.read_csv(
+        #         os.path.join(os.path.split(result[1])[0], 'outcome.csv'),
+        #         ).values.ravel()
+        # out = out[~np.isnan(out.astype(float))].astype(int)
+        # data = extant_result.data.to_mixed_new(raw, out)
+        # print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+        # extant_metric = extant_result.get_scoring_metrics(*data)
+        # del extant_result
+        # extant_metric['path'] = result[1]
+        # gc.collect()
+
+        # Cross-Validation Code
         cv = re.search('xv(\d+)', result[1]).group(1)
-        
         is_raw = pd.read_csv(
             os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
             ).values
@@ -568,7 +587,6 @@ if __name__ == '__main__':
         print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
         extant_metric_os = extant_result.get_scoring_metrics(*os_data)
 
-        # extant_result.pools_closed()
         del extant_result
         extant_metric_is['path'] = result[1]
         extant_metric_os['path'] = result[1]
@@ -580,5 +598,6 @@ if __name__ == '__main__':
     
     df = pd.concat(metrics)
     df.to_csv('./ad/performance_py_xv.csv')
+    # df.to_csv('./ad/performance_py.csv')
 
 # EOF   
