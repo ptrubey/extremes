@@ -183,8 +183,6 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
         chi            : (T, J)
         log_likelihood : (N x T x J)
         eta ([type])   : (T)
-    ---
-    Updates delta in-place
     """
     N, T, J = log_likelihood.shape
     scratch = np.zeros((N, T, J))
@@ -236,8 +234,26 @@ def pt_logd_gem_mx_st(chi, conc, disc):
     """
     raise
 
+class ParallelTemperingCRPSampler(DirichletProcessSampler):
+    @property
+    def curr_cluster_count(self):
+        return self.curr_delta[0].max() + 1
+    def average_cluster_count(self, ns):
+        acc = self.samples.delta[(ns//2):,0].max(axis = 1).mean() + 1
+        return '{:.2f}'.format(acc)
+        
 
-
+class ParallelTemperingStickBreakingSampler(DirichletProcessSampler):
+    @property
+    def curr_cluster_count(self):
+        return (np.bincount(self.curr_delta[0]) > 0).sum()
+    def average_cluster_count(self, ns):
+        cc = bincount2D_vectorized(
+            self.samples.delta[(ns//2):,0], 
+            self.samples.delta[:,0].max() + 1,
+            )
+        return '{:.2f}'.format((cc > 0).sum(axis = 1).mean())
+    
 
 if __name__ == '__main__':
     pass

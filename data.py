@@ -7,6 +7,7 @@ from genpareto import gpd_fit
 from numpy.linalg import norm
 from math import pi, sqrt, exp
 from scipy.special import erf, erfinv
+from cdf import ECDF
 
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
@@ -418,6 +419,27 @@ class Projection(object):
         self.data.Yp = euclidean_to_psphere(self.data.V, self.p)
         return
     pass
+
+class RankTransform(Outcome):
+    Fhats = None
+    X = None
+    Z = None
+    V = None
+    R = None
+
+    def fill_rank_transform(self, X):
+        self.X = X
+        self.Fhats = map(ECDF, self.X.T)
+        self.Z = np.array([Fhat.stdpareto(x) for Fhat, x in zip(self.Fhats, X.T)]).T
+        self.R = self.Z.max(axis = 1)
+        self.V = self.Z / self.R[:,None]
+        return
+
+    def __init__(self, raw, outcome = 'None'):
+        self.fill_rank_transform(raw)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
+        return
 
 if __name__ == '__main__':
     pass

@@ -18,13 +18,14 @@ from functools import cached_property
 from time import sleep
 from math import ceil
 from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
+from collections import defaultdict
 # Competing Anomaly Detection Algorithms
 from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 # Custom Modules
 from data import Projection, category_matrix, euclidean_to_catprob,             \
-    euclidean_to_hypercube
+    euclidean_to_hypercube, std_pareto_transform
 from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
     hypercube_distance_matrix, euclidean_distance_matrix,                       \
     euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
@@ -35,6 +36,24 @@ np.seterr(divide = 'ignore')
 # Globals
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
+
+class DAMEX(object):
+    damex = defaultdict(lambda: 1e-6)
+    threshold = None
+    
+    def __init__(self, data):
+        n = data.E.shape[0]
+        k = np.sqrt(data.E.shape[0])
+        epsilon = 0.01
+        self.threshold = n * epsilon / k
+        Z = np.array(list(map(std_pareto_transform, self.data.E.T))).T
+        U = (Z > self.threshold)
+        for u in map(tuple, U):
+            self.damex[u] += n / k
+
+    def score(self, X):
+        R = X.max(axis = 1)
+    pass
 
 def metric_auc(scores, actual):
     """  

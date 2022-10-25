@@ -5,7 +5,8 @@ np.seterr(under = 'ignore', over = 'raise')
 from numpy.linalg import norm, slogdet, inv
 from math import cos, sin, log, acos, exp
 from scipy.stats import gamma, uniform, norm as normal
-from scipy.special import gammaln, multigammaln
+from scipy.special import gammaln, multigammaln, gammainc
+from scipy.integrate import quad
 from functools import lru_cache
 from collections import namedtuple
 from contextlib import nullcontext
@@ -561,5 +562,34 @@ def sample_beta_fc(alpha, y, prior):
     aa = len(y) * alpha + prior.a
     bb = sum(y) + prior.b
     return gamma.rvs(aa, scale = 1. / bb)
+
+
+## Test Densities
+def lpv_inner(g, alpha, l):
+    return np.prod(gammainc(np.delete(alpha, l), g)) * g**(alpha[l] - 1) * np.exp(-g)
+
+
+def log_prob_max_of_gammas(alpha, l):
+    """
+    alpha = gamma shape variables
+    l     = dimension of vector to find max
+    """
+    lpv = - gammaln(alpha).sum()
+    lpv += np.log(quad(lambda g: lpv_inner(g, alpha, l), 0, np.inf)[0])
+    return lpv 
+
+def logd_projgamma_linf(v, alpha):
+    l = np.argmax(v)
+    ld = (
+        + log_prob_max_of_gammas(alpha, l)
+        + ((alpha - 1) * np.log(v)).sum()
+        - gammaln(alpha).sum()
+        + gammaln(alpha.sum())
+        - alpha.sum() * np.log(v.sum())
+        )
+    return ld
+
+
+
 
 # EOF

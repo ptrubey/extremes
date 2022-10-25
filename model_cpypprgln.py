@@ -14,18 +14,17 @@ from model_mpypprgln import GEMPrior
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import StickBreakingSampler, bincount2D_vectorized,               \
-    pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
+from samplers import ParallelTemperingStickBreakingSampler,                     \
+    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
 from data import Categorical, Multinomial, Projection, category_matrix,         \
     euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_catprob
 from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 \
     pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_mvnormal_mx_st,   \
     logd_gamma_my, logd_mvnormal_mx_st, logd_invwishart_ms,                     \
-    pt_logd_cumdirmultinom_paired_yt, pt_logd_projgamma_my_mt_inplace_unstable
+    pt_logd_cumdirmultinom_paired_yt
 from cov import PerObsTemperedOnlineCovariance
 
 Prior = namedtuple('Prior', 'mu Sigma chi')
-GEMPrior = namedtuple('GEMPrior', 'discount concentration')
 
 class Samples(object):
     zeta  = None
@@ -58,7 +57,7 @@ class Samples_(object):
         self.chi   = np.empty((nSamp, nTrunc))
         return
 
-class Chain(StickBreakingSampler, Projection):
+class Chain(ParallelTemperingStickBreakingSampler, Projection):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
@@ -74,15 +73,6 @@ class Chain(StickBreakingSampler, Projection):
     @property
     def curr_chi(self):
         return self.samples.chi[self.curr_iter]
-    @property
-    def curr_cluster_count(self):
-        return (np.bincount(self.curr_delta[0]) > 0).sum()
-    def average_cluster_count(self, ns):
-        cc = bincount2D_vectorized(
-            self.samples.delta[(ns//2):,0], 
-            self.samples.delta[:,0].max() + 1,
-            )
-        return '{:.2f}'.format((cc > 0).sum(axis = 1).mean())
 
     # Adaptive Metropolis Placeholders
     am_Sigma  = None
@@ -516,31 +506,19 @@ class Result(object):
 
     def generate_new_conditional_posterior_predictive_zetas(self, Wnew, **kwargs):
         n = Wnew.shape[0]
-        
-        max_clust_count = self.samples.delta.max() + 20
-        zetas = np.einsum(
-            'sab,sjb->sja',
-            cholesky(self.samples.Sigma),
-            normal(size = (self.nSamp, max_clust_count, self.tCol)),
-            )
-        zetas += self.samples.mu[:,None,:]
-        np.exp(zetas, out = zetas)
-        weights = np.zeros((self.nSamp, max_clust_count))
+        weights = np.zeros((self.nSamp, self.max_clust_count))
         for s in range(self.nSamp):
-            weights[s] = np.bincount(
-                self.samples.delta[s], 
-                minlength = max_clust_count,
-                )
-            zetas[s][np.where(weights[s] > 0)[0]] = \
-                self.samples.zeta[s][np.where(weights[s] > 0)[0]]
-            
-        weights += (weights == 0) * \
-            (self.samples.eta / ((weights == 0).sum(axis = 1) + EPS))[:,None]
+            weights[s] = np.bincount(self.samples.delta[s], minlength = self.max_clust_count)
+        weights -= (weights > 0) * self.GEMPrior.discount
+        weights += (weights == 0) * (
+            + self.GEMPrior.concentration
+            + self.GEMPrior.discount * (weights > 0).sum(axis = 1)[:,None]
+            ) / ((weights == 0).sum(axis = 1) + EPS)[:,None]
         np.log(weights, out = weights)
-        loglik = np.zeros((n, self.nSamp, max_clust_count))
+        loglik = np.zeros((n, self.nSamp, self.max_clust_count))
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             pt_logd_cumdircategorical_mx_ma_inplace_unstable(
-                loglik, Wnew, zetas, self.CatMat,
+                loglik, Wnew, self.samples.zeta, self.CatMat
                 )
         np.nan_to_num(loglik, False, -np.inf)
         # combine logprior weights and likelihood under cluster
@@ -548,14 +526,13 @@ class Result(object):
         weights -= weights.max(axis = 2)[:,:,None]
         np.exp(weights, out = weights) # unnormalized cluster probability
         np.cumsum(weights, axis = 2, out = weights)
-        weights /= weights[:,:,-1][:,:,None]  # normalized cluster 
-                                              #     cumulative probability
+        weights /= weights[:,:,-1][:,:,None]  # normalized cluster cumulative probability
         p = uniform(size = (n, self.nSamp, 1))
         dnew = (p > weights).sum(axis = 2)  # new deltas
         znew = np.empty((n, self.nSamp, self.tCol))
         for i in range(n):
             for s in range(self.nSamp):
-                znew[i,s] = zetas[s,dnew[i,s]]
+                znew[i,s] = self.samples.zeta[s,dnew[i,s]]
         return znew
     
     def load_data(self, path):        
@@ -563,16 +540,15 @@ class Result(object):
             out = pickle.load(file)
         
         deltas = out['deltas']
-        etas   = out['etas']
         zetas  = out['zetas']
         mus    = out['mus']
         Sigmas = out['Sigmas']
         cats   = out['cats']
+        chis   = out['chis']
         
         self.data   = Multinomial(out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
-        assert self.nDat == self.data.nDat
         self.nCat   = self.data.nCat
         self.tCol   = self.nCat
         self.nCats  = cats.shape[0]
@@ -583,17 +559,16 @@ class Result(object):
             if key in out.keys():
                 self.data.__dict__[key] = out[key] 
 
+        self.GEMPrior = GEMPrior(*out['GEM'])
+        self.max_clust_count = chis.shape[-1]
         self.samples = Samples_(
-            self.nSamp, self.nDat, self.nCat,
+            self.nSamp, self.nDat, self.nCat, self.max_clust_count,
             )
         self.samples.delta = deltas
-        self.samples.eta   = etas
         self.samples.mu    = mus
         self.samples.Sigma = Sigmas
-        self.samples.zeta  = [
-            zetas[np.where(zetas.T[0] == i)[0], 1:] 
-            for i in range(self.nSamp)
-            ]
+        self.samples.chi   = chis
+        self.samples.zeta  = zetas
 
         if 'swap_y' in out.keys():
             self.swap_y = out['swap_y']
@@ -637,7 +612,6 @@ if __name__ == '__main__':
         'in_data_path'    : './ad/solarflare/data.csv',
         'in_outcome_path' : './ad/solarflare/outcome.csv',
         'out_path'        : './ad/solarflare/results_cdppprgln_test.pkl',
-        'decluster'       : 'False',
         'nSamp' : 1000,
         'nKeep' : 500,
         'nThin' : 5,

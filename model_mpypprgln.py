@@ -13,8 +13,8 @@ from energy import limit_cpu
 EPS = np.finfo(float).eps
 
 import cUtility as cu
-from samplers import StickBreakingSampler, bincount2D_vectorized,               \
-    pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
+from samplers import ParallelTemperingStickBreakingSampler,                     \
+    bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
 from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
     euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
     category_matrix, euclidean_to_catprob
@@ -59,7 +59,7 @@ class Samples_(Samples):
         self.chi   = np.empty((nSamp, nTrunc))
         return
 
-class Chain(StickBreakingSampler, Projection):
+class Chain(ParallelTemperingStickBreakingSampler, Projection):
     @property
     def curr_zeta(self):
         return self.samples.zeta[self.curr_iter]
@@ -75,15 +75,6 @@ class Chain(StickBreakingSampler, Projection):
     @property
     def curr_chi(self):
         return self.samples.chi[self.curr_iter]
-    @property
-    def curr_cluster_count(self):
-        return (np.bincount(self.curr_delta[0]) > 0).sum()
-    def average_cluster_count(self, ns):
-        cc = bincount2D_vectorized(
-            self.samples.delta[(ns//2):,0], 
-            self.samples.delta[:,0].max() + 1,
-            )
-        return '{:.2f}'.format((cc > 0).sum(axis = 1).mean())
     
     # Adaptive Metropolis Placeholders
     am_Sigma  = None
