@@ -144,29 +144,6 @@ class Transformer(object):
         return (- 0.5 * np.log(2 * pi) - y * y / 2.).sum()
 
 class Data(Transformer):
-    def write_empirical(self, path):
-        folder = os.path.split(path)[0]
-        if not os.path.exists(folder):
-            os.mkdir(folder)
-        ncol   = self.A.shape[1] + 1
-        thetas = pd.DataFrame(
-            self.A,
-            columns = ['theta_{}'.format(i) for i in range(1, ncol)],
-            )
-        thetas.to_csv(path, index = False)
-        return
-
-    @staticmethod
-    def to_euclidean(theta):
-        return angular_to_euclidean(theta)
-
-    @staticmethod
-    def cast_to_cube(A):
-        V = A / (pi / 2.)
-        V[V > (1 - EPS)] = 1 - EPS
-        V[V < EPS] = EPS
-        return V
-
     def fill_out(self):
         self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
         self.sins  = np.vstack((np.ones(self.A.shape[0]), np.sin(self.A).T)).T
@@ -184,6 +161,21 @@ class Data(Transformer):
         self.V = angular_to_hypercube(self.A)
         self.nDat, self.nCol = self.V.shape
         self.fill_out()
+        return
+
+class DataBase(Outcome):
+    """ Base data class; to be amended with monkey patching. """
+    def __init__(self, V = None, R = None, W = None, X = None, Y = None):
+        if type(V) is np.ndarray:
+            self.V = V
+        if type(R) is np.ndarray:
+            self.R = R
+        if type(W) is np.ndarray:
+            self.W = W
+        if type(X) is np.ndarray:
+            self.X = X
+        if type(Y) is np.ndarray:
+            self.fill_outcome(Y)
         return
 
 class Data_From_Raw(Data, Outcome):
@@ -430,9 +422,13 @@ class RankTransform(Outcome):
     def fill_rank_transform(self, X):
         self.X = X
         self.Fhats = map(ECDF, self.X.T)
-        self.Z = np.array([Fhat.stdpareto(x) for Fhat, x in zip(self.Fhats, X.T)]).T
+        self.Z = np.array([
+            Fhat.stdpareto(x) 
+            for Fhat, x in zip(self.Fhats, self.X.T)
+            ]).T
         self.R = self.Z.max(axis = 1)
         self.V = self.Z / self.R[:,None]
+        self.nDat, self.nCol = self.X.shape
         return
 
     def __init__(self, raw, outcome = 'None'):
