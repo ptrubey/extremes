@@ -518,7 +518,7 @@ class Result(object):
         # As = np.einsum('il->i', zeta[delta].T[:self.nCol].T)
         # Bs = np.einsum('il->i', self.data.Yp)
         shapes = np.array([
-            zeta[delta]
+            zeta[delta][:,:self.nCol]
             for delta, zeta
             in zip(self.samples.delta, self.samples.zeta)
             ]).sum(axis = 2)
