@@ -417,8 +417,8 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
     def __init__(
             self,
             data,
-            prior_mu    = (0, 3.),
-            prior_Sigma = (10, 0.5),
+            prior_mu    = (0, 1.),
+            prior_Sigma = (10, 1.),
             prior_chi   = (0.1, 1.),
             p           = 10,
             max_clust_count = 200,
@@ -442,10 +442,9 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             np.eye(self.tCol) * np.sqrt(prior_mu[1]),
             np.eye(self.tCol) / np.sqrt(prior_mu[1]),            
             )
-        _prior_Sigma = InvWishartPrior(
-            self.tCol + prior_Sigma[0],
-            np.eye(self.tCol) * prior_Sigma[1],
-            )
+        nu = self.tCol + prior_Sigma[0]
+        psi = np.eye(self.tCol) * nu * prior_Sigma[1]
+        _prior_Sigma = InvWishartPrior(nu, psi)
         _prior_chi = GEMPrior(*prior_chi)
         self.priors = Prior(_prior_mu, _prior_Sigma, _prior_chi)
         self.set_projection()
