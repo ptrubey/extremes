@@ -1,6 +1,7 @@
 """ online updating of covariance matrices """
 
 import numpy as np
+EPS = np.finfo(float).eps
 
 class OnlineCovariance(object):
     """  
@@ -82,20 +83,23 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.b = np.array((nDat, nTemp, nCol))          (sum of X)
         self.c_Sigma = np.array((nTemp, nClust, nCol, nCol))  (cluster covariance matrix)
         """
-        self.c_A[:] = 0.
-        self.c_b[:] = 0.
-        self.c_xbar[:] = 0.
-        self.c_n[:] = 0.
+        if self.n <= 300:
+            return self.c_Sigma
         
-        self.c_A += np.einsum('ntcd,ntj->tjcd', self.A, dmat)
-        self.c_b += np.einsum('ntd,ntj->tjd',   self.b, dmat)
-        self.c_n += dmat.sum(axis = 0) * self.n
-        self.c_xbar[:] = self.c_b / self.c_n
+        self.c_Sigma[:] = 0.
+        
+        np.einsum('ntcd,tnj->tjcd', self.A, dmat, out = self.c_A)
+        np.einsum('ntd,tnj->tjd', self.b, dmat, out = self.c_b)
+        self.c_n[:] = dmat.sum(axis = 1) * self.n
+        self.c_xbar[:] = self.c_b / (self.c_n[:,:,None] + EPS)
         self.c_Sigma += self.c_A
         self.c_Sigma -= np.einsum('tjc,tjd->tjcd', self.c_xbar, self.c_b)
-        self.c_Sigma -= np.einsum('tjd,tjd->tjcd', self.c_b, self.c_xbar)
-        self.c_Sigma += self.c_n * np.einsum('tjc,tjd->tjcd', self.c_xbar, self.c_xbar)
-        self.c_Sigma /= self.c_n
+        self.c_Sigma -= np.einsum('tjc,tjd->tjcd', self.c_b, self.c_xbar)
+        self.c_Sigma += (
+            self.c_n[:,:,None,None] 
+            * np.einsum('tjc,tjd->tjcd', self.c_xbar, self.c_xbar)
+            )
+        self.c_Sigma /= (self.c_n[:,:,None,None] + EPS)
         return self.c_Sigma
 
     def cluster_covariance(self, delta):
@@ -165,6 +169,8 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
             self.c_Sigma += np.eye(self.nCol)[None, None, :, :] * 1e-6
             self.c_xbar  = np.zeros((self.nTemp, self.nClust, self.nCol))
             self.c_n     = np.zeros((self.nTemp, self.nClust))
+            self.c_A     = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))
+            self.c_b     = np.zeros((self.nTemp, self.nClust, self.nCol))
         return
 
 if __name__ == "__main__":

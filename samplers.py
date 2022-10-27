@@ -187,9 +187,9 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
     N, T, J = log_likelihood.shape
     scratch = np.zeros((N, T, J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch += (  # log prior
-            + np.log(chi) 
-            + np.hstack((np.zeros((T,1)), np.log(1 - chi[:,:-1]).cumsum(axis = 1)))
+        scratch += np.log(chi)[None] # Log Prior (part 1)
+        scratch += np.hstack(        # Log Prior (part 2)
+            (np.zeros((T,1)), np.log(1 - chi[:,:-1]).cumsum(axis = 1)),
             )[None]
         scratch += log_likelihood # log likelihood
         scratch[np.isnan(scratch)] = -np.inf
@@ -197,7 +197,10 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
         np.exp(scratch, out = scratch)
         np.cumsum(scratch, axis = 2, out = scratch)
         scratch /= scratch[:,:,-1][:,:,None]
-    delta = (uniform(size = (N,T))[:,:,None] > scratch).sum(axis = 2).T
+    # delta = (uniform(size = (N,T))[:,:,None] > scratch).sum(axis = 2).T
+    delta = (
+        (uniform(size = (N,T))[:,:,None] > scratch) @ np.ones(J, dtype = int)
+        ).T
     return delta
 
 pt_dp_sample_cluster = pt_dp_sample_cluster_crp8

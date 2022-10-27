@@ -98,6 +98,8 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return out
 
     def am_covariance_matrices(self, delta, index):
+        # dmat = delta[:,:,None] == range(self.max_clust_count)
+        # return self.am_Sigma.cluster_covariance2(dmat)[index]
         return self.am_Sigma.cluster_covariance(delta)[index]
 
     def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
