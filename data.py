@@ -145,15 +145,15 @@ class Transformer(object):
 
 class Data(Transformer):
     def fill_out(self):
-        self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
-        self.sins  = np.vstack((np.ones(self.A.shape[0]), np.sin(self.A).T)).T
-        self.sinp  = np.cumprod(self.sins, axis = 1)
-        self.Yl    = self.coss * self.sinp
-        self.lsins = np.log(self.sins)
-        self.lcoss = np.log(self.coss)
-        self.S     = angular_to_simplex(self.A)
-        self.Vi    = self.cast_to_cube(self.A)
-        self.pVi   = self.probit(self.Vi)
+        # self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
+        # self.sins  = np.vstack((np.ones(self.A.shape[0]), np.sin(self.A).T)).T
+        # self.sinp  = np.cumprod(self.sins, axis = 1)
+        # self.Yl    = self.coss * self.sinp
+        # self.lsins = np.log(self.sins)
+        # self.lcoss = np.log(self.coss)
+        # self.S     = angular_to_simplex(self.A)
+        # self.Vi    = self.cast_to_cube(self.A)
+        # self.pVi   = self.probit(self.Vi)
         return
 
     def __init__(self, path):

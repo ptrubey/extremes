@@ -694,7 +694,7 @@ if __name__ == '__main__':
         'in_data_path'    : './ad/mammography/data.csv',
         'in_outcome_path' : './ad/mammography/outcome.csv',
         'out_path' : './ad/mammography/results_mpypprgln_test.pkl',
-        'cat_vars' : '[5,6,7,8]',
+        'cat_vars' : '[5,6,7,8,9]',
         'decluster' : 'False',
         'quantile' : 0.95,
         'nSamp' : 10000,
