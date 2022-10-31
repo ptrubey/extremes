@@ -725,6 +725,7 @@ if __name__ == '__main__':
     data = MixedData(
         raw, 
         cat_vars = np.array(eval(p.cat_vars), dtype = int), 
+        realtype = 'threshold',
         decluster = eval(p.decluster), 
         quantile = float(p.quantile),
         outcome = out,

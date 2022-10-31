@@ -2,7 +2,7 @@ import model_sdpppg as sdpppg
 import model_sdppprg as sdppprg
 import model_sdppprgln as sdppprgln
 import model_sdpppgln as sdpppgln
-import model_cdppprg as cdppprg
+# import model_cdppprg as cdppprg
 import model_cdppprgln as cdppprgln
 import model_mdppprg_pt as mdppprg
 import model_mdppprgln as mdppprgln
@@ -36,11 +36,11 @@ MixedChains = {
 
 ## Categorical Data
 CategoricalResults = {
-    'cdppprg'   : cdppprg.Result,
+    # 'cdppprg'   : cdppprg.Result,
     'cdppprgln' : cdppprgln.Result,
     }
 CategoricalChains = {
-    'cdppprg'  : cdppprg.Chain,
+    # 'cdppprg'  : cdppprg.Chain,
     'cdppprgln'  : cdppprgln.Chain,
     }
 

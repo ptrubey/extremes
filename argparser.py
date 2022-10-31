@@ -37,6 +37,7 @@ def argparser_generic():
     p.add_argument('--nMix', default = 30)
     p.add_argument('--eta_shape', default = '2')
     p.add_argument('--eta_rate',  default = '5e-1')
+    p.add_argument('--realtype', default = 'threshold')
     p.add_argument('--sphere', default = 'False')
     p.add_argument('--quantile' , default = 0.95)
     p.add_argument('--decluster', default = 'True')
