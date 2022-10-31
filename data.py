@@ -143,26 +143,6 @@ class Transformer(object):
     def invprobitlogjac(y):
         return (- 0.5 * np.log(2 * pi) - y * y / 2.).sum()
 
-class Data(Transformer):
-    def fill_out(self):
-        # self.coss  = np.vstack((np.cos(self.A).T, np.ones(self.A.shape[0]))).T
-        # self.sins  = np.vstack((np.ones(self.A.shape[0]), np.sin(self.A).T)).T
-        # self.sinp  = np.cumprod(self.sins, axis = 1)
-        # self.Yl    = self.coss * self.sinp
-        # self.lsins = np.log(self.sins)
-        # self.lcoss = np.log(self.coss)
-        # self.S     = angular_to_simplex(self.A)
-        # self.Vi    = self.cast_to_cube(self.A)
-        # self.pVi   = self.probit(self.Vi)
-        return
-
-    def __init__(self, path):
-        self.A = pd.read_csv(path).values
-        self.V = angular_to_hypercube(self.A)
-        self.nDat, self.nCol = self.V.shape
-        self.fill_out()
-        return
-
 class DataBase(Outcome):
     """ Base data class; to be amended with monkey patching. """
     def __init__(self, V = None, R = None, W = None, X = None, Y = None):
@@ -178,7 +158,7 @@ class DataBase(Outcome):
             self.fill_outcome(Y)
         return
 
-class Data_From_Raw(Data, Outcome):
+class Data_From_Raw(DataBase):
     raw = None # raw data
     Z   = None # Standardized Pareto Transformed (for those > 1)
     P   = None # Generalized Pareto Parameters (threshold, scale, extreme index)
@@ -240,14 +220,9 @@ class Data_From_Raw(Data, Outcome):
         self.Z, self.P = self.to_pareto(self.raw, quantile)
         # Cast to hypercube, keep only observations extreme in >= 1 dimension
         self.V, self.R, self.I = self.to_hypercube(self.Z, decluster)
-        # proceed with angular representation
-        self.A = self.to_angular(self.V)
-        # Number of columns for Gamma representation
-        self.nCol = self.A.shape[1] + 1
-        # Number of rows in data
-        self.nDat = self.A.shape[0]
-        # Pre-compute the trig components of the likelihood.
-        self.fill_out()
+        # Number of rows, columns
+        self.nDat, self.nCol = self.V.shape
+        return
 
     def __init__(self, raw, decluster = False, quantile = 0.95, outcome = 'None'):
         self.fill_real(raw, decluster, quantile)
@@ -255,7 +230,7 @@ class Data_From_Raw(Data, Outcome):
             self.fill_outcome(outcome)
         return
 
-class Data_From_Sphere(Data, Outcome):
+class Data_From_Sphere(DataBase):
     def fill_sphere(self, raw):
         self.V = euclidean_to_hypercube(raw)
         self.nDat, self.nCol = self.V.shape
@@ -270,7 +245,37 @@ class Data_From_Sphere(Data, Outcome):
             self.fill_outcome(outcome)
         return
 
-class Multinomial(Data, Outcome):
+class RankTransform(DataBase):
+    Fhats = None
+    X = None
+    Z = None
+    V = None
+    R = None
+
+    def std_pareto_transform(self, X):
+        assert(X.shape[1] == len(self.Fhats))
+        Z = np.array([
+            Fhat.stdpareto(x)
+            for Fhat, x in zip(self.Fhats, X.T)
+            ]).T
+        return(Z)
+
+    def fill_rank_transform(self, X):
+        self.X = X
+        self.Fhats = map(ECDF, self.X.T)
+        self.Z = self.std_pareto_transform(self.X)
+        self.R = self.Z.max(axis = 1)
+        self.V = self.Z / self.R[:,None]
+        self.nDat, self.nCol = self.X.shape
+        return
+
+    def __init__(self, raw, outcome = 'None'):
+        self.fill_rank_transform(raw)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
+        return
+
+class Multinomial(DataBase):
     Cats = None  # numpy array indicating number of categories per multinomial variable
     nCat = None  # total number of categories (sum of Cats)
     spheres = None # For each variable, np.array(int) that identifies which 
@@ -311,7 +316,7 @@ class Multinomial(Data, Outcome):
             self.fill_outcome(outcome)
         return
 
-class Categorical(Multinomial, Outcome):
+class Categorical(Multinomial):
     Cats = None    # numpy array indicating number of categories per categorical variable
     nCat = None    # Total number of categories (sum of Cats)
 
@@ -360,46 +365,114 @@ class Categorical(Multinomial, Outcome):
             self.fill_outcome(outcome)
         return
 
-class MixedDataBase(Data_From_Sphere, Multinomial, Outcome):
+class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial):
     def to_mixed_new(self, raw_data, raw_out, decluster = False):
-        if hasattr(self, 'P'):
+        if hasattr(self, 'P') or (self.realtype == 'threshold'):
             Z = scale_pareto(raw_data[:,:self.nCol], self.P)
             V, R, I = Data_From_Raw.to_hypercube(Z, decluster = decluster)
             W = Categorical.to_categorical(
                 raw_data[:,self.nCol:], self.values, I,
                 )
             Y = raw_out[I]
-            return Y, V, W, R
-        else:
-            assert((raw_data[:,:self.nCol].max() - 1)**2 < 1e-10)
+        elif self.realtype == 'sphere':
+            assert((raw_data[:,:self.nCol].max() - 1)**2 < 1e-10) # check data on sphere
             V = raw_data[:,:self.nCol]
             W = Categorical.to_categorical(
                 raw_data[:,self.nCol:], self.values, np.arange(V.shape[0]),
                 )
             Y = raw_out
-        return Y, V, W, np.ones(V.shape[0])
+            R = np.ones(V.shape[0])
+        elif self.realtype == 'rank':
+            Z = self.std_pareto_transform(raw_data[:,:self.nCol])
+            R = Z.max(axis = 1)
+            V = Z / R[:,None]
+            W = Categorical.to_categorical(
+                raw_data[:,self.nCol:], self.values, np.arange(V.shape[0])
+                )
+            Y = raw_out
+        return Y,V,W,R
     
-    def __init__(self, raw_sphere, raw_multinomial, cats = None, outcome = 'None'):
-        self.fill_sphere(raw_sphere)
+    @classmethod
+    def instantiate_from_dict(cls, dict):
+        if 'realtype' in dict.keys():
+            if dict['realtype'] == 'sphere':
+                data = cls(dict['V'], dict['W'], dict['cats'], real_type = 'sphere')
+            elif dict['realtype'] == 'threshold':
+                data = cls(dict['V'], dict['W'], dict['cats'], real_type = 'threshold', parameters = dict['P'])
+            elif dict['realtype'] == 'rank':
+                data = cls(dict['X'], dict['W'], dict['cats'], real_type = 'rank')
+            else:
+                raise ValueError('realtype not recognized')
+        elif all([_ in dict.keys() for _ in ('V','P','W','cats')]):
+            data = cls(dict['V'], dict['W'], dict['cats'], 
+                    real_type = 'threshold', parameters = dict['P'])
+        elif all([_ in dict.keys() for _ in ('V','X','W','cats')]):
+            data = cls(dict['X'], dict['W'], dict['cats'], real_type = 'rank')
+        elif all([_ in dict.keys() for _ in ('V','W','cats')]):
+            data = cls(dict['V'], dict['W'], dict['cats'], real_type = 'sphere')
+        else:
+            raise ValueError('Required Dictionary Contents Not Available')
+        if 'Y' in dict.keys():
+                data.Y = dict['Y']
+        return data
+    
+    def __init__(
+            self, raw_real, raw_multinomial, cats = None, real_type = 'sphere', 
+            outcome = 'None', parameters = None,
+            ):
+        self.realtype = real_type
+        if real_type == 'sphere':
+            self.fill_sphere(raw_real)
+        elif real_type == 'rank': 
+            self.fill_rank_transform(raw_real)            
+        elif real_type == 'threshold':
+            self.fill_sphere(raw_real)
+            self.P = parameters
         self.fill_multinomial(raw_multinomial, cats)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
 
-class MixedData(MixedDataBase, Data_From_Raw, Categorical, Outcome):
-    def __init__(self, raw, cat_vars = [], sphere = False,
-            decluster = False, quantile = 0.95, values = None,
-            outcome = 'None',
+class MixedData(MixedDataBase, Categorical):
+    realtype = None
+    def write_to_dict(self, dict):
+        """ Updates output dictionary in-place with contents of data class """
+        if self.realtype == 'sphere':
+            dict['realtype'] = 'sphere'
+            dict['V'] = self.V
+        elif self.realtype == 'rank':
+            dict['realtype'] = 'rank'
+            dict['V'] = self.V
+            dict['Z'] = self.Z
+            dict['R'] = self.R
+            dict['X'] = self.X
+        elif self.realtype == 'threshold':
+            dict['realtype'] = 'threshold'
+            dict['V'] = self.V
+            dict['Z'] = self.Z
+            dict['R'] = self.R
+            dict['I'] = self.I
+            dict['P'] = self.P
+        dict['W'] = self.W
+        if hasattr(self, 'Y'):
+            dict['Y'] = self.Y
+        return
+    def __init__(
+            self, raw, cat_vars = [], realtype = 'threshold', decluster = False, 
+            quantile = 0.95, values = None, outcome = 'None',
             ):
+        self.realtype = realtype
         if type(raw) is pd.DataFrame:
             raw = raw.values
         real_vars = np.array(
             list(set(np.arange(raw.shape[1])).difference(set(cat_vars))), 
             dtype = int
             )
-        if sphere:
+        if realtype == 'sphere':
             self.fill_sphere(raw[:, real_vars])
-        else:
+        elif realtype == 'rank':
+            self.fill_rank_transform(raw[:, real_vars])
+        elif realtype == 'threshold':
             self.fill_real(raw[:, real_vars], decluster, quantile)
         self.fill_categorical(raw[:, cat_vars], values, self.I)
         if type(outcome) is np.ndarray:
@@ -412,30 +485,6 @@ class Projection(object):
         return
     pass
 
-class RankTransform(Outcome):
-    Fhats = None
-    X = None
-    Z = None
-    V = None
-    R = None
-
-    def fill_rank_transform(self, X):
-        self.X = X
-        self.Fhats = map(ECDF, self.X.T)
-        self.Z = np.array([
-            Fhat.stdpareto(x) 
-            for Fhat, x in zip(self.Fhats, self.X.T)
-            ]).T
-        self.R = self.Z.max(axis = 1)
-        self.V = self.Z / self.R[:,None]
-        self.nDat, self.nCol = self.X.shape
-        return
-
-    def __init__(self, raw, outcome = 'None'):
-        self.fill_rank_transform(raw)
-        if type(outcome) is np.ndarray:
-            self.fill_outcome(outcome)
-        return
 
 if __name__ == '__main__':
     pass

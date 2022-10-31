@@ -98,8 +98,6 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return out
 
     def am_covariance_matrices(self, delta, index):
-        # dmat = delta[:,:,None] == range(self.max_clust_count)
-        # return self.am_Sigma.cluster_covariance2(dmat)[index]
         return self.am_Sigma.cluster_covariance(delta)[index]
 
     def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
@@ -390,22 +388,23 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             'mus'    : mus,
             'Sigmas' : Sigmas,
             'deltas' : deltas,
-            'nCol'   : self.nCol,
-            'nDat'   : self.nDat,
-            'nCat'   : self.nCat,
+            # 'nCol'   : self.nCol,
+            # 'nDat'   : self.nDat,
+            # 'nCat'   : self.nCat,
             'cats'   : self.data.Cats,
-            'V'      : self.data.V,
-            'W'      : self.data.W,
+            # 'V'      : self.data.V,
+            # 'W'      : self.data.W,
             'swap_y' : self.swap_succeeds,
             'swap_n' : self.swap_attempts - self.swap_succeeds,
             'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
             'GEM'    : tuple(self.priors.chi),
             'chis'   : chis,
             }
+        self.data.write_to_dict(out)
         # try to add outcome / radius to dictionary
-        for attr in ['Y','R','P','values']:
-            if hasattr(self.data, attr):
-                out[attr] = self.data.__dict__[attr]
+        # for attr in ['Y','R','P','values']:
+        #     if hasattr(self.data, attr):
+        #         out[attr] = self.data.__dict__[attr]
         # write to disk
         with open(path, 'wb') as file:
             pickle.dump(out, file)
@@ -420,7 +419,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             self,
             data,
             prior_mu    = (0, 1.),
-            prior_Sigma = (10, 1.),
+            prior_Sigma = (100, 1.),
             prior_chi   = (0.1, 1.),
             p           = 10,
             max_clust_count = 200,
@@ -446,7 +445,20 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             )
         nu = self.tCol + prior_Sigma[0]
         psi = np.eye(self.tCol) * nu * prior_Sigma[1]
+        psi = np.zeros((self.tCol, self.tCol))
+        psi[:self.nCol, :self.nCol] = np.eye(self.nCol)
+        start_idx = self.nCol
+        for catlength in self.data.Cats:
+            end_idx = start_idx + catlength
+            cat_cov = np.eye(end_idx - start_idx)
+            for i in range(catlength):
+                for j in range(catlength):
+                    if i != j:
+                        cat_cov[i,j] = - catlength**(-2.)
+            psi[start_idx:end_idx, start_idx:end_idx] = cat_cov
+            start_idx = end_idx
         _prior_Sigma = InvWishartPrior(nu, psi)
+        psi *= nu * prior_Sigma[1]
         _prior_chi = GEMPrior(*prior_chi)
         self.priors = Prior(_prior_mu, _prior_Sigma, _prior_chi)
         self.set_projection()
@@ -629,7 +641,8 @@ class Result(object):
         cats   = out['cats']
         chis   = out['chis']
         
-        self.data = MixedDataBase(out['V'], out['W'], out['cats'])
+        self.data = MixedDataBase.instantiate_from_dict(out)
+        # self.data = MixedDataBase(out['V'], out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
         self.nCat   = self.data.nCat
@@ -693,9 +706,9 @@ if __name__ == '__main__':
 
     # p = argparser()
     d = {
-        'in_data_path'    : './ad/mammography/data.csv',
-        'in_outcome_path' : './ad/mammography/outcome.csv',
-        'out_path' : './ad/mammography/results_mpypprgln_test.pkl',
+        'in_data_path'    : './ad/cardio/data.csv',
+        'in_outcome_path' : './ad/cardio/outcome.csv',
+        'out_path' : './ad/cardio/results_mpypprgln_test.pkl',
         'cat_vars' : '[5,6,7,8,9]',
         'decluster' : 'False',
         'quantile' : 0.95,
