@@ -317,8 +317,9 @@ class Multinomial(DataBase):
         return
 
 class Categorical(Multinomial):
-    Cats = None    # numpy array indicating number of categories per categorical variable
-    nCat = None    # Total number of categories (sum of Cats)
+    Cats   = None    # numpy array indicating number of cats per categ variable
+    nCat   = None    # Total number of categories (sum of Cats)
+    values = None    # particular values indicating which category, per var
 
     def fill_categorical(self, raw, values, index):
         # If values are supplied, verify that all values in data
@@ -413,7 +414,9 @@ class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial)
         else:
             raise ValueError('Required Dictionary Contents Not Available')
         if 'Y' in dict.keys():
-                data.Y = dict['Y']
+            data.Y = dict['Y']
+        if 'values' in dict.keys():
+            data.values = dict['values']
         return data
     
     def __init__(
@@ -454,6 +457,7 @@ class MixedData(MixedDataBase, Categorical):
             dict['I'] = self.I
             dict['P'] = self.P
         dict['W'] = self.W
+        dict['values'] = self.values
         if hasattr(self, 'Y'):
             dict['Y'] = self.Y
         return
