@@ -262,7 +262,7 @@ class RankTransform(DataBase):
 
     def fill_rank_transform(self, X):
         self.X = X
-        self.Fhats = map(ECDF, self.X.T)
+        self.Fhats = list(map(ECDF, self.X.T))
         self.Z = self.std_pareto_transform(self.X)
         self.R = self.Z.max(axis = 1)
         self.V = self.Z / self.R[:,None]
@@ -368,7 +368,7 @@ class Categorical(Multinomial):
 
 class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial):
     def to_mixed_new(self, raw_data, raw_out, decluster = False):
-        if hasattr(self, 'P') or (self.realtype == 'threshold'):
+        if self.realtype == 'threshold':
             Z = scale_pareto(raw_data[:,:self.nCol], self.P)
             V, R, I = Data_From_Raw.to_hypercube(Z, decluster = decluster)
             W = Categorical.to_categorical(

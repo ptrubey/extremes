@@ -706,10 +706,12 @@ if __name__ == '__main__':
 
     # p = argparser()
     d = {
-        'in_data_path'    : './ad/cardio/data.csv',
-        'in_outcome_path' : './ad/cardio/outcome.csv',
-        'out_path' : './ad/cardio/results_mpypprgln_test.pkl',
-        'cat_vars' : '[5,6,7,8,9]',
+        'in_data_path'    : './ad/cardio/data_new.csv',
+        'in_outcome_path' : './ad/cardio/outcome_new.csv',
+        'out_path' : './ad/cardio/results_test.pkl',
+        # 'cat_vars' : '[5,6,7,8,9]',
+        'realtype' : 'rank',
+        'cat_vars' : '[19,20,21]',
         'decluster' : 'False',
         'quantile' : 0.95,
         'nSamp' : 10000,
@@ -721,11 +723,14 @@ if __name__ == '__main__':
     p = Heap(**d)
 
     raw = read_csv(p.in_data_path).values
+    raw = raw[~np.isnan(raw).any(axis = 1)]
     out = read_csv(p.in_outcome_path).values
+    out = out[~np.isnan(out).any(axis = 1)].ravel()
+    assert raw.shape[0] == out.shape[0]
     data = MixedData(
         raw, 
         cat_vars = np.array(eval(p.cat_vars), dtype = int), 
-        realtype = 'threshold',
+        realtype = p.realtype,
         decluster = eval(p.decluster), 
         quantile = float(p.quantile),
         outcome = out,
@@ -735,8 +740,9 @@ if __name__ == '__main__':
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
     res = Result(p.out_path)
+    Y,V,W,R = res.data.to_mixed_new(raw, out)
     ppg = res.generate_posterior_predictive_gammas()
-    cppg = res.generate_new_conditional_posterior_predictive_gammas(data.V, data.W)
+    cppg = res.generate_new_conditional_posterior_predictive_gammas(V, W)
     # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF
