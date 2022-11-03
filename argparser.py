@@ -35,8 +35,6 @@ def argparser_generic():
     p.add_argument('--nThin', default = '30')
     p.add_argument('--cats', default = '[]')
     p.add_argument('--nMix', default = 30)
-    p.add_argument('--eta_shape', default = '2')
-    p.add_argument('--eta_rate',  default = '5e-1')
     p.add_argument('--realtype', default = 'threshold')
     p.add_argument('--sphere', default = 'False')
     p.add_argument('--quantile' , default = 0.95)
@@ -45,6 +43,7 @@ def argparser_generic():
     p.add_argument('--maxclust', default = '300')
     p.add_argument('--ntemps', default = '3')
     p.add_argument('--stepping', default = '1.05')
+    p.add_argument('--prior_eta', default = '[2e0,5e-1]')
     p.add_argument('--prior_chi', default = '[1e-1,1e0]')
     return p.parse_args()
 

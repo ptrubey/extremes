@@ -515,6 +515,21 @@ def argparser():
     return p.parse_args()
 
 if __name__ == '__main__':
+    pass
+
+    path = './ad/cardio/rank_results_1e-1_1e1.pkl'
+    result = ResultFactory('mpypprgln', path)
+    result.pools_open()
+
+    is_raw = pd.read_csv('./ad/cardio/data_new.csv').values
+    is_out = pd.read_csv('./ad/cardio/outcome_new.csv').values
+    is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
+    is_out = is_out[~np.isnan(is_out).any(axis = 1)].ravel()
+
+    is_data = result.data.to_mixed_new(is_raw, is_out)
+    metric_is = result.get_scoring_metrics(*is_data)
+    raise
+
     # basepath = './ad/cardio'
 
     # result = ResultFactory('mpypprgln', os.path.join(basepath, 'results_xv1_1e-1_1e0.pkl'))
@@ -538,85 +553,85 @@ if __name__ == '__main__':
     # result.pools_closed()
 
     # raise
-    import re
-    results  = []
-    basepath = './ad'
-    # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
-    # resbases = {'mdppprgln' : 'results_xv*.pkl'}
-    datasets = ['cardio','cover','mammography','annthyroid','yeast']
-    # resbases = {'mpypprgln' : 'results*.pkl'}
-    resbases = {'mpypprgln' : 'results_xv*.pkl'}
-    # datasets = ['solarflare']
-    # resbases = {'cdppprgln' : 'results_xv*.pkl'}
-    for model in resbases.keys():
-        for dataset in datasets:
-            files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
-            for file in files:
-                results.append((model, file))
-                # if not 'xv' in file:
-                #     results.append((model, file))
-    metrics = []
-    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
-    for result in results:
-        extant_result = ResultFactory(*result)
-        extant_result.set_postpred_per_sample(20)
-        extant_result.pool = pool
+    # import re
+    # results  = []
+    # basepath = './ad'
+    # # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
+    # # resbases = {'mdppprgln' : 'results_xv*.pkl'}
+    # datasets = ['cardio','cover','mammography','annthyroid','yeast']
+    # # resbases = {'mpypprgln' : 'results*.pkl'}
+    # resbases = {'mpypprgln' : 'results_xv*.pkl'}
+    # # datasets = ['solarflare']
+    # # resbases = {'cdppprgln' : 'results_xv*.pkl'}
+    # for model in resbases.keys():
+    #     for dataset in datasets:
+    #         files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+    #         for file in files:
+    #             results.append((model, file))
+    #             # if not 'xv' in file:
+    #             #     results.append((model, file))
+    # metrics = []
+    # pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    # for result in results:
+    #     extant_result = ResultFactory(*result)
+    #     extant_result.set_postpred_per_sample(20)
+    #     extant_result.pool = pool
 
-        # Normal Code
-        # raw = pd.read_csv(
-        #         os.path.join(os.path.split(result[1])[0], 'data.csv'),
-        #         ).values
-        # raw = raw[~np.isnan(raw).any(axis = 1)]
-        # out = pd.read_csv(
-        #         os.path.join(os.path.split(result[1])[0], 'outcome.csv'),
-        #         ).values.ravel()
-        # out = out[~np.isnan(out.astype(float))].astype(int)
-        # data = extant_result.data.to_mixed_new(raw, out)
-        # print('Processing Result {}'.format(result[1]).ljust(80), end = '')
-        # extant_metric = extant_result.get_scoring_metrics(*data)
-        # del extant_result
-        # extant_metric['path'] = result[1]
-        # gc.collect()
+    #     # Normal Code
+    #     # raw = pd.read_csv(
+    #     #         os.path.join(os.path.split(result[1])[0], 'data.csv'),
+    #     #         ).values
+    #     # raw = raw[~np.isnan(raw).any(axis = 1)]
+    #     # out = pd.read_csv(
+    #     #         os.path.join(os.path.split(result[1])[0], 'outcome.csv'),
+    #     #         ).values.ravel()
+    #     # out = out[~np.isnan(out.astype(float))].astype(int)
+    #     # data = extant_result.data.to_mixed_new(raw, out)
+    #     # print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+    #     # extant_metric = extant_result.get_scoring_metrics(*data)
+    #     # del extant_result
+    #     # extant_metric['path'] = result[1]
+    #     # gc.collect()
 
-        # Cross-Validation Code
-        cv = re.search('xv(\d+)', result[1]).group(1)
-        is_raw = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
-            ).values
-        is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
-        os_raw = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
-            ).values
-        os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+    #     # Cross-Validation Code
+    #     cv = re.search('xv(\d+)', result[1]).group(1)
+    #     is_raw = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
+    #         ).values
+    #     is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
+    #     os_raw = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
+    #         ).values
+    #     os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
         
-        is_out = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_is.csv'.format(cv)),
-            ).values.ravel()
-        is_out = is_out[~np.isnan(is_out.astype(float))].astype(int)
-        os_out = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
-            ).values.ravel()
-        os_out = os_out[~np.isnan(os_out.astype(float))].astype(int)
+    #     is_out = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_is.csv'.format(cv)),
+    #         ).values.ravel()
+    #     is_out = is_out[~np.isnan(is_out.astype(float))].astype(int)
+    #     os_out = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
+    #         ).values.ravel()
+    #     os_out = os_out[~np.isnan(os_out.astype(float))].astype(int)
 
-        is_data = extant_result.data.to_mixed_new(is_raw, is_out)
-        os_data = extant_result.data.to_mixed_new(os_raw, os_out)
+    #     is_data = extant_result.data.to_mixed_new(is_raw, is_out)
+    #     os_data = extant_result.data.to_mixed_new(os_raw, os_out)
 
-        print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
-        extant_metric_is = extant_result.get_scoring_metrics(*is_data)
-        print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
-        extant_metric_os = extant_result.get_scoring_metrics(*os_data)
+    #     print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
+    #     extant_metric_is = extant_result.get_scoring_metrics(*is_data)
+    #     print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
+    #     extant_metric_os = extant_result.get_scoring_metrics(*os_data)
 
-        del extant_result
-        extant_metric_is['path'] = result[1]
-        extant_metric_os['path'] = result[1]
-        extant_metric_is['InSamp'] = True
-        extant_metric_os['InSamp'] = False
-        metrics.append(extant_metric_is)
-        metrics.append(extant_metric_os)
-        gc.collect()
+    #     del extant_result
+    #     extant_metric_is['path'] = result[1]
+    #     extant_metric_os['path'] = result[1]
+    #     extant_metric_is['InSamp'] = True
+    #     extant_metric_os['InSamp'] = False
+    #     metrics.append(extant_metric_is)
+    #     metrics.append(extant_metric_os)
+    #     gc.collect()
     
-    df = pd.concat(metrics)
-    df.to_csv('./ad/performance_py_xv.csv')
-    # df.to_csv('./ad/performance_py.csv')
+    # df = pd.concat(metrics)
+    # df.to_csv('./ad/performance_py_xv.csv')
+    # # df.to_csv('./ad/performance_py.csv')
 
 # EOF   
