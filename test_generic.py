@@ -26,7 +26,7 @@ if __name__ == '__main__':
         raw_out = read_csv(p.outcome).values
         raw_out = raw_out[~np.isnan(raw).any(axis = 1)].ravel().astype(int)
         assert raw_out.shape[0] == raw.shape[0]
-        data.fill_outcome(p.outcome)
+        data.fill_outcome(raw_out)
     
     ## Initialize Chain
     model = Chain(
