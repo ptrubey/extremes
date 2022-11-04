@@ -532,6 +532,7 @@ if __name__ == '__main__':
         result.pool = pool
         data = (result.data.Y, result.data.V, result.data.W, result.data.R)
         metric = result.get_scoring_metrics(*data)
+        metric['path'] = result_path
         metrics.append(metric)
         del result
         gc.collect()
