@@ -493,6 +493,44 @@ class Projection(object):
         return
     pass
 
+class Data(MixedData):
+    def check_var_consistency(self, raw, real_vars, cat_vars, multinom_vars):
+        assert len(set(real_vars).intersection(set(cat_vars))) == 0
+        assert len(set(real_vars).intersection(set(multinom_vars))) == 0
+        assert len(set(multinom_vars).intersection(set(cat_vars))) == 0
+        assert len(set(real_vars).union(set(cat_vars).union(multinom_vars))) == raw.shape[1]
+        return
+
+    def __init__(self, raw, real_vars = [], cat_vars = [], multinom_vars = [],
+            realtype = 'threshold', decluster = False, quantile = 0.95, 
+            values = None, outcome = 'None',):
+        self.check_var_consistency(raw, real_vars, cat_vars, multinom_vars)
+        self.realtype = realtype
+        if type(raw) is pd.DataFrame:
+            raw = raw.values
+        self.raw = raw
+        if realtype == 'sphere':
+            self.fill_sphere(raw[:, real_vars])
+        elif realtype == 'rank':
+            self.fill_rank_transform(raw[:, real_vars])
+        elif realtype == 'threshold':
+            self.fill_real(raw[:, real_vars], decluster = decluster, quantile = quantile)
+        self.fill_categorical(raw[:, cat_vars], values, self.I)
+        if type(outcome) is np.ndarray:
+            self.fill_outcome(outcome)
+        return
+        
+        
+
+
+
+
+    pass
+
+
+
+
+
 
 if __name__ == '__main__':
     pass
