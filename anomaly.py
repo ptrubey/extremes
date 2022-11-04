@@ -517,18 +517,29 @@ def argparser():
 if __name__ == '__main__':
     pass
 
-    path = './ad/cardio/rank_results_1e-1_1e1.pkl'
-    result = ResultFactory('mpypprgln', path)
-    result.pools_open()
-
-    is_raw = pd.read_csv('./ad/cardio/data_new.csv').values
-    is_out = pd.read_csv('./ad/cardio/outcome_new.csv').values
-    is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
-    is_out = is_out[~np.isnan(is_out).any(axis = 1)].ravel()
-
-    is_data = result.data.to_mixed_new(is_raw, is_out)
-    metric_is = result.get_scoring_metrics(*is_data)
-    raise
+    result_path = './ad/{}/rank_results_*.pkl'
+    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+    result_paths = []
+    metrics = []
+    for dataset in datasets:
+        result_files = glob.glob(result_path.format(dataset))
+        for result_file in result_files:
+            result_paths.append(result_file)
+    
+    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    for result_path in result_paths:
+        result = ResultFactory('mpypprgln', result_path)
+        result.pool = pool
+        data = (result.data.Y, result.data.V, result.data.W, result.data.R)
+        metric = result.get_scoring_metrics(*data)
+        metrics.append(metric)
+        del result
+        gc.collect()
+    
+    pool.close()
+    df = pd.concat(metrics)
+    df.to_csv('./ad/performance_rank.csv', index = False)
+    
 
     # basepath = './ad/cardio'
 
