@@ -3,7 +3,7 @@ import numpy as np
 from subprocess import Popen, PIPE, STDOUT
 
 discount = '1e-1'
-concentration = '1e0'
+concentration = '1e-1'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
 cardio = {
