@@ -417,6 +417,8 @@ class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial)
             data.Y = dict['Y']
         if 'values' in dict.keys():
             data.values = dict['values']
+        if 'raw' in dict.keys():
+            data.raw = dict['raw']
         return data
     
     def __init__(
@@ -458,6 +460,7 @@ class MixedData(MixedDataBase, Categorical):
             dict['P'] = self.P
         dict['W'] = self.W
         dict['values'] = self.values
+        dict['raw']  = self.raw
         if hasattr(self, 'Y'):
             dict['Y'] = self.Y
         return
@@ -468,6 +471,7 @@ class MixedData(MixedDataBase, Categorical):
         self.realtype = realtype
         if type(raw) is pd.DataFrame:
             raw = raw.values
+        self.raw = raw
         real_vars = np.array(
             list(set(np.arange(raw.shape[1])).difference(set(cat_vars))), 
             dtype = int

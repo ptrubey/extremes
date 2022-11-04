@@ -265,6 +265,8 @@ class Anomaly(Projection):
     ## Classic Anomaly Metrics:
     def isolation_forest(self, V = None, W = None, **kwargs):
         """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
+        # if hasattr(self.data, 'raw'):
+        #     forest = IsolationForest().fit(self.data.raw)
         if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
             dat = np.hstack((self.data.V, self.data.W))
             forest = IsolationForest().fit(dat)
