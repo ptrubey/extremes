@@ -36,13 +36,12 @@ class Samples(object):
     delta = None
     chi   = None
 
-    def __init__(self, nSamp, nDat, nCol, nCat, nTemp, nTrunc):
+    def __init__(self, nSamp, nDat, tCol, nTemp, nTrunc):
         """
         nCol: number of 
         nCat: number of categorical columns
         nCats: number of categorical variables        
         """
-        tCol = nCol + nCat
         self.zeta  = np.empty((nSamp + 1, nTemp, nTrunc, tCol))
         self.mu    = np.empty((nSamp + 1, nTemp, tCol))
         self.Sigma = np.empty((nSamp + 1, nTemp, tCol, tCol))
@@ -51,8 +50,7 @@ class Samples(object):
         return
 
 class Samples_(Samples):
-    def __init__(self, nSamp, nDat, nCol, nCat, nTrunc):
-        tCol = nCol + nCat
+    def __init__(self, nSamp, nDat, tCol, nTrunc):
         self.zeta  = np.empty((nSamp, nTrunc, tCol))
         self.mu    = np.empty((nSamp, tCol))
         self.Sigma = np.empty((nSamp, tCol, tCol))
@@ -91,7 +89,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
 
     def sample_zeta_new(self, mu, Sigma_chol):
         """ Sample new zetas as log-normal (sample normal, then exponentiate) """
-        sizes = (self.nTemp, self.max_clust_count, self.nCat + self.nCol)
+        sizes = (self.nTemp, self.max_clust_count, self.tCol)
         out = np.empty(sizes)
         np.einsum('tzy,tjy->tjz', np.triu(Sigma_chol), normal(size = sizes), out = out)
         out += mu[:,None,:]
@@ -99,7 +97,8 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return out
 
     def am_covariance_matrices(self, delta, index):
-        return self.am_Sigma.cluster_covariance(delta)[index]
+        # return self.am_Sigma.cluster_covariance(delta)[index]
+        return self.am_Sigma.cluster_covariance3(delta)[index]
 
     def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
         """
@@ -189,7 +188,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
                 out, self.data.Yp , zeta[:,:,:self.nCol], self.sigma_ph1,
                 )
             pt_logd_cumdircategorical_mx_ma_inplace_unstable(
-                out, self.data.W, zeta[:,:,self.nCol:], self.CatMat,
+                out, self.data.W, zeta[:,:,self.nCol:(self.nCol + self.nCat)], self.CatMat,
                 )
             if self.model_radius:
                 pt_logd_pareto_mx_ma_inplace_unstable(
@@ -234,28 +233,22 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return pt_logd_mvnormal_mx_st(logzeta, mu, Sigma_chol, Sigma_inv)
 
     def log_tempering_likelihood(self):
+        curr_zeta = self.curr_zeta[
+            self.temp_unravel, self.curr_delta.ravel()
+            ].reshape(self.nTemp, self.nDat, self.tCol)
         out = np.zeros(self.nTemp)
         out += pt_logd_projgamma_paired_yt(
             self.data.Yp, 
-            self.curr_zeta[:,:,:self.nCol][
-                self.temp_unravel, 
-                self.curr_delta.ravel(),
-                ].reshape(self.nTemp, self.nDat, self.nCol),
+            curr_zeta[:,:,:self.nCol],
             self.sigma_ph2,
             ).sum(axis = 1)
         out += pt_logd_cumdirmultinom_paired_yt(
             self.data.W, 
-            self.curr_zeta[:,:,self.nCol:(self.nCol + self.nCat)][
-                self.temp_unravel,
-                self.curr_delta.ravel(),
-                ].reshape(self.nTemp, self.nDat, self.nCat),
+            curr_zeta[:,:,self.nCol:(self.nCol + self.nCat)],
             self.CatMat,
             ).sum(axis = 1)
         if self.model_radius:
-            out += pt_logd_pareto_paired_yt(
-                self.data.R,
-                self.curr_zeta[:,:,-1]
-                )
+            out += pt_logd_pareto_paired_yt(self.data.R, curr_zeta[:,:,-1]).sum(axis = 1)
         return out
 
     def log_tempering_prior(self):
@@ -276,7 +269,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
 
     def initialize_sampler(self, ns):
         # Samples
-        self.samples = Samples(ns, self.nDat, self.nCol, self.nCat, self.nTemp, self.max_clust_count)
+        self.samples = Samples(ns, self.nDat, self.tCol, self.nTemp, self.max_clust_count)
         self.samples.mu[0] = 0.
         self.samples.Sigma[0] = np.eye(self.tCol) * 2.
         self.samples.zeta[0] = gamma(
@@ -297,7 +290,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         # Placeholders
         self.sigma_ph1 = np.ones((self.nTemp, self.max_clust_count, self.nCol))
         self.sigma_ph2 = np.ones((self.nTemp, self.nDat, self.nCol))
-        self.zeta_shape = (self.nTemp, self.nDat, self.nCol + self.nCat)
+        self.zeta_shape = (self.nTemp, self.nDat, self.tCol)
         return
 
     def update_am_cov(self):
@@ -356,7 +349,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         Sigma_cho = cholesky(self.curr_Sigma)
         Sigma_inv = inv(Sigma)
         chi   = self.curr_chi
-        
+
         # Adaptive Metropolis Update
         self.update_am_cov()
         
@@ -415,6 +408,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
             'GEM'    : tuple(self.priors.chi),
             'chis'   : chis,
+            'model_radius' : self.model_radius,
             }
         self.data.write_to_dict(out)
         # try to add outcome / radius to dictionary
@@ -479,6 +473,8 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
                         cat_cov[i,j] = - catlength**(-2.)
             psi[start_idx:end_idx, start_idx:end_idx] = cat_cov
             start_idx = end_idx
+        if self.model_radius:
+            psi[-1,-1] = 1.
         _prior_Sigma = InvWishartPrior(nu, psi)
         psi *= nu * prior_Sigma[1]
         _prior_chi = GEMPrior(*prior_chi)
@@ -544,7 +540,7 @@ class Result(object):
         return euclidean_to_angular(hyp)
 
     def generate_posterior_predictive_spheres(self, n_per_sample):
-        rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:] # (s,D)
+        rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:(self.nCol + self.nCat)] # (s,D)
         CatMat = category_matrix(self.data.Cats) # (C,d)
         return euclidean_to_catprob(rhos, CatMat)
         
@@ -575,7 +571,7 @@ class Result(object):
         """ pi | zeta, delta = normalized rho
         currently discarding generated Y's, keeping latent pis
         """
-        rhos = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:]
+        rhos = self.generate_conditional_posterior_predictive_gammas()[:,:,self.nCol:(self.nCol + self.nCat)]
         CatMat = category_matrix(self.data.Cats) # (C,d)
         shro = rhos @ CatMat.T # (s,n,C)
         nrho = np.einsum('snc,cd->snd', shro, CatMat) # (s,n,d)
@@ -605,14 +601,14 @@ class Result(object):
         znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
         Ypnew = euclidean_to_psphere(Vnew, 10)
         R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
-        G = gamma(znew[:,:,self.nCol:])
+        G = gamma(znew[:,:,self.nCol:(self.nCol + self.nCat)])
         return euclidean_to_hypercube(np.hstack((R[:,:,None] * Ypnew, G)))
     
     def generate_new_conditional_posterior_predictive_euclidean(self, Vnew, Wnew):
         znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
         Ypnew = euclidean_to_psphere(Vnew, 10)
         R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
-        G = gamma(znew[:,:,self.nCol:])
+        G = gamma(znew[:,:,self.nCol:(self.nCol + self.nCat)])
         return np.hstack((R[:,:,None] * Ypnew, G))
 
     def generate_new_conditional_posterior_predictive_zetas(self, Vnew, Wnew):
@@ -635,7 +631,7 @@ class Result(object):
                 loglik, Ypnew , self.samples.zeta[:,:,:self.nCol], sigma_ph,
                 )
             pt_logd_cumdircategorical_mx_ma_inplace_unstable(
-                loglik, Wnew, self.samples.zeta[:,:,self.nCol:], self.CatMat,
+                loglik, Wnew, self.samples.zeta[:,:,self.nCol:(self.nCol + self.nCat)], self.CatMat,
                 )
         np.nan_to_num(loglik, False, -np.inf)
         # combine logprior weights and likelihood under cluster
@@ -664,24 +660,27 @@ class Result(object):
         chis   = out['chis']
         
         self.data = MixedDataBase.instantiate_from_dict(out)
+        self.model_radius = out['model_radius']
         # self.data = MixedDataBase(out['V'], out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
         self.nCat   = self.data.nCat
         self.nCol   = self.data.nCol
         self.tCol   = self.nCol + self.nCat
+        if self.model_radius: 
+            self.tCol += 1
         self.nCats  = cats.shape[0]
         self.cats   = cats
         self.CatMat = category_matrix(self.data.Cats)
         
-        for key in ['Y','R','P','values']:
-            if key in out.keys():
-                self.data.__dict__[key] = out[key]
+        # for key in ['Y','R','P','values']:
+        #     if key in out.keys():
+        #         self.data.__dict__[key] = out[key]
 
         self.GEMPrior = GEMPrior(*out['GEM'])
         self.max_clust_count = chis.shape[-1]
         self.samples = Samples_(
-            self.nSamp, self.nDat, self.nCol, self.nCat, self.max_clust_count,
+            self.nSamp, self.nDat, self.tCol, self.max_clust_count,
             )
         self.samples.delta = deltas
         self.samples.mu    = mus
@@ -736,9 +735,9 @@ if __name__ == '__main__':
         'cat_vars' : '[19,20,21]',
         'decluster' : 'False',
         'quantile' : 0.95,
-        'nSamp' : 10000,
-        'nKeep' : 5000,
-        'nThin' : 5,
+        'nSamp' : 2000,
+        'nKeep' : 1000,
+        'nThin' : 2,
         'eta_alpha' : 2.,
         'eta_beta' : 1.,
         }
@@ -758,7 +757,10 @@ if __name__ == '__main__':
         outcome = out,
         )
     data.fill_outcome(out)
-    model = Chain(data, prior_chi = GEMPrior(0.1, 1), p = 10, ntemps = 6)
+    model = Chain(
+        data, prior_chi = GEMPrior(0.1, 1), p = 10, 
+        ntemps = 6, model_radius = True,
+        )
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
     res = Result(p.out_path)

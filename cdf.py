@@ -10,18 +10,22 @@ EPS = np.finfo(float).eps
 class ECDF(object):
     X = None
     N = None
+    eps = None
 
     def Fhat(self, Xnew):
         return np.searchsorted(self.X, Xnew, side = 'right') / self.N
 
     def stdpareto(self, Xnew):
-        return (1 / (1 - self.Fhat(Xnew) + EPS)) + EPS
+        stdpar = 1 / (1 - self.Fhat(Xnew) + self.eps)
+        stdpar[stdpar < 1] = 1.
+        return stdpar
 
     def __init__(self, X):
         assert len(X.shape) == 1 # verify univariate input
         self.X
         self.X = np.sort(X)
         self.N = X.shape[0]
+        self.eps = (1 / self.N) * 0.05
         return
 
 if __name__ == '__main__':

@@ -157,6 +157,8 @@ def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
+## functions relating to gamma density
+
 def logd_gamma_my(aY, alpha, beta):
     """
     log-density of Gamma distribution
@@ -176,6 +178,8 @@ def logd_gamma_my(aY, alpha, beta):
         lp -= beta * aY
     np.nan_to_num(lp, False, -np.inf)
     return lp
+
+## Functions relating to MVnormal density
 
 def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
     # def dmvnormal_log_mx(x, mu, cov_chol, cov_inv):
@@ -217,6 +221,8 @@ def logd_invwishart_ms(Sigma, nu, psi):
             '...ii->...', np.einsum('ji,...ij->...ij', psi, inv(Sigma)),
             )
     return ld
+
+## Functions relating to dirichlet-multinomial density
 
 def logd_dirmultinom_mx_sa(aW, vAlpha):
     # def logd_dirichlet_multinomial_mx_sa(aW, vAlpha):
@@ -429,6 +435,8 @@ def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
     # np.nan_to_num(logd, False, -np.inf)
     return logd
 
+## Functions relating to loggamma density
+
 def logd_loggamma_sx(x, a, b):
     logd = 0.
     logd += a * log(b)
@@ -483,6 +491,27 @@ def pt_logd_loggamma_mx_st(x, a, b):
         logd -= np.einsum('td,tjd->tj', b, np.exp(x))
     np.nan_to_num(logd, False, -np.inf)
     return logd
+
+## Functions relating to Pareto Density
+
+def pt_logd_pareto_paired_yt(vR, aAlpha):
+    """
+    inputs:
+        out : (t,n)
+        vR  : (n)
+        aAlpha : (t,n)
+    """
+    return -(aAlpha + 1) * np.log(vR[None])
+
+def pt_logd_pareto_mx_ma_inplace_unstable(out, vR, aAlpha):
+    """
+    inputs:
+        out:    (n,t,j)
+        vR:     (n)
+        aAlpha: (t,j)
+    """
+    out -= (aAlpha + 1)[None] * np.log(vR[:,None,None])
+    return
 
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.
@@ -563,11 +592,9 @@ def sample_beta_fc(alpha, y, prior):
     bb = sum(y) + prior.b
     return gamma.rvs(aa, scale = 1. / bb)
 
-
 ## Test Densities
 def lpv_inner(g, alpha, l):
     return np.prod(gammainc(np.delete(alpha, l), g)) * g**(alpha[l] - 1) * np.exp(-g)
-
 
 def log_prob_max_of_gammas(alpha, l):
     """
@@ -588,8 +615,5 @@ def logd_projgamma_linf(v, alpha):
         - alpha.sum() * np.log(v.sum())
         )
     return ld
-
-
-
 
 # EOF

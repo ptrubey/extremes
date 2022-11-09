@@ -1,6 +1,6 @@
 """ online updating of covariance matrices """
-
 import numpy as np
+from scipy import sparse
 EPS = np.finfo(float).eps
 
 class OnlineCovariance(object):
@@ -75,6 +75,30 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
     c_b     = None
     c_xbar  = None
 
+    def cluster_covariance3(self, delta):
+        if self.n <= 300:
+            return self.c_Sigma
+        
+        self.c_Sigma[:] = 0.
+        self.c_xbar[:] = 0.
+        self.c_A[:] = 0.
+        self.c_b[:] = 0.
+        self.c_n[:] = 0.
+        for n in range(self.nDat):
+            self.c_n[self.temps, delta.T[n]] += self.n
+            self.c_A[self.temps, delta.T[n]] += self.A[n]
+            self.c_b[self.temps, delta.T[n]] += self.b[n]
+        self.c_xbar = self.c_b / (self.c_n[:,:,None] + EPS)
+        self.c_Sigma += self.c_A
+        self.c_Sigma -= self.c_xbar[:,:,None] * self.c_b[:,:,:,None]
+        self.c_Sigma -= self.c_b[:,:,None] * self.c_xbar[:,:,:,None]
+        self.c_Sigma += self.c_n[:,:,None, None] * (
+            self.c_xbar[:,:,None] * self.c_xbar[:,:,:,None]
+            )
+        self.c_Sigma /= (self.c_n[:,:,None,None] + EPS)
+        self.c_Sigma += np.eye(self.nCol)[None,None,:] * 1e-9
+        return self.c_Sigma
+
     def cluster_covariance2(self, dmat):
         """
         dmat : np.array((nDat, nTemp, nClust))          (cluster indicator; true or false)
@@ -87,7 +111,6 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
             return self.c_Sigma
         
         self.c_Sigma[:] = 0.
-        
         np.einsum('ntcd,tnj->tjcd', self.A, dmat, out = self.c_A)
         np.einsum('ntd,tnj->tjd', self.b, dmat, out = self.c_b)
         self.c_n[:] = dmat.sum(axis = 1) * self.n
@@ -196,6 +219,14 @@ if __name__ == "__main__":
     #     covs[i] = sigma.Sigma
     #     if i > 1:
     #         ccovs[i] = np.cov(x[:(i+1)].T) * i/(i+1)
+    # A = np.ones((50, 5, 7,7))
+    # dmat = np.zeros((5, 50, 30))
+    # for t in range(5):
+    #     for n in range(50):
+    #         dmat[t,n,sample(range(30),1)[0]] = 1
+    # T1 = np.einsum('ntcd,tnj->tjcd', A, dmat)
+    # # T2 = np.tensordot(A, axes = (0))
+    # T2 = np.matmul(np.swapaxes())
     pass
 
 # EOF
