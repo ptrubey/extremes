@@ -714,9 +714,9 @@ if __name__ == '__main__':
         'cat_vars' : '[19,20,21]',
         'decluster' : 'False',
         'quantile' : 0.95,
-        'nSamp' : 10000,
-        'nKeep' : 5000,
-        'nThin' : 5,
+        'nSamp' : 5000,
+        'nKeep' : 3000,
+        'nThin' : 4,
         'eta_alpha' : 2.,
         'eta_beta' : 1.,
         }
@@ -736,13 +736,12 @@ if __name__ == '__main__':
         outcome = out,
         )
     data.fill_outcome(out)
-    model = Chain(data, prior_chi = GEMPrior(0.1, 1), p = 10, ntemps = 6)
+    model = Chain(data, prior_chi = (0.1, 1), p = 10, ntemps = 6)
     model.sample(p.nSamp)
     model.write_to_disk(p.out_path, p.nKeep, p.nThin)
     res = Result(p.out_path)
     Y,V,W,R = res.data.to_mixed_new(raw, out)
     ppg = res.generate_posterior_predictive_gammas()
     cppg = res.generate_new_conditional_posterior_predictive_gammas(V, W)
-    # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF
