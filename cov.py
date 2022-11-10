@@ -75,7 +75,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
     c_b     = None
     c_xbar  = None
 
-    def cluster_covariance3(self, delta):
+    def cluster_covariance(self, delta):
         if self.n <= 300:
             return self.c_Sigma
         
@@ -125,7 +125,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         self.c_Sigma /= (self.c_n[:,:,None,None] + EPS)
         return self.c_Sigma
 
-    def cluster_covariance(self, delta):
+    def cluster_covariance_old(self, delta):
         """ 
         Combines Covariance Matrices for all elements in cluster 
         adapted from: https://tinyurl.com/onlinecovariance
@@ -164,26 +164,27 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
 
     def update(self, x):
         """ x : (n, t, d) """
-        self.A += np.einsum('ntj,ntl->ntjl', x, x)
+        # self.A += np.einsum('ntj,ntl->ntjl', x, x)
+        self.A += x[:,:,:,None] * x[:,:,None,:] 
         self.b += x
         self.n += 1
-        self.xbar[:] = self.b / self.n
-        self.Sigma[:] = 0.
-        self.Sigma += self.A
-        self.Sigma -= np.einsum('ntj,ntl->ntjl', self.xbar, self.b)
-        self.Sigma -= np.einsum('ntj,ntl->ntjl', self.b, self.xbar)
-        self.Sigma += self.n * np.einsum('ntj,ntl->ntjl', self.xbar, self.xbar)
-        self.Sigma /= self.n
+        # self.xbar[:] = self.b / self.n
+        # self.Sigma[:] = 0.
+        # self.Sigma += self.A
+        # self.Sigma -= np.einsum('ntj,ntl->ntjl', self.xbar, self.b)
+        # self.Sigma -= np.einsum('ntj,ntl->ntjl', self.b, self.xbar)
+        # self.Sigma += self.n * np.einsum('ntj,ntl->ntjl', self.xbar, self.xbar)
+        # self.Sigma /= self.n
         return
     
     def __init__(self, nTemp, nDat, nCol, nClust = None):
         # regular
         self.nTemp, self.nDat, self.nCol = nTemp, nDat, nCol
         self.temps = np.arange(self.nTemp)
-        self.Sigma = np.empty((self.nDat, self.nTemp, self.nCol, self.nCol))
+        # self.Sigma = np.empty((self.nDat, self.nTemp, self.nCol, self.nCol))
         self.A = np.zeros((self.nDat, self.nTemp, self.nCol, self.nCol))
         self.b = np.zeros((self.nDat, self.nTemp, self.nCol))
-        self.xbar = np.zeros((self.nDat, self.nTemp, self.nCol))
+        # self.xbar = np.zeros((self.nDat, self.nTemp, self.nCol))
         self.n = 0
         # clustering
         if nClust is not None:

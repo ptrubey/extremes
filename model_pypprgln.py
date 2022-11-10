@@ -97,8 +97,8 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return out
 
     def am_covariance_matrices(self, delta, index):
-        # return self.am_Sigma.cluster_covariance(delta)[index]
-        return self.am_Sigma.cluster_covariance3(delta)[index]
+        return self.am_Sigma.cluster_covariance(delta)[index]
+        # return self.am_Sigma.cluster_covariance3(delta)[index]
 
     def sample_zeta(self, zeta, delta, mu, Sigma_chol, Sigma_inv):
         """
