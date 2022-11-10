@@ -633,6 +633,8 @@ class Result(object):
             pt_logd_cumdircategorical_mx_ma_inplace_unstable(
                 loglik, Wnew, self.samples.zeta[:,:,self.nCol:(self.nCol + self.nCat)], self.CatMat,
                 )
+            if self.model_radius:
+                pass
         np.nan_to_num(loglik, False, -np.inf)
         # combine logprior weights and likelihood under cluster
         weights = weights[None] + loglik # (n, nSamp, maxclustcount)

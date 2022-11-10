@@ -12,7 +12,8 @@ cardio = {
     'results'   : './ad/cardio/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[19,20,21]',
-    'model'     : 'mpypprgln',    
+    'model'     : 'pypprgln',
+    'model_radius' : 'True',
     }
 cover = {
     'source'    : './ad/cover/data_new.csv',
@@ -20,7 +21,8 @@ cover = {
     'results'   : './ad/cover/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[9,10,11,12]',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
+    'model_radius' : 'True',
     }
 mammography = {
     'source'    : './ad/mammography/data_new.csv',
@@ -28,7 +30,8 @@ mammography = {
     'results'   : './ad/mammography/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8]',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
+    'model_radius' : 'True',
     }
 annthyroid = {
     'source'    : './ad/annthyroid/data_new.csv',
@@ -36,7 +39,8 @@ annthyroid = {
     'results'   : './ad/annthyroid/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
+    'model_radius' : 'True',
     }
 yeast = {
     'source'    : './ad/yeast/data_new.csv',
@@ -44,7 +48,8 @@ yeast = {
     'results'   : './ad/yeast/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7]',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
+    'model_radius' : 'True',
     }
 pima = {
     'source'    : './ad/pima/data_new.csv',
@@ -52,12 +57,12 @@ pima = {
     'results'   : './ad/pima/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[8,9,10,11,12]',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
+    'model_radius' : 'True',
     }
 ## Categorical
 
 datasets = [cardio, cover, mammography, annthyroid, yeast, pima]
-# datasets = [mammography, annthyroid, yeast]
 stepping = '1.1'
 ntemps = '5'
 
@@ -79,6 +84,7 @@ if __name__ == '__main__':
             '--prior_chi', prior_chi,
             '--ntemps', ntemps,
             '--stepping', stepping,
+            '--model_radius', dataset['model_radius'],
             ]
         process_args.append(args)
         processes.append(Popen(args))

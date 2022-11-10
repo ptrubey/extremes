@@ -45,6 +45,7 @@ def argparser_generic():
     p.add_argument('--stepping', default = '1.05')
     p.add_argument('--prior_eta', default = '[2e0,5e-1]')
     p.add_argument('--prior_chi', default = '[1e-1,1e0]')
+    p.add_argument('--model_radius', default = 'True')
     return p.parse_args()
 
 def argparser_simulation():
