@@ -160,8 +160,8 @@ class Anomaly(Projection):
             raise            
 
     ## Latent Distance per Observation (Summary)
-    def euclidean_distance(self, V = None, W = None):
-        znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
+    def euclidean_distance(self, V = None, W = None, R = None, **kwargs):
+        znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         if hasattr(self.data, 'V') and (V is not None):            
             shape = znew[:,:,:self.nCol].sum(axis = 2)
             radii = gamma(shape).mean(axis = 1)
@@ -183,8 +183,8 @@ class Anomaly(Projection):
             self.pool,
             )
         return dmat
-    def hypercube_distance(self, V = None, W = None):
-        znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
+    def hypercube_distance(self, V = None, W = None, R = None):
+        znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         if hasattr(self.data, 'V') and (V is not None):            
             shape = znew[:,:,:self.nCol].sum(axis = 2)
             radii = gamma(shape).mean(axis = 1)
@@ -361,13 +361,13 @@ class Anomaly(Projection):
         for row in C_damex:
             cones[tuple(row)] += 1 / postpred.shape[0]
         return cones
-    def cone_density(self, V = None, W = None, epsilon = 0.5, **kwargs):
+    def cone_density(self, V = None, W = None, R = None, epsilon = 0.5, **kwargs):
         if V is None:
             return np.array([np.nan] * W.shape[0])
         n = V.shape[0]
         cone_prob = self.populate_cones(epsilon)
         scores = np.empty(n)
-        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         rho_new = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
         r_new = gamma(znew[:,:,:self.nCol].sum(axis = 2)).mean(axis = 1)
         Vnew = euclidean_to_hypercube(np.hstack((r_new[:,None] * V, rho_new)))
@@ -396,20 +396,20 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    def latent_sphere_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    def latent_sphere_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
         # if V is not None:
         #     return np.array([np.nan] * W.shape[0])
         h = self.latent_sphere_bandwidth
-        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         Gcon = gamma(Zcon[:,:,self.nCol:] + W[:,None])
         catmat = category_matrix(self.data.Cats)
         Pcon = euclidean_to_catprob(Gcon, catmat)
         Pnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
         inv_scores = kde_per_obs(Pcon, Pnew, h, 'manhattan', self.pool)
         return 1 / (inv_scores + EPS)
-    def latent_euclidean_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    def latent_euclidean_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
         h = self.latent_euclidean_bandwidth
-        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         if V is not None:
             Rcon = gamma(Zcon[:,:,:self.nCol].sum(axis = 2))
             Y1 = Rcon[:,:,None] * V[:,None,:]
@@ -420,11 +420,11 @@ class Anomaly(Projection):
         Ynew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
         inv_scores = kde_per_obs(Ycon, Ynew, h, 'euclidean', self.pool)
         return 1 / (inv_scores + EPS)
-    def latent_hypercube_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    def latent_hypercube_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
         if V is None:
             return np.array([np.nan] * W.shape[0])
         h = self.latent_euclidean_bandwidth
-        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W)
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         if V is not None:
             Rcon = gamma(Zcon[:,:,:self.nCol].sum(axis = 2))
             Y1 = Rcon[:,:,None] * V[:,None,:]
@@ -472,7 +472,7 @@ class Anomaly(Projection):
         for metric in metrics:
             print('s' + '\b'*11 + metric.ljust(10), end = '')
             sleep(1)
-            temp = self.scoring_metrics[metric](V = V, W = W).ravel()
+            temp = self.scoring_metrics[metric](V = V, W = W, R = R).ravel()
             temp[np.isnan(temp)] = MAX
             temp[temp > MAX] = MAX
             out[metric] = np.log(temp)
@@ -519,29 +519,30 @@ def argparser():
 if __name__ == '__main__':
     pass
 
-    # result_path = './ad/{}/rank_results_*.pkl'
-    # datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
-    # result_paths = []
-    # metrics = []
-    # for dataset in datasets:
-    #     result_files = glob.glob(result_path.format(dataset))
-    #     for result_file in result_files:
-    #         result_paths.append(result_file)
+    result_path = './ad/{}/rank_results_1e-1_1e-1.pkl'
+    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+    result_paths = []
+    metrics = []
+    for dataset in datasets:
+        result_files = glob.glob(result_path.format(dataset))
+        for result_file in result_files:
+            result_paths.append(result_file)
     
-    # pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
-    # for result_path in result_paths:
-    #     result = ResultFactory('mpypprgln', result_path)
-    #     result.pool = pool
-    #     data = (result.data.Y, result.data.V, result.data.W, result.data.R)
-    #     metric = result.get_scoring_metrics(*data)
-    #     metric['path'] = result_path
-    #     metrics.append(metric)
-    #     del result
-    #     gc.collect()
+    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    for result_path in result_paths:
+        print(result_path.ljust(80), end = '')
+        result = ResultFactory('pypprgln', result_path)
+        result.pool = pool
+        data = (result.data.Y, result.data.V, result.data.W, result.data.R)
+        metric = result.get_scoring_metrics(*data)
+        metric['path'] = result_path
+        metrics.append(metric)
+        del result
+        gc.collect()
     
-    # pool.close()
-    # df = pd.concat(metrics)
-    # df.to_csv('./ad/performance_rank.csv', index = False)
+    pool.close()
+    df = pd.concat(metrics)
+    df.to_csv('./ad/performance_rank_radius.csv', index = False)
     
 
     # basepath = './ad/cardio'
@@ -567,85 +568,85 @@ if __name__ == '__main__':
     # result.pools_closed()
 
     # raise
-    import re
-    results  = []
-    basepath = './ad'
-    # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
-    # resbases = {'mdppprgln' : 'results_xv*.pkl'}
-    datasets = ['cardio','cover','mammography','annthyroid','yeast']
-    # resbases = {'mpypprgln' : 'results*.pkl'}
-    resbases = {'mpypprgln' : 'results_xv*.pkl'}
-    # datasets = ['solarflare']
-    # resbases = {'cdppprgln' : 'results_xv*.pkl'}
-    for model in resbases.keys():
-        for dataset in datasets:
-            files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
-            for file in files:
-                results.append((model, file))
-                # if not 'xv' in file:
-                #     results.append((model, file))
-    metrics = []
-    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
-    for result in results:
-        extant_result = ResultFactory(*result)
-        extant_result.set_postpred_per_sample(20)
-        extant_result.pool = pool
+    # import re
+    # results  = []
+    # basepath = './ad'
+    # # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
+    # # resbases = {'mdppprgln' : 'results_xv*.pkl'}
+    # datasets = ['cardio','cover','mammography','annthyroid','yeast']
+    # # resbases = {'mpypprgln' : 'results*.pkl'}
+    # resbases = {'mpypprgln' : 'results_xv*.pkl'}
+    # # datasets = ['solarflare']
+    # # resbases = {'cdppprgln' : 'results_xv*.pkl'}
+    # for model in resbases.keys():
+    #     for dataset in datasets:
+    #         files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+    #         for file in files:
+    #             results.append((model, file))
+    #             # if not 'xv' in file:
+    #             #     results.append((model, file))
+    # metrics = []
+    # pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    # for result in results:
+    #     extant_result = ResultFactory(*result)
+    #     extant_result.set_postpred_per_sample(20)
+    #     extant_result.pool = pool
 
-        # Normal Code
-        # raw = pd.read_csv(
-        #         os.path.join(os.path.split(result[1])[0], 'data.csv'),
-        #         ).values
-        # raw = raw[~np.isnan(raw).any(axis = 1)]
-        # out = pd.read_csv(
-        #         os.path.join(os.path.split(result[1])[0], 'outcome.csv'),
-        #         ).values.ravel()
-        # out = out[~np.isnan(out.astype(float))].astype(int)
-        # data = extant_result.data.to_mixed_new(raw, out)
-        # print('Processing Result {}'.format(result[1]).ljust(80), end = '')
-        # extant_metric = extant_result.get_scoring_metrics(*data)
-        # del extant_result
-        # extant_metric['path'] = result[1]
-        # gc.collect()
+    #     # Normal Code
+    #     # raw = pd.read_csv(
+    #     #         os.path.join(os.path.split(result[1])[0], 'data.csv'),
+    #     #         ).values
+    #     # raw = raw[~np.isnan(raw).any(axis = 1)]
+    #     # out = pd.read_csv(
+    #     #         os.path.join(os.path.split(result[1])[0], 'outcome.csv'),
+    #     #         ).values.ravel()
+    #     # out = out[~np.isnan(out.astype(float))].astype(int)
+    #     # data = extant_result.data.to_mixed_new(raw, out)
+    #     # print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+    #     # extant_metric = extant_result.get_scoring_metrics(*data)
+    #     # del extant_result
+    #     # extant_metric['path'] = result[1]
+    #     # gc.collect()
 
-        # Cross-Validation Code
-        cv = re.search('xv(\d+)', result[1]).group(1)
-        is_raw = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
-            ).values
-        is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
-        os_raw = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
-            ).values
-        os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+    #     # Cross-Validation Code
+    #     cv = re.search('xv(\d+)', result[1]).group(1)
+    #     is_raw = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
+    #         ).values
+    #     is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
+    #     os_raw = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
+    #         ).values
+    #     os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
         
-        is_out = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_is.csv'.format(cv)),
-            ).values.ravel()
-        is_out = is_out[~np.isnan(is_out.astype(float))].astype(int)
-        os_out = pd.read_csv(
-            os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
-            ).values.ravel()
-        os_out = os_out[~np.isnan(os_out.astype(float))].astype(int)
+    #     is_out = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_is.csv'.format(cv)),
+    #         ).values.ravel()
+    #     is_out = is_out[~np.isnan(is_out.astype(float))].astype(int)
+    #     os_out = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
+    #         ).values.ravel()
+    #     os_out = os_out[~np.isnan(os_out.astype(float))].astype(int)
 
-        is_data = extant_result.data.to_mixed_new(is_raw, is_out)
-        os_data = extant_result.data.to_mixed_new(os_raw, os_out)
+    #     is_data = extant_result.data.to_mixed_new(is_raw, is_out)
+    #     os_data = extant_result.data.to_mixed_new(os_raw, os_out)
 
-        print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
-        extant_metric_is = extant_result.get_scoring_metrics(*is_data)
-        print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
-        extant_metric_os = extant_result.get_scoring_metrics(*os_data)
+    #     print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
+    #     extant_metric_is = extant_result.get_scoring_metrics(*is_data)
+    #     print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
+    #     extant_metric_os = extant_result.get_scoring_metrics(*os_data)
 
-        del extant_result
-        extant_metric_is['path'] = result[1]
-        extant_metric_os['path'] = result[1]
-        extant_metric_is['InSamp'] = True
-        extant_metric_os['InSamp'] = False
-        metrics.append(extant_metric_is)
-        metrics.append(extant_metric_os)
-        gc.collect()
+    #     del extant_result
+    #     extant_metric_is['path'] = result[1]
+    #     extant_metric_os['path'] = result[1]
+    #     extant_metric_is['InSamp'] = True
+    #     extant_metric_os['InSamp'] = False
+    #     metrics.append(extant_metric_is)
+    #     metrics.append(extant_metric_os)
+    #     gc.collect()
     
-    df = pd.concat(metrics)
-    df.to_csv('./ad/performance_py_xv.csv')
+    # df = pd.concat(metrics)
+    # df.to_csv('./ad/performance_py_xv.csv')
     # df.to_csv('./ad/performance_py.csv')
 
 # EOF   
