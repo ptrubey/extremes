@@ -560,9 +560,9 @@ class Result(object):
         pis = rhos / nrho
         return pis
 
-    def generate_new_conditional_posterior_predictive_spheres(self, Vnew, Wnew):
+    def generate_new_conditional_posterior_predictive_spheres(self, Vnew, Wnew, **kwargs):
         rhos   = self.generate_new_conditional_posterior_predictive_gammas(
-            Vnew, Wnew,
+            Vnew, Wnew, **kwargs
             )[:,:,self.nCol:]
         CatMat = category_matrix(self.data.Cats)
         shro   = rhos @ CatMat.T
@@ -570,30 +570,30 @@ class Result(object):
         pis    = rhos / nrho
         return pis
     
-    def generate_new_conditional_posterior_predictive_radii(self, Vnew, Wnew):
-        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+    def generate_new_conditional_posterior_predictive_radii(self, Vnew, Wnew, **kwargs):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, **kwargs)
         radii = znew[:,:,:self.nCol].sum(axis = 2)
         return gamma(radii)
     
-    def generate_new_conditional_posterior_predictive_gammas(self, Vnew, Wnew):
-        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+    def generate_new_conditional_posterior_predictive_gammas(self, Vnew, Wnew, **kwargs):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, **kwargs)
         return gamma(znew)
 
-    def generate_new_conditional_posterior_predictive_hypercube(self, Vnew, Wnew):
-        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+    def generate_new_conditional_posterior_predictive_hypercube(self, Vnew, Wnew, **kwargs):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, **kwargs)
         Ypnew = euclidean_to_psphere(Vnew, 10)
         R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
         G = gamma(znew[:,:,self.nCol:])
         return euclidean_to_hypercube(np.hstack((R[:,:,None] * Ypnew, G)))
     
-    def generate_new_conditional_posterior_predictive_euclidean(self, Vnew, Wnew):
-        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew)
+    def generate_new_conditional_posterior_predictive_euclidean(self, Vnew, Wnew, **kwargs):
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew, Wnew, **kwargs)
         Ypnew = euclidean_to_psphere(Vnew, 10)
         R = gamma(znew[:,:,:self.nCol].sum(axis = 2))
         G = gamma(znew[:,:,self.nCol:])
         return np.hstack((R[:,:,None] * Ypnew, G))
 
-    def generate_new_conditional_posterior_predictive_zetas(self, Vnew, Wnew):
+    def generate_new_conditional_posterior_predictive_zetas(self, Vnew, Wnew, **kwargs):
         n = Vnew.shape[0]
         Ypnew = euclidean_to_psphere(Vnew, 10)
         weights = np.zeros((self.nSamp, self.max_clust_count))
