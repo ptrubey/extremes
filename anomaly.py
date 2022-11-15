@@ -30,7 +30,10 @@ from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           
     hypercube_distance_matrix, euclidean_distance_matrix,                       \
     euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
     mixed_energy_score, real_energy_score, simp_energy_score
+from projgamma import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
+    pt_logd_pareto_mx_ma
 from models import Results
+from samplers import bincount2D_vectorized
 np.seterr(divide = 'ignore')
 
 # Globals
@@ -446,28 +449,58 @@ class Anomaly(Projection):
         S1 = kde_per_obs(V[None], Vnew, h_real, 'hypercube', self.pool)
         S2 = 1 / self.latent_sphere_kernel_density_estimate(V, W)
         return 1 / (S1 * S2  + EPS)
-        
+
+    ## Parametric Density Estimate Metric
+    def simplex_density_estimate(self, V = None, W = None, R = None, **kwargs):
+        """
+        V : (n x nCol) (if available)
+        W : (n x nCat) (if available)
+        R : (n)        (if available)
+        """
+        S = V / V.sum(axis = 1)[:, None] # (n x nCol), on S_1^{d-1}
+        ll_real = pt_logd_dirichlet_mx_ma(S, self.samples.zeta[:,:,:self.nCol])
+        ll_cat = pt_logd_cumdircategorical_mx_ma(
+            W, self.samples.zeta[:,:,:self.nCol:(self.nCol + self.nCat)], self.CatMat,
+            )
+        if self.model_radius:
+            ll_real += pt_logd_pareto_mx_ma(R, self.samples.zeta[:,:,-1])
+        ll = ll_real + ll_cat # n, s, j
+
+        weights = bincount2D_vectorized(self.samples.delta, self.max_clust_count)
+        weights -= (weights > 0) * self.GEMPrior.discount
+        weights += (weights == 0) * (
+            + self.GEMPrior.concentration
+            + self.GEMPrior.discount * (self.weights > 0).sum(axis = 1)[:,None]
+            ) / ((weights == 0).sum(axis = 1) + EPS)[:,None]
+        np.log(weights, out = weights)
+        lp = ll + weights[None]
+        density = np.exp(lp).sum(axis = 2).mean(axis = 1)
+        return density
+
     # scoring metrics
     @property
     def scoring_metrics(self):
         metrics = {
-            'iso'    : self.isolation_forest,
-            'lof'    : self.local_outlier_factor,
-            'svm'    : self.one_class_svm,
-            'kedp'   : self.knn_euclidean_distance_to_postpred,
-            'khdp'   : self.knn_hypercube_distance_to_postpred,
-            'cone'   : self.cone_density,
-            'ekde'   : self.euclidean_kernel_density_estimate,
-            'hkde'   : self.hypercube_kernel_density_estimate,
-            'lhkde'  : self.latent_hypercube_kernel_density_estimate,
-            'lekde'  : self.latent_euclidean_kernel_density_estimate,
-            'lskde'  : self.latent_sphere_kernel_density_estimate,
-            'lmkde'  : self.latent_mixed_kernel_density_estimate,
+            # 'iso'    : self.isolation_forest,
+            # 'lof'    : self.local_outlier_factor,
+            # 'svm'    : self.one_class_svm,
+            # 'kedp'   : self.knn_euclidean_distance_to_postpred,
+            # 'khdp'   : self.knn_hypercube_distance_to_postpred,
+            # 'cone'   : self.cone_density,
+            # 'ekde'   : self.euclidean_kernel_density_estimate,
+            # 'hkde'   : self.hypercube_kernel_density_estimate,
+            # 'lhkde'  : self.latent_hypercube_kernel_density_estimate,
+            # 'lekde'  : self.latent_euclidean_kernel_density_estimate,
+            # 'lskde'  : self.latent_sphere_kernel_density_estimate,
+            # 'lmkde'  : self.latent_mixed_kernel_density_estimate,
+            'sde'    : self.simplex_density_estimate,
             }
         return metrics
     def get_scores(self, V, W, R):
         metrics = self.scoring_metrics.keys()
-        density_metrics = ['khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','lmkde']
+        density_metrics = [
+            'khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','lmkde',
+            ]
         out = pd.DataFrame()
         for metric in metrics:
             print('s' + '\b'*11 + metric.ljust(10), end = '')
@@ -520,7 +553,8 @@ if __name__ == '__main__':
     pass
 
     result_path = './ad/{}/rank_results_1e-1_1e-1.pkl'
-    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+    # datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+    datasets = ['annthyroid']
     result_paths = []
     metrics = []
     for dataset in datasets:
@@ -528,7 +562,7 @@ if __name__ == '__main__':
         for result_file in result_files:
             result_paths.append(result_file)
     
-    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    pool = Pool(processes = ceil(0.5 * cpu_count()), initializer = limit_cpu)
     for result_path in result_paths:
         print(result_path.ljust(80), end = '')
         result = ResultFactory('pypprgln', result_path)

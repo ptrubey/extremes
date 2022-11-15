@@ -1,18 +1,24 @@
-""" Functions relating to density of Projected Gamma.  All functions are
-parameterized such that E(x) = alpha / beta (treat beta as rate parameter). """
+""" 
+Functions relating to density of Projected Gamma.  All functions are
+parameterized such that E(x) = alpha / beta (treat beta as rate parameter). 
+"""
 import numpy as np
+
 np.seterr(under = 'ignore', over = 'raise')
-from numpy.linalg import norm, slogdet, inv
-from math import cos, sin, log, acos, exp
-from scipy.stats import gamma, uniform, norm as normal
-from scipy.special import gammaln, multigammaln, gammainc
-from scipy.integrate import quad
-from functools import lru_cache
 from collections import namedtuple
 from contextlib import nullcontext
+from functools import lru_cache
+from math import acos, cos, exp, log, sin
+
+from numpy.linalg import inv, norm, slogdet
+from scipy.integrate import quad
+from scipy.special import gammainc, gammaln, multigammaln
+from scipy.stats import gamma
+from scipy.stats import norm as normal
+from scipy.stats import uniform
 
 from genpareto import gpd_fit
-from slice import univariate_slice_sample, skip_univariate_slice_sample
+from slice import skip_univariate_slice_sample, univariate_slice_sample
 
 # Tuples for storing priors
 
@@ -129,6 +135,18 @@ def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
     return ld
 
 def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
+    """
+    projected gamma log-density (proportional) 
+        for multiple Y, multiple theta (per temperature)
+    ----
+    Inputs:
+        out    : log-density    (n, t, j)
+        aY     : array of Y     (n, d)    [Y in S_p^{d-1}]
+        aAlpha : array of alpha (t, j, d)
+        aBeta  : array of beta  (t, j, d)        
+    """
+    if aY.shape[1] == 0:
+        return
     out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
     out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
@@ -156,6 +174,24 @@ def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
         ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
     np.nan_to_num(ld, False, -np.inf)
     return ld
+
+def pt_logd_dirichlet_mx_ma(aY, aAlpha):
+    """
+    Log-density for Dirichlet Distribution (assuming parallel tempering)
+    ---
+    Args:
+        aY     : (n, d)
+        aAlpha : (t,j,d)
+    ---
+    Returns:
+        out    : (n,t,j)
+    """
+    n = aY.shape[0]; t, j, d = aAlpha.shape
+    out = np.zeros((n,t,j))
+    out += gammaln(aAlpha.sum(axis = 2))
+    out -= gammaln(aAlpha).sum(axis = 2)
+    out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
+    return out
 
 ## functions relating to gamma density
 
@@ -376,6 +412,8 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat
     output:
         logd:       (n,t,j)
     """
+    if aW.shape[1] == 0:
+        return
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     ga = gammaln(aAlpha)
     ga1 = gammaln(aAlpha + 1)
@@ -385,6 +423,27 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat
     out += np.einsum('tjd,nd->ntj', ga, ~aW)
     out -= np.einsum('tjd->tj', ga)[None,:,:]
     return
+
+def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
+    """
+    inputs:
+        aW:         (n,d)
+        aAlpha:     (t,j,d)
+        sphere_mat: (c,d)
+    output:
+        logd:       (n,t,j)
+    """
+    n = aW.shape[0]; t,j,d = aAlpha.shape
+    out = np.zeros((n,t,j))
+    sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
+    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
+    out += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
+    out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+    out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    out -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
+    return out
 
 def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
@@ -512,6 +571,19 @@ def pt_logd_pareto_mx_ma_inplace_unstable(out, vR, aAlpha):
     """
     out -= (aAlpha + 1)[None] * np.log(vR[:,None,None])
     return
+
+def pt_logd_pareto_mx_ma(vR, aAlpha):
+    """
+    inputs:
+        vR:     (n)
+        aAlpha: (t,j)
+    outputs:
+        out:    (n,t,j)
+    """
+    n = vR.shape[0]; t,j = aAlpha.shape[0]
+    out = np.zeros((n,t,j))
+    out -= (aAlpha + 1)[None] * np.log(vR[:,None,None])
+    return out
 
 ## Functions related to sampling for parameters from posterior, assuming
 ## a projected gamma likelihood.

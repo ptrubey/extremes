@@ -261,6 +261,13 @@ class RankTransform(DataBase):
         return(Z)
 
     def fill_rank_transform(self, X):
+        if X.shape[1] == 0:
+            self.X = X
+            self.Z = X
+            self.R = np.ones(X.shape[0])
+            self.V = X
+            self.nDat, self.nCol = self.X.shape
+            return
         self.X = X
         self.Fhats = list(map(ECDF, self.X.T))
         self.Z = self.std_pareto_transform(self.X)
@@ -528,11 +535,9 @@ class Data(MixedData):
     pass
 
 
-
-
-
-
 if __name__ == '__main__':
+    X = np.zeros((50, 0))
+    r = RankTransform(X)
     pass
 
 # EOF
