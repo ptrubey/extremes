@@ -266,53 +266,74 @@ class Anomaly(Projection):
         return (hV, hP)
 
     ## Classic Anomaly Metrics:
-    def isolation_forest(self, V = None, W = None, **kwargs):
+    def isolation_forest(self, V = None, W = None, R = None, **kwargs):
         """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
-        # if hasattr(self.data, 'raw'):
-        #     forest = IsolationForest().fit(self.data.raw)
-        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+        if hasattr(self.data, 'R') and hasattr(self.data,'V') and hasattr(self.data, 'W'):
+            assert all([type(x) is np.ndarray for x in [V, W, R]])
+            dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+            forest = IsolationForest().fit(dat)
+            raw = forest.score_samples(np.hstack([R[:,None] * V, W]))
+        elif hasattr(self.data, 'V' and hasattr('W')):
+            assert all([type(x) is np.ndarray for x in [V,W]])
             dat = np.hstack((self.data.V, self.data.W))
             forest = IsolationForest().fit(dat)
-            datnew = np.hstack((V,W))
-            raw = forest.score_samples(datnew)
+            raw = forest.score_samples(np.hstack((V,W)))
         elif hasattr(self.data, 'V'):
+            assert all([type(x) is np.ndarray for x in [V]])
             dat = self.data.V
             forest = IsolationForest().fit(dat)
             raw = forest.score_samples(V)
         elif hasattr(self.data, 'W'):
+            assert all([type(x) is np.ndarray for x in [W]])
             dat = self.data.W
             forest = IsolationForest().fit(dat)
             raw = forest.score_samples(W)
         else:
             raise
         return raw.max() - raw + 1
-    def local_outlier_factor(self, V = None, W = None, k = 5, **kwargs):
+    def local_outlier_factor(self, V = None, W = None, R = None, k = 5, **kwargs):
         """ Implements Local Outlier Factor.  k specifies the number of neighbors to fit to. """
-        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+        if hasattr(self.data, 'R') and hasattr(self.data,'V') and hasattr(self.data, 'W'):
+            assert all([type(x) is np.ndarray for x in [V, W, R]])
+            dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+            lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
+            raw = lof.score_samples(np.hstack([R[:,None] * V, W]))
+        elif hasattr(self.data, 'V' and hasattr('W')):
+            assert all([type(x) is np.ndarray for x in [V,W]])
             dat = np.hstack((self.data.V, self.data.W))
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(np.hstack((V,W)))
         elif hasattr(self.data, 'V'):
+            assert all([type(x) is np.ndarray for x in [V]])
             dat = self.data.V
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(V)
         elif hasattr(self.data, 'W'):
+            assert all([type(x) is np.ndarray for x in [W]])
             dat = self.data.W
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(W)
         else:
             raise
         return raw.max() - raw + 1
-    def one_class_svm(self, V = None, W = None, **kwargs):        
-        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+    def one_class_svm(self, V = None, W = None, R = None, **kwargs):
+        if hasattr(self.data, 'R') and hasattr(self.data,'V') and hasattr(self.data, 'W'):
+            assert all([type(x) is np.ndarray for x in [V, W, R]])
+            dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+            svm = OneClassSVM(gamma = 'auto').fit(dat)
+            raw = svm.score_samples(np.hstack([R[:,None] * V, W]))
+        elif hasattr(self.data, 'V' and hasattr('W')):
+            assert all([type(x) is np.ndarray for x in [V,W]])
             dat = np.hstack((self.data.V, self.data.W))
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(np.hstack((V,W)))
         elif hasattr(self.data, 'V'):
+            assert all([type(x) is np.ndarray for x in [V]])
             dat = self.data.V
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(V)
         elif hasattr(self.data, 'W'):
+            assert all([type(x) is np.ndarray for x in [W]])
             dat = self.data.W
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(W)
@@ -460,30 +481,32 @@ class Anomaly(Projection):
         S = V / V.sum(axis = 1)[:, None] # (n x nCol), on S_1^{d-1}
         ll_real = pt_logd_dirichlet_mx_ma(S, self.samples.zeta[:,:,:self.nCol])
         ll_cat = pt_logd_cumdircategorical_mx_ma(
-            W, self.samples.zeta[:,:,:self.nCol:(self.nCol + self.nCat)], self.CatMat,
+            W, self.samples.zeta[:,:,self.nCol:(self.nCol + self.nCat)], self.CatMat,
             )
         if self.model_radius:
             ll_real += pt_logd_pareto_mx_ma(R, self.samples.zeta[:,:,-1])
         ll = ll_real + ll_cat # n, s, j
 
-        weights = bincount2D_vectorized(self.samples.delta, self.max_clust_count)
+        weights = bincount2D_vectorized(self.samples.delta, self.max_clust_count) * 1.
         weights -= (weights > 0) * self.GEMPrior.discount
         weights += (weights == 0) * (
             + self.GEMPrior.concentration
-            + self.GEMPrior.discount * (self.weights > 0).sum(axis = 1)[:,None]
+            + self.GEMPrior.discount * (weights > 0).sum(axis = 1)[:,None]
             ) / ((weights == 0).sum(axis = 1) + EPS)[:,None]
+        weights /= weights.sum(axis = 1)[:,None]
         np.log(weights, out = weights)
-        lp = ll + weights[None]
-        density = np.exp(lp).sum(axis = 2).mean(axis = 1)
-        return density
+        clust_density = ll + weights[None]
+        np.exp(clust_density, out = clust_density)
+        avg_density = clust_density.sum(axis = 2).mean(axis = 1)
+        return 1 / avg_density
 
     # scoring metrics
     @property
     def scoring_metrics(self):
         metrics = {
-            # 'iso'    : self.isolation_forest,
-            # 'lof'    : self.local_outlier_factor,
-            # 'svm'    : self.one_class_svm,
+            'iso'    : self.isolation_forest,
+            'lof'    : self.local_outlier_factor,
+            'svm'    : self.one_class_svm,
             # 'kedp'   : self.knn_euclidean_distance_to_postpred,
             # 'khdp'   : self.knn_hypercube_distance_to_postpred,
             # 'cone'   : self.cone_density,
@@ -552,7 +575,7 @@ def argparser():
 if __name__ == '__main__':
     pass
 
-    result_path = './ad/{}/rank_results_1e-1_1e-1.pkl'
+    result_path = './ad/{}/rank_results_1e-1_1e0.pkl'
     # datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
     datasets = ['annthyroid']
     result_paths = []
@@ -562,7 +585,7 @@ if __name__ == '__main__':
         for result_file in result_files:
             result_paths.append(result_file)
     
-    pool = Pool(processes = ceil(0.5 * cpu_count()), initializer = limit_cpu)
+    pool = Pool(processes = ceil(0.2 * cpu_count()), initializer = limit_cpu)
     for result_path in result_paths:
         print(result_path.ljust(80), end = '')
         result = ResultFactory('pypprgln', result_path)
@@ -576,7 +599,7 @@ if __name__ == '__main__':
     
     pool.close()
     df = pd.concat(metrics)
-    df.to_csv('./ad/performance_rank_radius.csv', index = False)
+    df.to_csv('./ad/perf_test.csv', index = False)
     
 
     # basepath = './ad/cardio'

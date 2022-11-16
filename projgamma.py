@@ -436,13 +436,13 @@ def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
     n = aW.shape[0]; t,j,d = aAlpha.shape
     out = np.zeros((n,t,j))
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
-    sw = np.einsum('nd,cd->nc', aW, sphere_mat)
+    ga = gammaln(aAlpha)
+    ga1 = gammaln(aAlpha + 1)
     out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
-    out += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
-    out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
-    out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
-    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
-    out -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
+    out -= np.einsum('tjc->tj', gammaln(sa + 1))[None,:,:]
+    out += np.einsum('tjd,nd->ntj', ga1, aW)
+    out += np.einsum('tjd,nd->ntj', ga, ~aW)
+    out -= np.einsum('tjd->tj', ga)[None,:,:]
     return out
 
 def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
@@ -580,7 +580,7 @@ def pt_logd_pareto_mx_ma(vR, aAlpha):
     outputs:
         out:    (n,t,j)
     """
-    n = vR.shape[0]; t,j = aAlpha.shape[0]
+    n = vR.shape[0]; t,j = aAlpha.shape
     out = np.zeros((n,t,j))
     out -= (aAlpha + 1)[None] * np.log(vR[:,None,None])
     return out

@@ -675,10 +675,6 @@ class Result(object):
         self.cats   = cats
         self.CatMat = category_matrix(self.data.Cats)
         
-        # for key in ['Y','R','P','values']:
-        #     if key in out.keys():
-        #         self.data.__dict__[key] = out[key]
-
         self.GEMPrior = GEMPrior(*out['GEM'])
         self.max_clust_count = chis.shape[-1]
         self.samples = Samples_(
