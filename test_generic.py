@@ -38,6 +38,7 @@ if __name__ == '__main__':
         ntemps = int(p.ntemps), 
         stepping = float(p.stepping),
         nMix = int(p.nMix),
+        model_radius = eval(p.model_radius),
         )
         
     ## Run Sampler
