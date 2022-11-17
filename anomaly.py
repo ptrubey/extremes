@@ -575,9 +575,9 @@ def argparser():
 if __name__ == '__main__':
     pass
 
-    result_path = './ad/{}/rank_results_1e-1_1e0.pkl'
-    # datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
-    datasets = ['annthyroid']
+    result_path = './ad/{}/rank_results_*.pkl'
+    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+    # datasets = ['annthyroid']
     result_paths = []
     metrics = []
     for dataset in datasets:
@@ -599,7 +599,7 @@ if __name__ == '__main__':
     
     pool.close()
     df = pd.concat(metrics)
-    df.to_csv('./ad/perf_test.csv', index = False)
+    df.to_csv('./ad/performance_rank_radius.csv', index = False)
     
 
     # basepath = './ad/cardio'
