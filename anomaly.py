@@ -495,7 +495,9 @@ class Anomaly(Projection):
         with np.errstate(over='ignore'):
             np.exp(clust_density, out = clust_density)
         clust_density[np.isinf(clust_density)] = MAX
-        avg_density = clust_density.sum(axis = 2).mean(axis = 1)
+        with np.errstate(over='ignore'):
+            avg_density = clust_density.sum(axis = 2).mean(axis = 1)
+        avg_density[np.isinf(avg_density)] = MAX
         return 1 / avg_density
 
     # scoring metrics
