@@ -585,7 +585,7 @@ if __name__ == '__main__':
         for result_file in result_files:
             result_paths.append(result_file)
     
-    pool = Pool(processes = ceil(0.2 * cpu_count()), initializer = limit_cpu)
+    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
     for result_path in result_paths:
         print(result_path.ljust(80), end = '')
         result = ResultFactory('pypprgln', result_path)
