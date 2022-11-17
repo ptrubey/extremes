@@ -58,6 +58,14 @@ MAX = np.finfo(float).max
 #         R = X.max(axis = 1)
 #     pass
 
+def chkarr(obj, attr):
+    """ check if object has array; array is valid, and has positive dimensions """
+    if bool(hasattr(obj, attr) and type(obj.__dict__[attr]) is np.ndarray and
+                obj.__dict__[attr].shape[-1] > 0):
+        return True
+    else:
+        return False
+
 def metric_auc(scores, actual):
     """  
     metric_auc(scores, actual)
@@ -268,23 +276,19 @@ class Anomaly(Projection):
     ## Classic Anomaly Metrics:
     def isolation_forest(self, V = None, W = None, R = None, **kwargs):
         """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
-        if hasattr(self.data, 'R') and hasattr(self.data,'V') and hasattr(self.data, 'W'):
-            assert all([type(x) is np.ndarray for x in [V, W, R]])
+        if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
             forest = IsolationForest().fit(dat)
             raw = forest.score_samples(np.hstack([R[:,None] * V, W]))
-        elif hasattr(self.data, 'V' and hasattr('W')):
-            assert all([type(x) is np.ndarray for x in [V,W]])
+        elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             dat = np.hstack((self.data.V, self.data.W))
             forest = IsolationForest().fit(dat)
             raw = forest.score_samples(np.hstack((V,W)))
-        elif hasattr(self.data, 'V'):
-            assert all([type(x) is np.ndarray for x in [V]])
+        elif chkarr(self.data, 'V'):
             dat = self.data.V
             forest = IsolationForest().fit(dat)
             raw = forest.score_samples(V)
-        elif hasattr(self.data, 'W'):
-            assert all([type(x) is np.ndarray for x in [W]])
+        elif chkarr(self.data, 'W'):
             dat = self.data.W
             forest = IsolationForest().fit(dat)
             raw = forest.score_samples(W)
@@ -293,23 +297,19 @@ class Anomaly(Projection):
         return raw.max() - raw + 1
     def local_outlier_factor(self, V = None, W = None, R = None, k = 5, **kwargs):
         """ Implements Local Outlier Factor.  k specifies the number of neighbors to fit to. """
-        if hasattr(self.data, 'R') and hasattr(self.data,'V') and hasattr(self.data, 'W'):
-            assert all([type(x) is np.ndarray for x in [V, W, R]])
+        if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(np.hstack([R[:,None] * V, W]))
-        elif hasattr(self.data, 'V' and hasattr('W')):
-            assert all([type(x) is np.ndarray for x in [V,W]])
+        elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             dat = np.hstack((self.data.V, self.data.W))
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(np.hstack((V,W)))
-        elif hasattr(self.data, 'V'):
-            assert all([type(x) is np.ndarray for x in [V]])
+        elif chkarr(self.data, 'V'):
             dat = self.data.V
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(V)
-        elif hasattr(self.data, 'W'):
-            assert all([type(x) is np.ndarray for x in [W]])
+        elif chkarr(self.data, 'W'):
             dat = self.data.W
             lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
             raw = lof.score_samples(W)
@@ -317,23 +317,19 @@ class Anomaly(Projection):
             raise
         return raw.max() - raw + 1
     def one_class_svm(self, V = None, W = None, R = None, **kwargs):
-        if hasattr(self.data, 'R') and hasattr(self.data,'V') and hasattr(self.data, 'W'):
-            assert all([type(x) is np.ndarray for x in [V, W, R]])
+        if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(np.hstack([R[:,None] * V, W]))
-        elif hasattr(self.data, 'V' and hasattr('W')):
-            assert all([type(x) is np.ndarray for x in [V,W]])
+        elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             dat = np.hstack((self.data.V, self.data.W))
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(np.hstack((V,W)))
-        elif hasattr(self.data, 'V'):
-            assert all([type(x) is np.ndarray for x in [V]])
+        elif chkarr(self.data, 'V'):
             dat = self.data.V
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(V)
-        elif hasattr(self.data, 'W'):
-            assert all([type(x) is np.ndarray for x in [W]])
+        elif chkarr(self.data, 'W'):
             dat = self.data.W
             svm = OneClassSVM(gamma = 'auto').fit(dat)
             raw = svm.score_samples(W)
@@ -496,7 +492,9 @@ class Anomaly(Projection):
         weights /= weights.sum(axis = 1)[:,None]
         np.log(weights, out = weights)
         clust_density = ll + weights[None]
-        np.exp(clust_density, out = clust_density)
+        with np.errstate(over='ignore'):
+            np.exp(clust_density, out = clust_density)
+        clust_density[np.isinf(clust_density)] = MAX
         avg_density = clust_density.sum(axis = 2).mean(axis = 1)
         return 1 / avg_density
 
