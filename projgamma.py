@@ -569,6 +569,8 @@ def pt_logd_pareto_mx_ma_inplace_unstable(out, vR, aAlpha):
         vR:     (n)
         aAlpha: (t,j)
     """
+    if vR.shape[-1] == 0:
+        return
     out -= (aAlpha + 1)[None] * np.log(vR[:,None,None])
     return
 

@@ -725,12 +725,15 @@ if __name__ == '__main__':
 
     # p = argparser()
     d = {
-        'in_data_path'    : './ad/cardio/data_new.csv',
-        'in_outcome_path' : './ad/cardio/outcome_new.csv',
-        'out_path' : './ad/cardio/results_test.pkl',
+        'in_data_path'      : './ad/solarflare/data.csv',
+        'in_outcome_path'   : './ad/solarflare/outcome.csv',
+        'out_path'          : './ad/solarflare/results.pkl',
+        # 'in_data_path'    : './ad/cardio/data_new.csv',
+        # 'in_outcome_path' : './ad/cardio/outcome_new.csv',
+        # 'out_path' : './ad/cardio/results_test.pkl',
         # 'cat_vars' : '[5,6,7,8,9]',
         'realtype' : 'rank',
-        'cat_vars' : '[19,20,21]',
+        'cat_vars' : '[0,1,2,3,4,5,6,7,8,9]',
         'decluster' : 'False',
         'quantile' : 0.95,
         'nSamp' : 2000,
@@ -755,16 +758,22 @@ if __name__ == '__main__':
         outcome = out,
         )
     data.fill_outcome(out)
-    model = Chain(
-        data, prior_chi = GEMPrior(0.1, 1), p = 10, 
-        ntemps = 6, model_radius = True,
-        )
-    model.sample(p.nSamp)
-    model.write_to_disk(p.out_path, p.nKeep, p.nThin)
-    res = Result(p.out_path)
+    # model = Chain(
+    #     data, prior_chi = GEMPrior(0.1, 1), p = 10, ntemps = 6,
+    #     )
+    # model.sample(p.nSamp)
+    # model.write_to_disk(p.out_path, p.nKeep, p.nThin)
+    # res = Result(p.out_path)
+    # Y,V,W,R = res.data.to_mixed_new(raw, out)
+    from anomaly import ResultFactory
+    res = ResultFactory('pypprgln', p.out_path)
     Y,V,W,R = res.data.to_mixed_new(raw, out)
-    ppg = res.generate_posterior_predictive_gammas()
-    cppg = res.generate_new_conditional_posterior_predictive_gammas(V, W)
+    res.pools_open()
+    scores = res.get_scoring_metrics(Y,V,W,R)
+    res.pools_closed()
+
+    # ppg = res.generate_posterior_predictive_gammas()
+    # cppg = res.generate_new_conditional_posterior_predictive_gammas(V, W, R)
     # res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF

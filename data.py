@@ -246,7 +246,7 @@ class Data_From_Sphere(DataBase):
         return
 
 class RankTransform(DataBase):
-    Fhats = None
+    Fhats = []
     X = None
     Z = None
     V = None
@@ -254,6 +254,8 @@ class RankTransform(DataBase):
 
     def std_pareto_transform(self, X):
         assert(X.shape[1] == len(self.Fhats))
+        if X.shape[1] == 0:
+            return np.zeros(X.shape)
         Z = np.array([
             Fhat.stdpareto(x)
             for Fhat, x in zip(self.Fhats, X.T)
@@ -268,6 +270,7 @@ class RankTransform(DataBase):
             self.V = X
             self.nDat, self.nCol = self.X.shape
             return
+
         self.X = X
         self.Fhats = list(map(ECDF, self.X.T))
         self.Z = self.std_pareto_transform(self.X)
@@ -375,7 +378,15 @@ class Categorical(Multinomial):
 
 class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial):
     def to_mixed_new(self, raw_data, raw_out, decluster = False):
-        if self.realtype == 'threshold':
+        if self.nCol == 0: # if supplied data was categorical
+            Z = np.zeros((raw_data.shape[0],0))
+            V = np.zeros(Z.shape)
+            R = np.zeros(Z.shape)
+            W = Categorical.to_categorical(
+                raw_data[:,self.nCol:], self.values, np.arange(raw_data.shape[0]),
+                )
+            Y = raw_out
+        elif self.realtype == 'threshold':
             Z = scale_pareto(raw_data[:,:self.nCol], self.P)
             V, R, I = Data_From_Raw.to_hypercube(Z, decluster = decluster)
             W = Categorical.to_categorical(

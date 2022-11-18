@@ -153,18 +153,18 @@ class Anomaly(Projection):
             return np.zeros((self.nSamp, self.nDat, 0))
     
     def energy_score(self):
-        if hasattr(self.data, 'V') and hasattr(self.data, 'W'):
+        if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
             Vnew = euclidean_to_hypercube(
                 self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
                 )
             Wnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
             return mixed_energy_score(self.data.V, self.data.W, Vnew, Wnew)
-        elif hasattr(self.data, 'V'):
+        elif chkarr(self.data, 'V'):
             Vnew = euclidean_to_hypercube(
                 self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
                 )
             return real_energy_score(self.data.V, Vnew)
-        elif hasattr(self.data, 'W'):
+        elif chkarr(self.data, 'W'):
             Wnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
             return simp_energy_score(self.data.W, Wnew)
         else:
@@ -458,15 +458,19 @@ class Anomaly(Projection):
         inv_scores = kde_per_obs(Vcon, Vnew, h, 'hypercube', self.pool)
         return 1 / (inv_scores + EPS)
     def latent_mixed_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
-        if V is None:
-            return np.array([np.nan] * W.shape[0])
-        h_real = self.hypercube_bandwidth
-        Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
-        Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
-        S1 = kde_per_obs(V[None], Vnew, h_real, 'hypercube', self.pool)
-        S2 = 1 / self.latent_sphere_kernel_density_estimate(V, W)
-        return 1 / (S1 * S2  + EPS)
-
+        if chkarr(self.data, 'V'):
+            h_real = self.hypercube_bandwidth
+            Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+            Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
+            S1 = kde_per_obs(V[None], Vnew, h_real, 'hypercube', self.pool)
+        else:
+            S1 = np.ones(self.data.nDat)
+        if chkarr(self.data, 'W'):
+            S2 = 1 / self.latent_sphere_kernel_density_estimate(V, W)
+        else:
+            S2 = np.ones(self.data.nDat)
+        return 1 / (S1 * S2 + EPS)
+    
     ## Parametric Density Estimate Metric
     def simplex_density_estimate(self, V = None, W = None, R = None, **kwargs):
         """
@@ -507,15 +511,15 @@ class Anomaly(Projection):
             'iso'    : self.isolation_forest,
             'lof'    : self.local_outlier_factor,
             'svm'    : self.one_class_svm,
-            # 'kedp'   : self.knn_euclidean_distance_to_postpred,
-            # 'khdp'   : self.knn_hypercube_distance_to_postpred,
-            # 'cone'   : self.cone_density,
-            # 'ekde'   : self.euclidean_kernel_density_estimate,
-            # 'hkde'   : self.hypercube_kernel_density_estimate,
-            # 'lhkde'  : self.latent_hypercube_kernel_density_estimate,
-            # 'lekde'  : self.latent_euclidean_kernel_density_estimate,
-            # 'lskde'  : self.latent_sphere_kernel_density_estimate,
-            # 'lmkde'  : self.latent_mixed_kernel_density_estimate,
+            'kedp'   : self.knn_euclidean_distance_to_postpred,
+            'khdp'   : self.knn_hypercube_distance_to_postpred,
+            'cone'   : self.cone_density,
+            'ekde'   : self.euclidean_kernel_density_estimate,
+            'hkde'   : self.hypercube_kernel_density_estimate,
+            'lhkde'  : self.latent_hypercube_kernel_density_estimate,
+            'lekde'  : self.latent_euclidean_kernel_density_estimate,
+            'lskde'  : self.latent_sphere_kernel_density_estimate,
+            'lmkde'  : self.latent_mixed_kernel_density_estimate,
             'sde'    : self.simplex_density_estimate,
             }
         return metrics
@@ -532,7 +536,7 @@ class Anomaly(Projection):
             temp[np.isnan(temp)] = MAX
             temp[temp > MAX] = MAX
             out[metric] = np.log(temp)
-            if type(R) is np.ndarray:
+            if type(R) is np.ndarray and R.shape[-1] > 0:
                 if (metric in density_metrics) and (R is not None):
                     with np.errstate(over='ignore', invalid='ignore'):
                         out['c' + metric] = out[metric] + 2 * np.log(R)
