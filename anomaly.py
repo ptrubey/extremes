@@ -1,7 +1,7 @@
-""" 
-Module for implementing anomaly detection algorithms.
+"""Module for implementing anomaly detection algorithms.
 
-Implements classic anomaly detection algorithms, as well as custom anomaly detection algorithms for extreme data.
+Implements classic anomaly detection algorithms, as well as 
+custom anomaly detection algorithms for extreme data.
 """
 # builtins imported as package
 import numpy as np, pandas as pd, matplotlib.pyplot as plt
@@ -338,8 +338,10 @@ class Anomaly(Projection):
         return raw.max() - raw + 1
 
     ## Extreme Anomaly Metrics:
-    def knn_hypercube_distance_to_postpred(self, V = None, W = None, k = 5, **kwargs):
-        knn = np.array(list(map(np.sort, self.hypercube_distance(V = V, W = W))))[:, k, 0]
+    def knn_hypercube_distance_to_postpred(self, V = None, W = None, R = None, k = 5, **kwargs):
+        knn = np.array(list(map(
+            np.sort, self.hypercube_distance(V = V, W = W, R = R)
+            )))[:, k, 0]
         try:
             n = V.shape[0]
         except AttributeError:
@@ -355,8 +357,10 @@ class Anomaly(Projection):
             scores = np.exp(log_scores)
         scores[np.isnan(scores)] = MAX
         return scores
-    def knn_euclidean_distance_to_postpred(self, V = None, W = None, k = 5, **kwargs):
-        knn = np.array(list(map(np.sort, self.euclidean_distance(V = V, W = W))))[:, k, 0]
+    def knn_euclidean_distance_to_postpred(self, V = None, W = None, R = None, k = 5, **kwargs):
+        knn = np.array(list(map(
+            np.sort, self.euclidean_distance(V = V, W = W, R = R),
+            )))[:, k, 0]
         try:
             n = V.shape[0]
         except AttributeError:
@@ -589,7 +593,7 @@ if __name__ == '__main__':
         for result_file in result_files:
             result_paths.append(result_file)
     
-    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    pool = Pool(processes = ceil(0.5 * cpu_count()), initializer = limit_cpu)
     for result_path in result_paths:
         print(result_path.ljust(80), end = '')
         result = ResultFactory('pypprgln', result_path)
