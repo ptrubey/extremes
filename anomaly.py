@@ -461,7 +461,7 @@ class Anomaly(Projection):
             )
         inv_scores = kde_per_obs(Vcon, Vnew, h, 'hypercube', self.pool)
         return 1 / (inv_scores + EPS)
-    def latent_mixed_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    def latent_mixed_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
         if chkarr(self.data, 'V'):
             h_real = self.hypercube_bandwidth
             Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
@@ -470,7 +470,7 @@ class Anomaly(Projection):
         else:
             S1 = np.ones(self.data.nDat)
         if chkarr(self.data, 'W'):
-            S2 = 1 / self.latent_sphere_kernel_density_estimate(V, W)
+            S2 = 1 / self.latent_sphere_kernel_density_estimate(V = V, W = W, R = R)
         else:
             S2 = np.ones(self.data.nDat)
         return 1 / (S1 * S2 + EPS)
