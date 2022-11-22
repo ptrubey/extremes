@@ -398,11 +398,11 @@ class Anomaly(Projection):
         for i in range(n):
             scores[i] = 1 / cone_prob[tuple(Vnew[i] > epsilon)]
         return scores
-    def hypercube_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    def hypercube_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
         if V is None:
             return np.array([np.nan] * W.shape[0])
         h = self.latent_hypercube_bandwidth
-        Z = self.hypercube_distance(V, W) / h
+        Z = self.hypercube_distance(V, W, R) / h
         if kernel == 'gaussian':
             return 1 / (np.exp(- 0.5 * (Z**2)).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -410,9 +410,9 @@ class Anomaly(Projection):
         else:
             raise ValueError('requested kernel not available')
         pass
-    def euclidean_kernel_density_estimate(self, V = None, W = None, kernel = 'gaussian', **kwargs):
+    def euclidean_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
         h = self.latent_euclidean_bandwidth
-        Z = self.euclidean_distance(V, W) / h
+        Z = self.euclidean_distance(V, W, R) / h
         if kernel == 'gaussian':
             return 1 / (np.exp(- 0.5 * Z**2).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
@@ -425,7 +425,7 @@ class Anomaly(Projection):
         #     return np.array([np.nan] * W.shape[0])
         h = self.latent_sphere_bandwidth
         Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
-        Gcon = gamma(Zcon[:,:,self.nCol:] + W[:,None])
+        Gcon = gamma(Zcon[:,:,self.nCol:(self.nCol + self.nCat)] + W[:,None])
         catmat = category_matrix(self.data.Cats)
         Pcon = euclidean_to_catprob(Gcon, catmat)
         Pnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
