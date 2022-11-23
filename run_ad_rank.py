@@ -12,7 +12,7 @@ cardio = {
     'results'   : './ad/cardio/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[19,20,21]',
-    'model'     : 'pypprgln',
+    'model'     : 'fpypprgln',
     'model_radius' : 'True',
     }
 cover = {
@@ -21,7 +21,7 @@ cover = {
     'results'   : './ad/cover/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[9,10,11,12]',
-    'model'     : 'pypprgln',
+    'model'     : 'fpypprgln',
     'model_radius' : 'True',
     }
 mammography = {
@@ -30,7 +30,7 @@ mammography = {
     'results'   : './ad/mammography/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8]',
-    'model'     : 'pypprgln',
+    'model'     : 'fpypprgln',
     'model_radius' : 'True',
     }
 annthyroid = {
@@ -39,7 +39,7 @@ annthyroid = {
     'results'   : './ad/annthyroid/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
-    'model'     : 'pypprgln',
+    'model'     : 'fpypprgln',
     'model_radius' : 'True',
     }
 yeast = {
@@ -48,7 +48,7 @@ yeast = {
     'results'   : './ad/yeast/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7]',
-    'model'     : 'pypprgln',
+    'model'     : 'fpypprgln',
     'model_radius' : 'True',
     }
 pima = {
@@ -57,7 +57,7 @@ pima = {
     'results'   : './ad/pima/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[8,9,10,11,12]',
-    'model'     : 'pypprgln',
+    'model'     : 'fpypprgln',
     'model_radius' : 'True',
     }
 ## Categorical
