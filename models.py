@@ -8,6 +8,8 @@ import model_cdppprgln as cdppprgln
 import model_mdppprgln as mdppprgln
 import model_mpypprgln as mpypprgln
 import model_pypprgln as pypprgln
+import model_fpypprgln as fpypprgln
+import model_gpypprgln as gpypprgln
 
 ## Real Data
 RealResults = {
@@ -29,12 +31,16 @@ MixedResults = {
     'mdppprgln' : mdppprgln.Result,
     'mpypprgln' : mpypprgln.Result,
     'pypprgln'  : pypprgln.Result,
+    'fpypprgln'  : fpypprgln.Result,
+    'gpypprgln'  : gpypprgln.Result,
     }
 MixedChains = {
     # 'mdppprg'   : mdppprg.Chain,
     'mdppprgln' : mdppprgln.Chain,
     'mpypprgln' : mpypprgln.Chain,
     'pypprgln'  : pypprgln.Chain,
+    'fpypprgln'  : fpypprgln.Chain,
+    'gpypprgln'  : gpypprgln.Chain,
     }
 
 ## Categorical Data
