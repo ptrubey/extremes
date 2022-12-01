@@ -142,37 +142,42 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         return zcurr
 
     def sample_Sigma(self, zeta, mu, extant_clusters):
-        n = extant_clusters.sum(axis = 1)
-        diff = (np.log(zeta) - mu[:,None,:]) * extant_clusters[:,:,None]
-        C = np.einsum('tjd,tje->tde', diff, diff)
-        _psi = self.priors.Sigma.psi + C * self.itl[:,None,None]
-        _nu  = self.priors.Sigma.nu + n * self.itl
-        out = np.empty((self.nTemp, self.tCol, self.tCol))
-        for i in range(self.nTemp):
-            out[i] = invwishart.rvs(df = _nu[i], scale = _psi[i])
+        out = np.zeros((self.nTemp, self.tCol, self.tCol))
+        out[:] = self.priors.Sigma.psi / self.priors.Sigma.nu
         return out
+        # n = extant_clusters.sum(axis = 1)
+        # diff = (np.log(zeta) - mu[:,None,:]) * extant_clusters[:,:,None]
+        # C = np.einsum('tjd,tje->tde', diff, diff)
+        # _psi = self.priors.Sigma.psi + C * self.itl[:,None,None]
+        # _nu  = self.priors.Sigma.nu + n * self.itl
+        # out = np.empty((self.nTemp, self.tCol, self.tCol))
+        # for i in range(self.nTemp):
+        #     out[i] = invwishart.rvs(df = _nu[i], scale = _psi[i])
+        # return out
 
     def sample_mu(self, zeta, Sigma_inv, extant_clusters):
-        return np.ones((self.nTemp, self.tCol)) * self.priors.mu.mu
-        n = extant_clusters.sum(axis = 1)
-        assert np.all(zeta[extant_clusters] > 0)
-        with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            lzbar = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) / n[:,None]
-        _Sigma = inv(n[:,None,None] * Sigma_inv + self.priors.mu.SInv)
-        _mu = np.einsum(
-            'tjl,tl->tj', 
-            _Sigma, 
-            self.priors.mu.SInv @ self.priors.mu.mu + 
-                np.einsum('tjl,tl->tj', Sigma_inv, n[:,None] * lzbar),
-            )
         out = np.zeros((self.nTemp, self.tCol))
-        np.einsum(
-            'tkl,tl->tk', cholesky(_Sigma), 
-            normal(size = (self.nTemp, self.tCol)),
-            out = out,
-            )
-        out += _mu
+        out[:] = self.priors.mu.mu
         return out
+        # n = extant_clusters.sum(axis = 1)
+        # assert np.all(zeta[extant_clusters] > 0)
+        # with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        #     lzbar = np.nansum(np.log(zeta) * extant_clusters[:,:,None], axis = 1) / n[:,None]
+        # _Sigma = inv(n[:,None,None] * Sigma_inv + self.priors.mu.SInv)
+        # _mu = np.einsum(
+        #     'tjl,tl->tj', 
+        #     _Sigma, 
+        #     self.priors.mu.SInv @ self.priors.mu.mu + 
+        #         np.einsum('tjl,tl->tj', Sigma_inv, n[:,None] * lzbar),
+        #     )
+        # out = np.zeros((self.nTemp, self.tCol))
+        # np.einsum(
+        #     'tkl,tl->tk', cholesky(_Sigma), 
+        #     normal(size = (self.nTemp, self.tCol)),
+        #     out = out,
+        #     )
+        # out += _mu
+        # return out
 
     def sample_chi(self, delta):
         chi = pt_py_sample_chi_bgsb(
@@ -430,7 +435,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             self,
             data,
             prior_mu     = (-1, 1.),
-            prior_Sigma  = (100, 1.),
+            prior_Sigma  = (100, 2.),
             prior_chi    = (0.1, 1.),
             p            = 10,
             max_clust_count = 200,
