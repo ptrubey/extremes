@@ -9,7 +9,7 @@ prior_chi = '[{},{}]'.format(discount, concentration)
 cardio = {
     'source'    : './ad/cardio/data.csv',
     'outcome'   : './ad/cardio/outcome.csv',
-    'results'   : './ad/cardio/results_{}_{}.pkl',
+    'results'   : './ad/cardio/real_results_{}_{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
     'decluster' : 'False',
@@ -18,7 +18,7 @@ cardio = {
 cover = {
     'source'    : './ad/cover/data.csv',
     'outcome'   : './ad/cover/outcome.csv',
-    'results'   : './ad/cover/results_{}_{}.pkl',
+    'results'   : './ad/cover/real_results_{}_{}.pkl',
     'quantile'  : '0.98',
     'cats'      : '[9,10,11,12]',
     'decluster' : 'False',
@@ -27,7 +27,7 @@ cover = {
 mammography = {
     'source'    : './ad/mammography/data.csv',
     'outcome'   : './ad/mammography/outcome.csv',
-    'results'   : './ad/mammography/results_{}_{}.pkl',
+    'results'   : './ad/mammography/real_results_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8,9]',
     'decluster' : 'False',
@@ -36,7 +36,7 @@ mammography = {
 pima = {
     'source'    : './ad/pima/data.csv',
     'outcome'   : './ad/pima/outcome.csv',
-    'results'   : './ad/pima/results_{}_{}.pkl',
+    'results'   : './ad/pima/real_results_{}_{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[7,8,9,10,11,12]',
     'decluster' : 'False',
@@ -45,7 +45,7 @@ pima = {
 satellite = {
     'source'    : './ad/satellite/data.csv',
     'outcome'   : './ad/satellite/outcome.csv',
-    'results'   : './ad/satellite/results_{}_{}.pkl',
+    'results'   : './ad/satellite/real_results_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
     'decluster' : 'False',
@@ -54,7 +54,7 @@ satellite = {
 annthyroid = {
     'source'    : './ad/annthyroid/data.csv',
     'outcome'   : './ad/annthyroid/outcome.csv',
-    'results'   : './ad/annthyroid/results_{}_{}.pkl',
+    'results'   : './ad/annthyroid/real_results_{}_{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
     'decluster' : 'False',
@@ -63,7 +63,7 @@ annthyroid = {
 yeast = {
     'source'    : './ad/yeast/data.csv',
     'outcome'   : './ad/yeast/outcome.csv',
-    'results'   : './ad/yeast/results_{}_{}.pkl',
+    'results'   : './ad/yeast/real_results_{}_{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[4,5,8,9,10]',
     'decluster' : 'False',
