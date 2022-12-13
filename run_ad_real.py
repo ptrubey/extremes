@@ -81,8 +81,9 @@ solarflare = {
     }
 
 
-# datasets = [cardio, cover, mammography, annthyroid, yeast]
-datasets = [mammography, annthyroid, yeast]
+# datasets = [cardio, cover, mammography, annthyroid, yeast, pima]
+# datasets = [mammography, annthyroid, yeast]
+datasets = [cardio,cover,pima]
 stepping = '1.1'
 ntemps = '5'
 
