@@ -12,52 +12,52 @@ cardio = {
     'results'   : './ad/cardio/frank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[19,20,21]',
-    'model'     : 'fpypprgln',
+    'model'     : 'pypprgln',
     'model_radius' : 'True',
     }
 cover = {
     'source'    : './ad/cover/data_new.csv',
     'outcome'   : './ad/cover/outcome_new.csv',
-    'results'   : './ad/cover/frank_results_{}_{}.pkl',
+    'results'   : './ad/cover/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[9,10,11,12]',
-    'model'     : 'fpypprgln',
+    'model'     : 'pypprgln',
     'model_radius' : 'True',
     }
 mammography = {
     'source'    : './ad/mammography/data_new.csv',
     'outcome'   : './ad/mammography/outcome_new.csv',
-    'results'   : './ad/mammography/frank_results_{}_{}.pkl',
+    'results'   : './ad/mammography/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8]',
-    'model'     : 'fpypprgln',
+    'model'     : 'pypprgln',
     'model_radius' : 'True',
     }
 annthyroid = {
     'source'    : './ad/annthyroid/data_new.csv',
     'outcome'   : './ad/annthyroid/outcome_new.csv',
-    'results'   : './ad/annthyroid/frank_results_{}_{}.pkl',
+    'results'   : './ad/annthyroid/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
-    'model'     : 'fpypprgln',
+    'model'     : 'pypprgln',
     'model_radius' : 'True',
     }
 yeast = {
     'source'    : './ad/yeast/data_new.csv',
     'outcome'   : './ad/yeast/outcome_new.csv',
-    'results'   : './ad/yeast/frank_results_{}_{}.pkl',
+    'results'   : './ad/yeast/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7]',
-    'model'     : 'fpypprgln',
+    'model'     : 'pypprgln',
     'model_radius' : 'True',
     }
 pima = {
     'source'    : './ad/pima/data_new.csv',
     'outcome'   : './ad/pima/outcome_new.csv',
-    'results'   : './ad/pima/frank_results_{}_{}.pkl',
+    'results'   : './ad/pima/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[8,9,10,11,12]',
-    'model'     : 'fpypprgln',
+    'model'     : 'pypprgln',
     'model_radius' : 'True',
     }
 ## Categorical
