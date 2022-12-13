@@ -13,7 +13,7 @@ cardio = {
     'quantile'  : '0.85',
     'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',    
+    'model'     : 'pypprgln',    
     }
 cover = {
     'source'    : './ad/cover/data.csv',
@@ -22,7 +22,7 @@ cover = {
     'quantile'  : '0.98',
     'cats'      : '[9,10,11,12]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
     }
 mammography = {
     'source'    : './ad/mammography/data.csv',
@@ -31,7 +31,7 @@ mammography = {
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8,9]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
     }
 pima = {
     'source'    : './ad/pima/data.csv',
@@ -40,7 +40,7 @@ pima = {
     'quantile'  : '0.90',
     'cats'      : '[7,8,9,10,11,12]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
     }
 satellite = {
     'source'    : './ad/satellite/data.csv',
@@ -49,7 +49,7 @@ satellite = {
     'quantile'  : '0.95',
     'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
     }
 annthyroid = {
     'source'    : './ad/annthyroid/data.csv',
@@ -58,7 +58,7 @@ annthyroid = {
     'quantile'  : '0.85',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
     }
 yeast = {
     'source'    : './ad/yeast/data.csv',
@@ -67,7 +67,7 @@ yeast = {
     'quantile'  : '0.90',
     'cats'      : '[4,5,8,9,10]',
     'decluster' : 'False',
-    'model'     : 'mpypprgln',
+    'model'     : 'pypprgln',
     }
 ## Categorical
 solarflare = {
