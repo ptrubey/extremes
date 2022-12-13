@@ -576,20 +576,21 @@ def plot_log_inverse_scores_knn(scores):
 
 def argparser():
     p = argparse.ArgumentParser()
-    p.add_argument('in_path')
-    p.add_argument('out_path')
+    p.add_argument('file_string')
+    p.add_argument('out_file')
     return p.parse_args()
 
 if __name__ == '__main__':
-    pass
+    p = argparser()
+    # results_*, rank_results_*, class_results_*
 
-    result_path = './ad/{}/rank_results_*.pkl'
+    result_path = './ad/{}/{}.pkl'
     datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
     # datasets = ['annthyroid']
     result_paths = []
     metrics = []
     for dataset in datasets:
-        result_files = glob.glob(result_path.format(dataset))
+        result_files = glob.glob(result_path.format(dataset, p.file_string))
         for result_file in result_files:
             result_paths.append(result_file)
     
@@ -607,7 +608,7 @@ if __name__ == '__main__':
     
     pool.close()
     df = pd.concat(metrics)
-    df.to_csv('./ad/performance_rank_radius.csv', index = False)
+    df.to_csv(os.path.join('./ad', p.out_file), index = False)
     
 
     # basepath = './ad/cardio'
