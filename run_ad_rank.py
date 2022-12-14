@@ -9,7 +9,7 @@ prior_chi = '[{},{}]'.format(discount, concentration)
 cardio = {
     'source'    : './ad/cardio/data_new.csv',
     'outcome'   : './ad/cardio/outcome_new.csv',
-    'results'   : './ad/cardio/frank_results_{}_{}.pkl',
+    'results'   : './ad/cardio/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[19,20,21]',
     'model'     : 'pypprgln',
