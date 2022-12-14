@@ -165,6 +165,8 @@ def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
     ----
     returns: (t, n)
     """
+    if aAlpha.shape[-1] == 0:
+        return np.zeros(aAlpha.shape[:-1])
     ld = np.zeros(aAlpha.shape[:-1])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
@@ -480,6 +482,8 @@ def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
     outputs:
         logd       : (t,n)
     """
+    if aAlpha.shape[-1] == 0:
+        return np.zeros(aAlpha.shape[:-1])
     sa = np.einsum('tnd,cd->tnc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW.astype(int), sphere_mat)
     logd = np.zeros((aAlpha.shape[0], aW.shape[0]))

@@ -537,12 +537,7 @@ class Data(MixedData):
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
-        
-        
-
-
-
-
+    
     pass
 
 

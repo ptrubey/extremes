@@ -10,6 +10,8 @@ import pickle
 from multiprocessing import Pool
 from energy import limit_cpu
 
+# np.seterr(invalid='raise')
+
 EPS = np.finfo(float).eps
 
 import cUtility as cu
@@ -725,9 +727,9 @@ if __name__ == '__main__':
 
     # p = argparser()
     d = {
-        'in_data_path'      : './ad/solarflare/data.csv',
-        'in_outcome_path'   : './ad/solarflare/outcome.csv',
-        'out_path'          : './ad/solarflare/results.pkl',
+        'in_data_path'      : './ad/solarflare/data_cat.csv',
+        'in_outcome_path'   : './ad/solarflare/outcome_cat.csv',
+        'out_path'          : './ad/solarflare/cat_results.pkl',
         # 'in_data_path'    : './ad/cardio/data_new.csv',
         # 'in_outcome_path' : './ad/cardio/outcome_new.csv',
         # 'out_path' : './ad/cardio/results_test.pkl',
@@ -758,13 +760,13 @@ if __name__ == '__main__':
         outcome = out,
         )
     data.fill_outcome(out)
-    # model = Chain(
-    #     data, prior_chi = GEMPrior(0.1, 1), p = 10, ntemps = 6,
-    #     )
-    # model.sample(p.nSamp)
-    # model.write_to_disk(p.out_path, p.nKeep, p.nThin)
-    # res = Result(p.out_path)
-    # Y,V,W,R = res.data.to_mixed_new(raw, out)
+    model = Chain(
+        data, prior_chi = GEMPrior(0.1, 1), p = 10, ntemps = 6,
+        )
+    model.sample(p.nSamp)
+    model.write_to_disk(p.out_path, p.nKeep, p.nThin)
+    res = Result(p.out_path)
+    Y,V,W,R = res.data.to_mixed_new(raw, out)
     from anomaly import ResultFactory
     res = ResultFactory('pypprgln', p.out_path)
     Y,V,W,R = res.data.to_mixed_new(raw, out)
