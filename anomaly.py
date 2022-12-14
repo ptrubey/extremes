@@ -582,7 +582,7 @@ def argparser():
 
 if __name__ == '__main__':
     p = argparser()
-    # results_*, rank_results_*, class_results_*
+    # real_results_\*, rank_results_\*, class_results_\*
 
     result_path = './ad/{}/{}.pkl'
     datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
