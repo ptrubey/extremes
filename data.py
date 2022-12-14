@@ -417,9 +417,11 @@ class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial)
             if dict['realtype'] == 'sphere':
                 data = cls(dict['V'], dict['W'], dict['cats'], real_type = 'sphere')
             elif dict['realtype'] == 'threshold':
-                data = cls(dict['V'], dict['W'], dict['cats'], real_type = 'threshold', parameters = dict['P'])
+                data = cls(dict['V'], dict['W'], dict['cats'], radius = dict['R'], 
+                        real_type = 'threshold', parameters = dict['P'])
             elif dict['realtype'] == 'rank':
-                data = cls(dict['X'], dict['W'], dict['cats'], real_type = 'rank')
+                data = cls(dict['X'], dict['W'], dict['cats'], radius = dict['R'], 
+                        real_type = 'rank')
             else:
                 raise ValueError('realtype not recognized')
         elif all([_ in dict.keys() for _ in ('V','P','W','cats')]):
@@ -441,7 +443,7 @@ class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial)
     
     def __init__(
             self, raw_real, raw_multinomial, cats = None, real_type = 'sphere', 
-            outcome = 'None', parameters = None,
+            radius = None, outcome = 'None', parameters = None,
             ):
         self.realtype = real_type
         if real_type == 'sphere':
@@ -452,6 +454,8 @@ class MixedDataBase(Data_From_Sphere, Data_From_Raw, RankTransform, Multinomial)
             self.fill_sphere(raw_real)
             self.P = parameters
         self.fill_multinomial(raw_multinomial, cats)
+        if type(radius) is np.ndarray:
+            self.R = radius
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return

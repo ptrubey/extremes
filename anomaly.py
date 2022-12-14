@@ -574,11 +574,20 @@ def plot_log_inverse_scores_knn(scores):
     plt.show()
     return
 
+class FakeParser(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        return
+
 def argparser():
     p = argparse.ArgumentParser()
     p.add_argument('file_string')
     p.add_argument('out_file')
     return p.parse_args()
+    # return FakeParser(
+    #     file_string = 'real_results_*', 
+    #     outfile = 'performance_real.csv',
+    #     )
 
 if __name__ == '__main__':
     p = argparser()
