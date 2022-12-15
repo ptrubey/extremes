@@ -594,7 +594,7 @@ if __name__ == '__main__':
     # real_results_\*, rank_results_\*, class_results_\*
 
     result_path = './ad/{}/{}.pkl'
-    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast','solarflare']
     # datasets = ['annthyroid']
     result_paths = []
     metrics = []
