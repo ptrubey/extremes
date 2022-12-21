@@ -7,54 +7,54 @@ concentration = '1e-1'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
 cardio = {
-    'source'    : './ad/cardio/real_data_xv{}_is.csv',
-    'outcome'   : './ad/cardio/real_outcome_xv{}_is.csv',
-    'results'   : './ad/cardio/real_results_xv{}.pkl',
+    'source'    : './ad/cardio/rank_data_xv{}_is.csv',
+    'outcome'   : './ad/cardio/rank_outcome_xv{}_is.csv',
+    'results'   : './ad/cardio/rank_results_xv{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
     'decluster' : 'False',
     'model'     : 'pypprgln',    
     }
 cover = {
-    'source'    : './ad/cover/real_data_xv{}_is.csv',
-    'outcome'   : './ad/cover/real_outcome_xv{}_is.csv',
-    'results'   : './ad/cover/real_results_xv{}.pkl',
+    'source'    : './ad/cover/rank_data_xv{}_is.csv',
+    'outcome'   : './ad/cover/rank_outcome_xv{}_is.csv',
+    'results'   : './ad/cover/rank_results_xv{}.pkl',
     'quantile'  : '0.98',
     'cats'      : '[9,10,11,12]',
     'decluster' : 'False',
     'model'     : 'pypprgln',
     }
 mammography = {
-    'source'    : './ad/mammography/real_data_xv{}_is.csv',
-    'outcome'   : './ad/mammography/real_outcome_xv{}_is.csv',
-    'results'   : './ad/mammography/real_results_xv{}.pkl',
+    'source'    : './ad/mammography/rank_data_xv{}_is.csv',
+    'outcome'   : './ad/mammography/rank_outcome_xv{}_is.csv',
+    'results'   : './ad/mammography/rank_results_xv{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8,9]',
     'decluster' : 'False',
     'model'     : 'pypprgln',
     }
 pima = {
-    'source'    : './ad/pima/real_data_xv{}_is.csv',
-    'outcome'   : './ad/pima/real_outcome_xv{}_is.csv',
-    'results'   : './ad/pima/real_results_xv{}.pkl',
+    'source'    : './ad/pima/rank_data_xv{}_is.csv',
+    'outcome'   : './ad/pima/rank_outcome_xv{}_is.csv',
+    'results'   : './ad/pima/rank_results_xv{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[7,8,9,10,11,12]',
     'decluster' : 'False',
     'model'     : 'pypprgln',
     }
 annthyroid = {
-    'source'    : './ad/annthyroid/real_data_xv{}_is.csv',
-    'outcome'   : './ad/annthyroid/real_outcome_xv{}_is.csv',
-    'results'   : './ad/annthyroid/real_results_xv{}.pkl',
+    'source'    : './ad/annthyroid/rank_data_xv{}_is.csv',
+    'outcome'   : './ad/annthyroid/rank_outcome_xv{}_is.csv',
+    'results'   : './ad/annthyroid/rank_results_xv{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
     'decluster' : 'False',
     'model'     : 'pypprgln',
     }
 yeast = {
-    'source'    : './ad/yeast/real_data_xv{}_is.csv',
-    'outcome'   : './ad/yeast/real_outcome_xv{}_is.csv',
-    'results'   : './ad/yeast/real_results_xv{}.pkl',
+    'source'    : './ad/yeast/rank_data_xv{}_is.csv',
+    'outcome'   : './ad/yeast/rank_outcome_xv{}_is.csv',
+    'results'   : './ad/yeast/rank_results_xv{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[4,5,8,9,10]',
     'decluster' : 'False',
@@ -80,14 +80,14 @@ if __name__ == '__main__':
                 dataset['model'],
                 '--outcome', dataset['outcome'].format(xv),
                 '--cats', dataset['cats'],
-                '--realtype', 'threshold',
+                '--realtype', 'rank',
                 '--quantile', dataset['quantile'],
                 '--nSamp', '50000', '--nKeep', '30000', '--nThin', '40',
                 '--prior_chi', prior_chi,
                 '--decluster', dataset['decluster'],
                 '--ntemps', ntemps, 
                 '--stepping', stepping,
-                '--model_radius', 'False',
+                '--model_radius', 'True',
                 ]
             process_args.append(args)
             processes.append(Popen(args))
