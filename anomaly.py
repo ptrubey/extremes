@@ -462,6 +462,12 @@ class Anomaly(Projection):
         inv_scores = kde_per_obs(Vcon, Vnew, h, 'hypercube', self.pool)
         return 1 / (inv_scores + EPS)
     def latent_mixed_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        # if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+        #     h_real = self.hypercube_bandwidth
+        #     h_simp = self.latent_sphere_bandwidth
+
+        #     Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        #     Gnew = self.generate_posterior_predictive_gammas(self.)
         if chkarr(self.data, 'V'):
             h_real = self.hypercube_bandwidth
             Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)

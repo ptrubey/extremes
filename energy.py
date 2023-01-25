@@ -221,6 +221,22 @@ def kde_per_obs(conditional, postpred, bandwidth, metric, pool):
     res  = pool.map(kde_per_obs_inner, args)
     return np.array(list(res))
 
+def multi_kde_per_obs_inner(pargs):
+    cond1, pp1, band1, metric1, cond2, pp2, band2, metric2 = pargs
+    args1 = zip(repeat(pp1, cond1))
+    args2 = zip(repeat(pp2, cond2))
+    res1 = map(distance_metrics[metric1], args1)
+    res2 = map(distance_metrics[metric2], args2)
+    ld1 = np.log(kernels['gaussian'](np.array(list(res1)), band1))
+    ld2 = np.log(kernels['gaussian'](np.array(list(res2)), band2))
+    return np.exp(ld1 + ld2).mean()
+
+def multi_kde_per_obs(cond1, pp1, band1, metric1, cond2, pp2, band2, metric2, pool):
+    args = zip(cond1, repeat(pp1), repeat(band1), repeat(metric1), 
+                cond2, repeat(pp2), repeat(band2), repeat(metric2))
+    res = pool.map(multi_kde_per_obs_inner, args)
+    return np.array(list(res))
+
 def distance_to_point(a, b, metric):
     """
     a : array (n, d)
