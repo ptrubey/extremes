@@ -187,15 +187,35 @@ def manhattan_dmat_per_obs(conditional, postpred, pool):
     res = np.array(list(pool.map(manhattan_distance_unsummed, args)))
     return res.reshape(cshape[0], cshape[1], pshape[0])
 
+def logkernel_gaussian(distance, bandwidth):
+    lk = (
+        - 0.5 * (distance / bandwidth)**2
+        - np.log(bandwidth) 
+        - 0.5 * np.log(2 * np.pi)
+        )
+    return lk
+
+def logkernel_laplace(distance, bandwidth):
+    lk = (
+        - np.abs(distance / bandwidth)
+        - np.log(2 * bandwidth)
+        )
+
 def kernel_gaussian(distance, bandwidth):
-    return np.exp(- 0.5 * (distance / bandwidth)**2) / (np.sqrt(2 * np.pi) * bandwidth)
+    # return np.exp(- 0.5 * (distance / bandwidth)**2) / (np.sqrt(2 * np.pi) * bandwidth)
+    return np.exp(logkernel_gaussian(distance, bandwidth))
 
 def kernel_laplace(distance, bandwidth):
-    return np.exp(- np.abs(distance / bandwidth)) / (2 * bandwidth)
+    # return np.exp(- np.abs(distance / bandwidth)) / (2 * bandwidth)
+    return np.exp(logkernel_laplace(distance, bandwidth))
 
 kernels = {
     'gaussian' : kernel_gaussian,
     'laplace'  : kernel_laplace,
+    }
+logkernels = {
+    'gaussian' : logkernel_gaussian,
+    'laplace'  : logkernel_laplace,
     }
 
 def kde_per_obs_inner(args):
@@ -220,6 +240,39 @@ def kde_per_obs(conditional, postpred, bandwidth, metric, pool):
     args = zip(conditional, repeat(postpred), repeat(bandwidth), repeat(metric))
     res  = pool.map(kde_per_obs_inner, args)
     return np.array(list(res))
+
+def multi_kde_per_obs_inner(pargs):
+    # cond1 (D1)
+    # pp1   (S2, D1)
+    # band1 (1)
+    # met1  ('euclidean','hypercube','manhattan')
+    # cond2 (S1, D2)
+    # pp2   (S2, D2)
+    # band2 (1)
+    # met2  ('euclidean','hypercube','manhattan')
+    cond1, pp1, band1, met1, cond2, pp2, band2, met2 = pargs
+    args1 = zip(repeat(pp1), cond1[None]) 
+    args2 = zip(repeat(pp2), cond2)
+    dis1  = np.array(list(map(distance_metrics[met1], args1))) # (1,  S2)
+    dis2  = np.array(list(map(distance_metrics[met2], args2))) # (S1, S2)
+    ld = logkernels['gaussian'](dis1, band1) + logkernels['gaussian'](dis2, band2)
+    d = np.exp(d).mean(axis = 0).mean()
+    return d
+
+def multi_kde_per_obs(cond1, pp1, band1, met1, cond2, pp2, band2, met2, pool):
+    args = zip(
+        cond1, repeat(pp1), repeat(band1), repeat(met1),
+        cond2, repeat(pp2), repeat(band2), repeat(met2),
+        )
+    res = pool.map(multi_kde_per_obs_inner(args))
+    return np.array(list(res))
+
+
+
+
+
+
+
 
 def distance_to_point(a, b, metric):
     """
