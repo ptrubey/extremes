@@ -620,14 +620,14 @@ class FakeParser(object):
         return
 
 def argparser():
-    # p = argparse.ArgumentParser()
-    # p.add_argument('file_string')
-    # p.add_argument('out_file')
-    # return p.parse_args()
-    return FakeParser(
-        file_string = 'real_results_*', 
-        outfile = 'performance_real.csv',
-        )
+    p = argparse.ArgumentParser()
+    p.add_argument('file_string')
+    p.add_argument('out_file')
+    return p.parse_args()
+    # return FakeParser(
+    #     file_string = 'real_results_*', 
+    #     outfile = 'performance_real.csv',
+    #     )
 
 if __name__ == '__main__':
     p = argparser()
