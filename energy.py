@@ -264,7 +264,7 @@ def multi_kde_per_obs(cond1, pp1, band1, met1, cond2, pp2, band2, met2, pool):
         cond1, repeat(pp1), repeat(band1), repeat(met1),
         cond2, repeat(pp2), repeat(band2), repeat(met2),
         )
-    res = pool.map(multi_kde_per_obs_inner(args))
+    res = pool.map(multi_kde_per_obs_inner, args)
     return np.array(list(res))
 
 def distance_to_point(a, b, metric):
