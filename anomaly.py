@@ -25,11 +25,12 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 # Custom Modules
 from data import Projection, category_matrix, euclidean_to_catprob,             \
-    euclidean_to_hypercube
+    euclidean_to_hypercube, euclidean_to_psphere
 from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
     hypercube_distance_matrix, euclidean_distance_matrix,                       \
     euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
-    mixed_energy_score, real_energy_score, simp_energy_score
+    mixed_energy_score, real_energy_score, simp_energy_score,                   \
+    multi_kde_per_obs
 from projgamma import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
     pt_logd_pareto_mx_ma
 from models import Results
@@ -60,9 +61,14 @@ MAX = np.finfo(float).max
 
 def chkarr(obj, attr):
     """ check if object has array; array is valid, and has positive dimensions """
-    if bool(hasattr(obj, attr) and type(obj.__dict__[attr]) is np.ndarray and
-                obj.__dict__[attr].shape[-1] > 0):
-        return True
+    if hasattr(obj, attr):
+        if (type(obj.__dict__[attr]) is np.ndarray):
+            if (obj.__dict__[attr].shape[-1] > 0):
+                return True
+            else:
+                return False
+        else:
+            return False
     else:
         return False
 
@@ -172,6 +178,7 @@ class Anomaly(Projection):
 
     ## Latent Distance per Observation (Summary)
     def euclidean_distance(self, V = None, W = None, R = None, **kwargs):
+        # znew axis: (observation, sample iteration, dimension): (i, s, d)
         znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
         if hasattr(self.data, 'V') and (V is not None):            
             shape = znew[:,:,:self.nCol].sum(axis = 2)
@@ -196,27 +203,34 @@ class Anomaly(Projection):
         return dmat
     def hypercube_distance(self, V = None, W = None, R = None):
         znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
-        if hasattr(self.data, 'V') and (V is not None):            
-            shape = znew[:,:,:self.nCol].sum(axis = 2)
-            radii = gamma(shape).mean(axis = 1)
-            Y1 = radii[:,None] * V
-        elif W is not None:
-            Y1 = np.zeros((W.shape[0], 0))
+        if (chkarr(self.data, 'V') and type(V) is np.ndarray and 
+                chkarr(self.data, 'W') and type(W) is np.ndarray):
+            radii = gamma(znew[:,:,:self.nCol].sum(axis = 2)) # (i, s)
+            Yp = euclidean_to_psphere(V, 10) # (i, s)
+            Y1 = Yp[:,None,:] * radii[:,:,None]  # (i, ,d1) * (i,s, ) = (i,s,d1)
+            Y2 = gamma(znew[:,:,self.nCol:(self.nCol + self.nCat)]) # (i, s, d2)
+            YY = np.concatenate((Y1,Y2), axis = 2)
+            VV = euclidean_to_hypercube(euclidean_to_hypercube(YY).mean(axis = 1))
         else:
-            raise ValueError('We need some data')
-        if hasattr(self.data, 'W') and (W is not None):
-            Y2 = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
-        elif V is not None:
-            Y2 = np.zeros((V.shape[0], 0))
-        else:
-            raise ValueError('We need some data')
-        Y = np.hstack((Y1,Y2))
-        VV = euclidean_to_hypercube(Y)
-        dmat = hypercube_distance_matrix(
-            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
-            VV,
-            self.pool,
-            )
+            if hasattr(self.data, 'V') and (V is not None):            
+                shape = znew[:,:,:self.nCol].sum(axis = 2)
+                radii = gamma(shape).mean(axis = 1)
+                Y1 = radii[:,None] * V
+            elif W is not None:
+                Y1 = np.zeros((W.shape[0], 0))
+            else:
+                raise ValueError('We need some data')
+            if hasattr(self.data, 'W') and (W is not None):
+                Y2 = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
+            elif V is not None:
+                Y2 = np.zeros((V.shape[0], 0))
+            else:
+                raise ValueError('We need some data')
+            Y = np.hstack((Y1,Y2))
+            VV = euclidean_to_hypercube(Y)
+        Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        postpred = euclidean_to_hypercube(Gnew[:,:(self.nCol + self.nCat)])
+        dmat = hypercube_distance_matrix(postpred, VV, self.pool)
         return dmat
     def mixed_distance(self, V = None, W = None):
         Gcon = self.generate_new_conditional_posterior_predictive_gammas(Vnew = V, Wnew = W)
@@ -462,12 +476,32 @@ class Anomaly(Projection):
         inv_scores = kde_per_obs(Vcon, Vnew, h, 'hypercube', self.pool)
         return 1 / (inv_scores + EPS)
     def latent_mixed_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
-        # if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
-        #     h_real = self.hypercube_bandwidth
-        #     h_simp = self.latent_sphere_bandwidth
-
-        #     Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
-        #     Gnew = self.generate_posterior_predictive_gammas(self.)
+        if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            h_real, h_cat = self.latent_mixed_bandwidth
+            Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+            Gcon = gamma(Zcon)
+            Pcon = euclidean_to_catprob(
+                Gcon[:,:,self.nCol:(self.nCol + self.nCat)], 
+                self.CatMat,
+                )
+            Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+            Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
+            Pnew = euclidean_to_catprob(
+                Gnew[:,self.nCol:(self.nCol + self.nCat)], 
+                self.CatMat,
+                )
+            InvScores = multi_kde_per_obs(
+                cond1 = V,
+                pp1   = Vnew,
+                band1 = h_real,
+                met1  = 'hypercube',
+                cond2 = Pcon,
+                pp2   = Pnew, 
+                band2 = h_cat,
+                met2  = 'manhattan',
+                pool  = self.pool,
+                )
+            return 1 / (InvScores + EPS)
         if chkarr(self.data, 'V'):
             h_real = self.hypercube_bandwidth
             Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
@@ -521,14 +555,14 @@ class Anomaly(Projection):
             'iso'    : self.isolation_forest,
             'lof'    : self.local_outlier_factor,
             'svm'    : self.one_class_svm,
-            'kedp'   : self.knn_euclidean_distance_to_postpred,
+            # 'kedp'   : self.knn_euclidean_distance_to_postpred,
             'khdp'   : self.knn_hypercube_distance_to_postpred,
-            'cone'   : self.cone_density,
-            'ekde'   : self.euclidean_kernel_density_estimate,
+            # 'cone'   : self.cone_density,
+            # 'ekde'   : self.euclidean_kernel_density_estimate,
             'hkde'   : self.hypercube_kernel_density_estimate,
             'lhkde'  : self.latent_hypercube_kernel_density_estimate,
-            'lekde'  : self.latent_euclidean_kernel_density_estimate,
-            'lskde'  : self.latent_sphere_kernel_density_estimate,
+            # 'lekde'  : self.latent_euclidean_kernel_density_estimate,
+            # 'lskde'  : self.latent_sphere_kernel_density_estimate,
             'lmkde'  : self.latent_mixed_kernel_density_estimate,
             'sde'    : self.simplex_density_estimate,
             }
@@ -586,14 +620,14 @@ class FakeParser(object):
         return
 
 def argparser():
-    p = argparse.ArgumentParser()
-    p.add_argument('file_string')
-    p.add_argument('out_file')
-    return p.parse_args()
-    # return FakeParser(
-    #     file_string = 'real_results_*', 
-    #     outfile = 'performance_real.csv',
-    #     )
+    # p = argparse.ArgumentParser()
+    # p.add_argument('file_string')
+    # p.add_argument('out_file')
+    # return p.parse_args()
+    return FakeParser(
+        file_string = 'real_results_*', 
+        outfile = 'performance_real.csv',
+        )
 
 if __name__ == '__main__':
     p = argparser()
