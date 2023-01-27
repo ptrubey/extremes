@@ -8,50 +8,156 @@ import os
 
 EPS = np.finfo(float).eps
 
-cardio = {
-    'source'    : './ad/cardio/data.csv',
-    'quantile'  : '0.85',
-    'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
-    'name'      : 'cardio',
+# Rank
+rank = {
+    'cardio' : {
+        'source'    : './ad/cardio/rank_data.csv',
+        'outcome'   : './ad/cardio/rank_outcome.csv',
+        'realtype'  : 'rank',
+        'cats'      : '[19,20,21]',
+        'model'     : 'pypprgln',
+        'model_radius' : 'True',
+        },
+    'cover' : {
+        'source'    : './ad/cover/rank_data.csv',
+        'outcome'   : './ad/cover/rank_outcome.csv',
+        'realtype'  : 'rank',
+        'cats'      : '[9,10,11,12]',
+        'model'     : 'pypprgln',
+        'model_radius' : 'True',
+        },
+    'mammography' : {
+        'source'    : './ad/mammography/rank_data.csv',
+        'outcome'   : './ad/mammography/rank_outcome.csv',
+        'realtype'  : 'rank',
+        'cats'      : '[6,7,8]',
+        'model'     : 'pypprgln',
+        'model_radius' : 'True',
+        },
+    'pima' : {
+        'source'    : './ad/pima/rank_data.csv',
+        'outcome'   : './ad/pima/rank_outcome.csv',
+        'realtype'  : 'rank',
+        'cats'      : '[8,9,10,11,12]',
+        'model'     : 'pypprgln',
+        'model_radius' : 'True',
+        },
+    'annthyroid' : {
+        'source'    : './ad/annthyroid/rank_data.csv',
+        'outcome'   : './ad/annthyroid/rank_outcome.csv',
+        'realtype'  : 'rank',
+        'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
+        'model'     : 'pypprgln',
+        'model_radius' : 'True',
+        },
+    'yeast' : {
+        'source'    : './ad/yeast/rank_data.csv',
+        'outcome'   : './ad/yeast/rank_outcome.csv',
+        'realtype'  : 'rank',
+        'cats'      : '[6,7]',
+        'model'     : 'pypprgln',
+        'model_radius' : 'True',
+        },
     }
-cover = {
-    'source'    : './ad/cover/data.csv',
-    'quantile'  : '0.98',
-    'cats'      : '[9,10,11,12]',
-    'name'      : 'cover',
+rank_datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+# Real
+real = {
+    'cardio' : {
+        'source'    : './ad/cardio/real_data.csv',
+        'outcome'   : './ad/cardio/real_outcome.csv',
+        'quantile'  : '0.85',
+        'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
+        'decluster' : 'False',
+        'model'     : 'pypprgln',    
+        },
+    'cover' : {
+        'source'    : './ad/cover/real_data.csv',
+        'outcome'   : './ad/cover/real_outcome.csv',
+        'quantile'  : '0.98',
+        'cats'      : '[9,10,11,12]',
+        'decluster' : 'False',
+        'model'     : 'pypprgln',
+        },
+    'mammography' : {
+        'source'    : './ad/mammography/real_data.csv',
+        'outcome'   : './ad/mammography/real_outcome.csv',
+        'quantile'  : '0.95',
+        'cats'      : '[5,6,7,8,9]',
+        'decluster' : 'False',
+        'model'     : 'pypprgln',
+        },
+    'pima' : {
+        'source'    : './ad/pima/real_data.csv',
+        'outcome'   : './ad/pima/real_outcome.csv',
+        'quantile'  : '0.90',
+        'cats'      : '[7,8,9,10,11,12]',
+        'decluster' : 'False',
+        'model'     : 'pypprgln',
+        },
+    'annthyroid' : {
+        'source'    : './ad/annthyroid/real_data.csv',
+        'outcome'   : './ad/annthyroid/real_outcome.csv',
+        'quantile'  : '0.85',
+        'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
+        'decluster' : 'False',
+        'model'     : 'pypprgln',
+        },
+    'yeast' : {
+        'source'    : './ad/yeast/real_data.csv',
+        'outcome'   : './ad/yeast/real_outcome.csv',
+        'quantile'  : '0.90',
+        'cats'      : '[4,5,8,9,10]',
+        'decluster' : 'False',
+        'model'     : 'pypprgln',
+        },
     }
-mammography = {
-    'source'    : './ad/mammography/data.csv',
-    'quantile'  : '0.95',
-    'cats'      : '[5,6,7,8,9]',
-    'name'      : 'mammography',
+rank_datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+# Cat
+cat = {
+    'cover' : {
+        'source'    : './ad/cover/cat_data.csv',
+        'outcome'   : './ad/cover/cat_outcome.csv',
+        'model'     : 'pypprgln',
+        'cats'      : '[0,1,2,3,4,5,6,7,8,9]',
+        },
+    'pima' : {
+        'source'    : './ad/pima/cat_data.csv',
+        'outcome'   : './ad/pima/cat_outcome.csv',
+        'model'     : 'pypprgln',
+        'cats'      : '[0,1,2,3,4,5,6,7]',
+        },
+    'yeast' : {
+        'source'    : './ad/yeast/cat_data.csv',
+        'outcome'   : './ad/yeast/cat_outcome.csv',
+        'model'     : 'pypprgln',
+        'cats'      : '[0,1,2,3,4,5,6,7]',
+        },
+    'solarflare' : {
+        'source'    : './ad/solarflare/cat_data.csv',
+        'outcome'   : './ad/solarflare/cat_outcome.csv',
+        'model'     : 'pypprgln',
+        'cats'      : '[0,1,2,3,4,5,6,7,8,9]',
+        },
     }
-pima = {
-    'source'    : './ad/pima/data.csv',
-    'quantile'  : '0.90',
-    'cats'      : '[7,8,9,10,11,12]',
-    'name'      : 'pima',
-    }
-satellite = {
-    'source'    : './ad/satellite/data.csv',
-    'quantile'  : '0.95',
-    'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
-    'name'      : 'satellite',
-    }
-annthyroid = {
-    'source'    : './ad/annthyroid/data.csv',
-    'quantile'  : '0.85',
-    'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
-    'name'      : 'annthyroid',
-    }
-yeast = {
-    'source'    : './ad/yeast/data.csv',
-    'quantile'  : '0.90',
-    'cats'      : '[4,5,8,9,10]',
-    'name'      : 'yeast',
+cat_datasets = ['cover','pima','solarflare','yeast']
+
+for dataset in rank_datasets:
+    raw = pd.read_csv(rank[dataset]['source']).values
+    raw = raw[~np.isnan(raw).any(axis = 1)]
+    out = pd.read_csv(rank[dataset]['outcome']).values.ravel()
+    out = out[~np.isnan(out)]
+    
+    dat = MixedData(raw = raw, cat_vars = eval(dataset['cats']), realtype = 'rank')
+    dat.fill_outcome(out)
+
+    desc = {
+        'name' : dataset,
+        'path' : rank[dataset]['source'],
+        
     }
 
-datasets = [cardio, cover, mammography, annthyroid, yeast]
+
+
 summaries = []
 
 for dataset in datasets:
