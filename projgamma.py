@@ -12,7 +12,7 @@ from math import acos, cos, exp, log, sin
 
 from numpy.linalg import inv, norm, slogdet
 from scipy.integrate import quad
-from scipy.special import gammainc, gammaln, multigammaln
+from scipy.special import gammainc, gammaln, multigammaln, loggamma
 from scipy.stats import gamma
 from scipy.stats import norm as normal
 from scipy.stats import uniform
@@ -44,7 +44,7 @@ def logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     out = np.zeros((aY.shape[0], aAlpha.shape[0]))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta)).reshape(1,-1) # beta^alpha
-        out -= np.einsum('jd->j', gammaln(aAlpha)).reshape(1,-1)          # gamma(alpha)
+        out -= np.einsum('jd->j', loggamma(aAlpha)).reshape(1,-1)          # gamma(alpha)
         out += np.einsum('jd,nd->nj', aAlpha - 1, np.log(aY))             # y^(alpha - 1)
         out -= np.einsum('jd,nd->nj', aBeta, aY)                          # e^(- beta y)
     np.nan_to_num(out, False, -np.inf)
@@ -64,7 +64,7 @@ def pt_logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     ld = np.zeros((n, t, j))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta)).reshape(1, t, j)
-        ld -= np.einsum('tjd->tj', gammaln(aAlpha)).reshape(1, t, j)
+        ld -= np.einsum('tjd->tj', loggamma(aAlpha)).reshape(1, t, j)
         ld += np.einsum('tnd,tjd->ntj', np.log(aY), aAlpha - 1)
         ld -= np.einsum('tnd,tjd->ntj', aY, aBeta)
     np.nan_to_num(ld, False, -np.inf)
@@ -83,7 +83,7 @@ def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
     out = np.zeros(aY.shape[:-1])                             # n temps x n Y
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         out += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))    # beta^alpha
-        out -= np.einsum('tnd->tn', gammaln(aAlpha))              # gamma(alpha)
+        out -= np.einsum('tnd->tn', loggamma(aAlpha))              # gamma(alpha)
         out += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
         out -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
     np.nan_to_num(out, False, -np.inf)
@@ -104,7 +104,7 @@ def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
     ld = np.zeros(aY.shape[:-1])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('td,td->t', aAlpha, np.log(aBeta)).reshape(-1,1)
-        ld -= np.einsum('td->t', gammaln(aAlpha)).reshape(-1,1)
+        ld -= np.einsum('td->t', loggamma(aAlpha)).reshape(-1,1)
         ld += np.einsum('tnd,td->tn', np.log(aY), aAlpha - 1)
         ld -= np.einsum('tnd,td->tn', aY, aBeta)
     np.nan_to_num(ld, False, -np.inf)
@@ -127,9 +127,9 @@ def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
     ld = np.zeros((n,t,j))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
-        ld -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+        ld -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
         ld += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
-        ld += gammaln(np.einsum('tjd->tj', aAlpha))[None,:,:]
+        ld += loggamma(np.einsum('tjd->tj', aAlpha))[None,:,:]
         ld -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
     np.nan_to_num(ld, False, -np.inf)
     return ld
@@ -148,9 +148,9 @@ def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
     if aY.shape[1] == 0:
         return
     out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
-    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    out -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
-    out += gammaln(np.einsum('tjd->tj', aAlpha))[None,:,:]
+    out += loggamma(np.einsum('tjd->tj', aAlpha))[None,:,:]
     out -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
     return
 
@@ -170,9 +170,9 @@ def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
     ld = np.zeros(aAlpha.shape[:-1])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))
-        ld -= np.einsum('tnd->tn', gammaln(aAlpha))
+        ld -= np.einsum('tnd->tn', loggamma(aAlpha))
         ld += np.einsum('nd,tnd->tn', np.log(aY), (aAlpha - 1))
-        ld += gammaln(np.einsum('tnd->tn', aAlpha))
+        ld += loggamma(np.einsum('tnd->tn', aAlpha))
         ld -= np.einsum('tnd->tn',aAlpha) * np.log(np.einsum('nd,tnd->tn', aY, aBeta))
     np.nan_to_num(ld, False, -np.inf)
     return ld
@@ -190,8 +190,8 @@ def pt_logd_dirichlet_mx_ma(aY, aAlpha):
     """
     n = aY.shape[0]; t, j, d = aAlpha.shape
     out = np.zeros((n,t,j))
-    out += gammaln(aAlpha.sum(axis = 2))
-    out -= gammaln(aAlpha).sum(axis = 2)
+    out += loggamma(aAlpha.sum(axis = 2))
+    out -= loggamma(aAlpha).sum(axis = 2)
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
     return out
 
@@ -211,7 +211,7 @@ def logd_gamma_my(aY, alpha, beta):
     lp = np.zeros(aY.shape)
     with np.errstate(divide = 'ignore',invalid = 'ignore'):
         lp += alpha * np.log(beta)
-        lp -= gammaln(alpha)
+        lp -= loggamma(alpha)
         lp += (alpha - 1) * np.log(aY)
         lp -= beta * aY
     np.nan_to_num(lp, False, -np.inf)
@@ -279,12 +279,12 @@ def logd_dirmultinom_mx_sa(aW, vAlpha):
     sa = vAlpha.sum()
     sw = aW.sum(axis = 1)
     logd = np.zeros(aW.shape[0])
-    logd += gammaln(sa)
-    logd += gammaln(sw + 1)
-    logd -= gammaln(sw + sa)
-    logd += gammaln(aW + vAlpha[None,:]).sum(axis = 1)
-    logd -= gammaln(vAlpha).sum()
-    logd -= gammaln(aW + 1).sum(axis = 1)
+    logd += loggamma(sa)
+    logd += loggamma(sw + 1)
+    logd -= loggamma(sw + sa)
+    logd += loggamma(aW + vAlpha[None,:]).sum(axis = 1)
+    logd -= loggamma(vAlpha).sum()
+    logd -= loggamma(aW + 1).sum(axis = 1)
     return logd
 
 def logd_dirmultinom_paired(aW, aAlpha):
@@ -299,12 +299,12 @@ def logd_dirmultinom_paired(aW, aAlpha):
     sa = aAlpha.sum(axis = 1)
     sw = aW.sum(axis = 1)
     logd = np.zeros(aW.shape[0])
-    logd += gammaln(sa)
-    logd += gammaln(sw + 1)
-    logd -= gammaln(sw + sa)
-    logd += gammaln(aW + aAlpha).sum(axis = 1)
-    logd -= gammaln(aAlpha).sum(axis = 1)
-    logd -= gammaln(aW + 1).sum(axis = 1)
+    logd += loggamma(sa)
+    logd += loggamma(sw + 1)
+    logd -= loggamma(sw + sa)
+    logd += loggamma(aW + aAlpha).sum(axis = 1)
+    logd -= loggamma(aAlpha).sum(axis = 1)
+    logd -= loggamma(aW + 1).sum(axis = 1)
     return logd
 
 def logd_cumdirmultinom_mx_sa(aW, vAlpha, sphere_mat):
@@ -312,12 +312,12 @@ def logd_cumdirmultinom_mx_sa(aW, vAlpha, sphere_mat):
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     logd = np.zeros(aW.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        logd += gammaln(sa).sum()
-        logd += np.einsum('nc->n', gammaln(sw + 1))
-        logd -= np.einsum('nc->n', gammaln(sw + sa[None,:]))
-        logd += np.einsum('nd->n', gammaln(aW + vAlpha[None,:]))
-        logd -= gammaln(vAlpha).sum()
-        logd -= np.einsum('nd->n', gammaln(aW + 1))
+        logd += loggamma(sa).sum()
+        logd += np.einsum('nc->n', loggamma(sw + 1))
+        logd -= np.einsum('nc->n', loggamma(sw + sa[None,:]))
+        logd += np.einsum('nd->n', loggamma(aW + vAlpha[None,:]))
+        logd -= loggamma(vAlpha).sum()
+        logd -= np.einsum('nd->n', loggamma(aW + 1))
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -326,13 +326,13 @@ def logd_cumdircateg_mx_sa(aW, vAlpha, sphere_mat):
     sw = np.einsum('nd,cd->nc', aW, sphere_mat) # matrix of ones (n x c)
     logd = np.zeros(aW.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        logd += gammaln(sa).sum()
-        # logd += np.einsum('nc->n', gammaln(sw + 1)) # zeros, all the way down
-        # logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa[:,None,:])) # gammaln(sa + 1)
-        logd -= gammaln(sa + 1.).sum()
-        logd += np.einsum('nd->n', gammaln(aW + vAlpha[None,:]))
-        logd -= gammaln(vAlpha).sum()
-        # logd -= np.einsum('nd->n', gammaln(aW + 1)) # zeros again
+        logd += loggamma(sa).sum()
+        # logd += np.einsum('nc->n', loggamma(sw + 1)) # zeros, all the way down
+        # logd -= np.einsum('tnc->tn', loggamma(sw[None,:,:] + sa[:,None,:])) # loggamma(sa + 1)
+        logd -= loggamma(sa + 1.).sum()
+        logd += np.einsum('nd->n', loggamma(aW + vAlpha[None,:]))
+        logd -= loggamma(vAlpha).sum()
+        # logd -= np.einsum('nd->n', loggamma(aW + 1)) # zeros again
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -341,12 +341,12 @@ def pt_logd_cumdirmultinom_mx_sa(aW, aAlpha, sphere_mat):
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)     # (n,c)
     logd = np.zeros((aAlpha.shape[0], aW.shape[0])) # (t,n)
     with np.errstate(divide = 'ignore',  invalid = 'ignore'):
-        logd += np.einsum('', gammaln(sa))[:,None] # (t,)
-        logd += np.einsum('nc->n', gammaln(sw + 1))[None,:] # (,n) 
-        logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa[:,None,:])) # (t,n)
-        logd += np.einsum('tnd->tn', gammaln(aW[None,:,:] + aAlpha[:,None,:])) # (t,n)
-        logd -= np.einsum('td,t', gammaln(aAlpha))[:,None] # (t,)
-        logd -= np.einsum('nd->n', gammaln(aW + 1))[None,:]
+        logd += np.einsum('', loggamma(sa))[:,None] # (t,)
+        logd += np.einsum('nc->n', loggamma(sw + 1))[None,:] # (,n) 
+        logd -= np.einsum('tnc->tn', loggamma(sw[None,:,:] + sa[:,None,:])) # (t,n)
+        logd += np.einsum('tnd->tn', loggamma(aW[None,:,:] + aAlpha[:,None,:])) # (t,n)
+        logd -= np.einsum('td,t', loggamma(aAlpha))[:,None] # (t,)
+        logd -= np.einsum('nd->n', loggamma(aW + 1))[None,:]
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -365,12 +365,12 @@ def logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     logd = np.zeros((aW.shape[0], aAlpha.shape[0]))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        logd += np.einsum('jc->j', gammaln(sa))[None,:]
-        logd += np.einsum('nc->n', gammaln(sw + 1))[:,None]
-        logd -= np.einsum('njc->nj', gammaln(sw[:,None,:] + sa[None,:,:]))
-        logd += np.einsum('njd->nj', gammaln(aW[:,None,:] + aAlpha[None,:,:]))
-        logd -= np.einsum('jd->j', gammaln(aAlpha))[None,:]
-        logd -= np.einsum('nd->n', gammaln(aW + 1))[:,None]
+        logd += np.einsum('jc->j', loggamma(sa))[None,:]
+        logd += np.einsum('nc->n', loggamma(sw + 1))[:,None]
+        logd -= np.einsum('njc->nj', loggamma(sw[:,None,:] + sa[None,:,:]))
+        logd += np.einsum('njd->nj', loggamma(aW[:,None,:] + aAlpha[None,:,:]))
+        logd -= np.einsum('jd->j', loggamma(aAlpha))[None,:]
+        logd -= np.einsum('nd->n', loggamma(aW + 1))[:,None]
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -387,22 +387,22 @@ def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     logd = np.zeros((aW.shape[0], aAlpha.shape[0], aAlpha.shape[1]))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        logd += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
-        logd += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
-        logd -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
-        logd += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
-        logd -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
-        logd -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
+        logd += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
+        logd += np.einsum('nc->n', loggamma(sw + 1))[:,None,None]
+        logd -= np.einsum('tnjc->ntj', loggamma(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+        logd += np.einsum('tnjd->ntj',loggamma(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+        logd -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
+        logd -= np.einsum('nd->n', loggamma(aW + 1))[:,None,None]
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
 def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere_mat):
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
-    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
-    out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
-    out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
-    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
+    out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
+    out -= np.einsum('tnjc->ntj', loggamma(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+    out += np.einsum('tnjd->ntj',loggamma(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+    out -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
     return
 
 def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
@@ -417,10 +417,10 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat
     if aW.shape[1] == 0:
         return
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
-    ga = gammaln(aAlpha)
-    ga1 = gammaln(aAlpha + 1)
-    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
-    out -= np.einsum('tjc->tj', gammaln(sa + 1))[None,:,:]
+    ga = loggamma(aAlpha)
+    ga1 = loggamma(aAlpha + 1)
+    out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
+    out -= np.einsum('tjc->tj', loggamma(sa + 1))[None,:,:]
     out += np.einsum('tjd,nd->ntj', ga1, aW)
     out += np.einsum('tjd,nd->ntj', ga, ~aW)
     out -= np.einsum('tjd->tj', ga)[None,:,:]
@@ -438,10 +438,10 @@ def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
     n = aW.shape[0]; t,j,d = aAlpha.shape
     out = np.zeros((n,t,j))
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
-    ga = gammaln(aAlpha)
-    ga1 = gammaln(aAlpha + 1)
-    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
-    out -= np.einsum('tjc->tj', gammaln(sa + 1))[None,:,:]
+    ga = loggamma(aAlpha)
+    ga1 = loggamma(aAlpha + 1)
+    out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
+    out -= np.einsum('tjc->tj', loggamma(sa + 1))[None,:,:]
     out += np.einsum('tjd,nd->ntj', ga1, aW)
     out += np.einsum('tjd,nd->ntj', ga, ~aW)
     out -= np.einsum('tjd->tj', ga)[None,:,:]
@@ -450,12 +450,12 @@ def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
 def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
-    out += np.einsum('tjc->tj', gammaln(sa))[None,:,:]
-    out += np.einsum('nc->n', gammaln(sw + 1))[:,None,None]
-    out -= np.einsum('tnjc->ntj', gammaln(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
-    out += np.einsum('tnjd->ntj',gammaln(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
-    out -= np.einsum('tjd->tj', gammaln(aAlpha))[None,:,:]
-    out -= np.einsum('nd->n', gammaln(aW + 1))[:,None,None]
+    out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
+    out += np.einsum('nc->n', loggamma(sw + 1))[:,None,None]
+    out -= np.einsum('tnjc->ntj', loggamma(sw[None,:,None,:] + sa[:,None,:,:])) # (n,c)+(tjc)->(tnjc)
+    out += np.einsum('tnjd->ntj',loggamma(aW[None,:,None,:] + aAlpha[:,None,:,:])) # (nd)+(tjd)->(tnjd)
+    out -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
+    out -= np.einsum('nd->n', loggamma(aW + 1))[:,None,None]
     return
 
 def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
@@ -463,12 +463,12 @@ def logd_cumdirmultinom_paired(aW, aAlpha, sphere_mat):
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     logd = np.zeros(aW.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        logd += np.einsum('nc->n', gammaln(sa))
-        logd += np.einsum('nc->n', gammaln(sw + 1))
-        logd -= np.einsum('nc->n', gammaln(sw + sa))
-        logd += np.einsum('nd->n', gammaln(aW + aAlpha))
-        logd -= np.einsum('nd->n', gammaln(aAlpha))
-        logd -= np.einsum('nd->n', gammaln(aW + 1))
+        logd += np.einsum('nc->n', loggamma(sa))
+        logd += np.einsum('nc->n', loggamma(sw + 1))
+        logd -= np.einsum('nc->n', loggamma(sw + sa))
+        logd += np.einsum('nd->n', loggamma(aW + aAlpha))
+        logd -= np.einsum('nd->n', loggamma(aAlpha))
+        logd -= np.einsum('nd->n', loggamma(aW + 1))
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -489,12 +489,12 @@ def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
     logd = np.zeros((aAlpha.shape[0], aW.shape[0]))
     # with np.errstate(divide = 'ignore', invalid = 'ignore'):
     with nullcontext():
-        logd += np.einsum('tnc->tn', gammaln(sa))
-        logd += np.einsum('nc->n', gammaln(sw + 1))[None,:]
-        logd -= np.einsum('tnc->tn', gammaln(sw[None,:,:] + sa))
-        logd += np.einsum('tnd->tn', gammaln(aW[None,:,:] + aAlpha))
-        logd -= np.einsum('tnd->tn', gammaln(aAlpha))
-        logd -= np.einsum('nd->n', gammaln(aW + 1))[None,:]
+        logd += np.einsum('tnc->tn', loggamma(sa))
+        logd += np.einsum('nc->n', loggamma(sw + 1))[None,:]
+        logd -= np.einsum('tnc->tn', loggamma(sw[None,:,:] + sa))
+        logd += np.einsum('tnd->tn', loggamma(aW[None,:,:] + aAlpha))
+        logd -= np.einsum('tnd->tn', loggamma(aAlpha))
+        logd -= np.einsum('nd->n', loggamma(aW + 1))[None,:]
     # np.nan_to_num(logd, False, -np.inf)
     return logd
 
@@ -503,7 +503,7 @@ def pt_logd_cumdirmultinom_paired_yt(aW, aAlpha, sphere_mat):
 def logd_loggamma_sx(x, a, b):
     logd = 0.
     logd += a * log(b)
-    logd -= gammaln(a)
+    logd -= loggamma(a)
     logd += a * x
     logd -= b * exp(x)
     return logd
@@ -512,7 +512,7 @@ def logd_loggamma_mx_st(x, a, b):
     logd = np.zeros(x.shape[0])
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         logd += a * np.log(b)
-        logd -= gammaln(a)
+        logd -= loggamma(a)
         logd += a * x
         logd -= b * np.exp(x)
     return logd
@@ -530,7 +530,7 @@ def logd_loggamma_paired(x, a, b):
     logd = np.empty((x.shape[0]))
     with np.errstate(divide = 'ignore', invalid = 'ignore', over = 'ignore'):
         logd += np.einsum('md,md->m', a, np.log(b))
-        logd -= np.einsum('md->m', gammaln(a))
+        logd -= np.einsum('md->m', loggamma(a))
         logd += np.einsum('md,md->m', a, x)
         logd -= np.einsum('md,md->m', b, np.exp(x))
     np.nan_to_num(logd, False, -np.inf)
@@ -548,9 +548,9 @@ def pt_logd_loggamma_mx_st(x, a, b):
     """
     logd = np.empty((x.shape[0], x.shape[1]))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        logd += np.einsum('td,td->t', a, np.log(b))
-        logd -= np.einsum('td->t', gammaln(a))
-        logd += np.einsum('tjd,td->tj', a, x)
+        logd += np.einsum('td,td->t', a, np.log(b))[:,None]
+        logd -= np.einsum('td->t', loggamma(a))[:,None]
+        logd += np.einsum('td,tjd->tj', a, x)
         logd -= np.einsum('td,tjd->tj', b, np.exp(x))
     np.nan_to_num(logd, False, -np.inf)
     return logd
@@ -603,7 +603,7 @@ def log_post_log_alpha_1(log_alpha_1, y_1, prior):
         + prior.a * log_alpha_1
         - prior.b * alpha_1
         + (alpha_1 - 1) * np.log(y_1).sum()
-        - n_1 * gammaln(alpha_1)
+        - n_1 * loggamma(alpha_1)
         )
     return lp
 
@@ -636,10 +636,10 @@ def log_post_log_alpha_k(log_alpha, y, prior_a, prior_b):
     n  = y.shape[0]
     lp = (
         + (alpha - 1) * np.log(y).sum()
-        - n * gammaln(alpha)
+        - n * loggamma(alpha)
         + prior_a.a * log_alpha
         - prior_a.b * alpha
-        + gammaln(n * alpha + prior_b.a)
+        + loggamma(n * alpha + prior_b.a)
         - (n * alpha + prior_b.a) * log(y.sum() + prior_b.b)
         )
     return lp
@@ -679,7 +679,7 @@ def log_prob_max_of_gammas(alpha, l):
     alpha = gamma shape variables
     l     = dimension of vector to find max
     """
-    lpv = - gammaln(alpha).sum()
+    lpv = - loggamma(alpha).sum()
     lpv += np.log(quad(lambda g: lpv_inner(g, alpha, l), 0, np.inf)[0])
     return lpv 
 
@@ -688,10 +688,29 @@ def logd_projgamma_linf(v, alpha):
     ld = (
         + log_prob_max_of_gammas(alpha, l)
         + ((alpha - 1) * np.log(v)).sum()
-        - gammaln(alpha).sum()
-        + gammaln(alpha.sum())
+        - loggamma(alpha).sum()
+        + loggamma(alpha.sum())
         - alpha.sum() * np.log(v.sum())
         )
     return ld
+
+def logd_gamma(Y, alpha, beta):
+    """
+    gamma logdensity
+    ----
+    args:
+        Y: (...)
+        alpha: scalar
+        beta:  scalar
+    return:
+        logd: Y.shape
+    """
+    out = np.zeros(Y.shape)
+    out += alpha * log(beta)
+    out -= loggamma(alpha)
+    out += (alpha - 1) * np.log(Y)
+    out -= beta * Y
+    return out
+
 
 # EOF

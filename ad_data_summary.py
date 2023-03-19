@@ -111,7 +111,7 @@ real = {
         'model'     : 'pypprgln',
         },
     }
-rank_datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
+real_datasets = ['annthyroid','cardio','cover','mammography','pima','yeast']
 # Cat
 cat = {
     'cover' : {
@@ -141,88 +141,141 @@ cat = {
     }
 cat_datasets = ['cover','pima','solarflare','yeast']
 
+# out = {
+#     'name'       : dataset['name'],
+#     'quantile'   : dataset['quantile'],
+#     'n_over_threshold' : dat.nDat,
+#     'n_over_anom' : dat.Y.sum(),
+#     'total_cols' : dat.nCol + dat.nCat,
+#     'prevalence' : dat.Y.sum() / dat.nDat,
+#     'raw_prevalence' : y.sum() / y.shape[0],
+#     'N_raw_obsv' : y.shape[0],
+#     'N_raw_anom' : y.sum(),
+#     'P_anom_pres' : dat.Y.sum() / y.sum(),
+#     'P_over_thre' : dat.nDat / y.shape[0],
+#     }
+# out['OR_keep_anom'] = (
+#     out['P_anom_pres'] / (1 - out['P_anom_pres'] + EPS)
+#     / (out['P_over_thre'] / (1 - out['P_over_thre'] + EPS))
+#     )
+
+summaries = []
+
 for dataset in rank_datasets:
     raw = pd.read_csv(rank[dataset]['source']).values
     raw = raw[~np.isnan(raw).any(axis = 1)]
     out = pd.read_csv(rank[dataset]['outcome']).values.ravel()
     out = out[~np.isnan(out)]
     
-    dat = MixedData(raw = raw, cat_vars = eval(dataset['cats']), realtype = 'rank')
+    dat = MixedData(raw = raw, cat_vars = eval(rank[dataset]['cats']), realtype = 'rank')
+    dat.fill_outcome(out)
+    
+    # verify
+    assert (raw.shape[0] == out.shape[0])
+    
+    desc = {
+        'name'     : dataset,
+        'regime'   : 'rank',
+        'path'     : rank[dataset]['source'],
+        'raw_cols' : raw.shape[1],
+        'mod_cols' : dat.nCol + dat.nCat + 1,
+        'N_raw'    : out.shape[0],
+        'N_over'   : dat.nDat,
+        'A_raw'    : out.sum(),
+        'A_over'   : dat.Y.sum(),
+        }
+    summaries.append(desc)
+    
+
+
+for dataset in real_datasets:
+    raw = pd.read_csv(real[dataset]['source']).values
+    raw = raw[~np.isnan(raw).any(axis = 1)]
+    out = pd.read_csv(real[dataset]['outcome']).values.ravel()
+    out = out[~np.isnan(out)]
+    
+    dat = MixedData(raw = raw, cat_vars = eval(real[dataset]['cats']), realtype = 'threshold')
     dat.fill_outcome(out)
 
+    # verify
+    assert (raw.shape[0] == out.shape[0])
+    
     desc = {
-        'name' : dataset,
-        'path' : rank[dataset]['source'],
-        
-    }
-
-
-
-summaries = []
-
-for dataset in datasets:
-    raw = pd.read_csv(dataset['source']).values
-    raw = raw[~np.isnan(raw).any(axis = 1)]
-    
-    y = pd.read_csv(os.path.join(os.path.split(dataset['source'])[0], 'outcome.csv')).values.ravel()
-    y = y[~np.isnan(y)]
-    
-    dat = MixedData(raw, eval(dataset['cats']), quantile = float(dataset['quantile']))
-    dat.fill_outcome(y)
-
-    out = {
-        'name'       : dataset['name'],
-        'quantile'   : dataset['quantile'],
-        'n_over_threshold' : dat.nDat,
-        'n_over_anom' : dat.Y.sum(),
-        'total_cols' : dat.nCol + dat.nCat,
-        'prevalence' : dat.Y.sum() / dat.nDat,
-        'raw_prevalence' : y.sum() / y.shape[0],
-        'N_raw_obsv' : y.shape[0],
-        'N_raw_anom' : y.sum(),
-        'P_anom_pres' : dat.Y.sum() / y.sum(),
-        'P_over_thre' : dat.nDat / y.shape[0],
+        'name'     : dataset,
+        'regime'   : 'threshold',
+        'path'     : real[dataset]['source'],
+        'quantile' : real[dataset]['quantile'],
+        'raw_cols' : raw.shape[1],
+        'mod_cols' : dat.nCol + dat.nCat,
+        'N_raw'    : out.shape[0],
+        'N_over'   : dat.nDat,
+        'A_raw'    : out.sum(),
+        'A_over'   : dat.Y.sum(),
         }
-    out['OR_keep_anom'] = (
-        out['P_anom_pres'] / (1 - out['P_anom_pres'] + EPS)
-        / (out['P_over_thre'] / (1 - out['P_over_thre'] + EPS))
+    summaries.append(desc)
+
+for dataset in cat_datasets:
+    raw = pd.read_csv(cat[dataset]['source']).values
+    raw = raw[~np.isnan(raw).any(axis = 1)]
+    out = pd.read_csv(cat[dataset]['outcome']).values.ravel()
+    out = out[~np.isnan(out)]
+    
+    dat = MixedData(
+        raw = raw, cat_vars = eval(cat[dataset]['cats']), realtype = 'rank',
         )
-    summaries.append(out)
+    dat.fill_outcome(out)
+
+    # verify
+    assert (raw.shape[0] == out.shape[0])
+    
+    desc = {
+        'name'     : dataset,
+        'regime'   : 'categorical',
+        'path'     : cat[dataset]['source'],
+        'raw_cols' : raw.shape[1],
+        'mod_cols' : dat.nCol + dat.nCat,
+        'N_raw'    : out.shape[0],
+        'N_over'   : dat.nDat,
+        'A_raw'    : out.sum(),
+        'A_over'   : dat.Y.sum(),
+        }
+    summaries.append(desc)
+
 
 summary_df = pd.DataFrame(summaries)
-summary_df.to_csv('./ad/data_summary.csv', index = False)
+summary_df.to_csv('./ad/data_summary_updated.csv', index = False)
 
-basepath = './ad'
-folders = ['cardio','cover','mammography','annthyroid','yeast']
-result_paths = []
-for folder in folders:
-    for file in glob(os.path.join(basepath, folder, 'results_xv*')):
-        result_paths.append(file)
+# basepath = './ad'
+# folders = ['cardio','cover','mammography','annthyroid','yeast']
+# result_paths = []
+# for folder in folders:
+#     for file in glob(os.path.join(basepath, folder, 'results_xv*')):
+#         result_paths.append(file)
 
-result_summaries = []
-for path in result_paths:
-    result = Results['mpypprgln'](path)
+# result_summaries = []
+# for path in result_paths:
+#     result = Results['mpypprgln'](path)
 
-    avg_cluster_count =  (
-        bincount2D_vectorized(
-            result.samples.delta, 
-            result.max_clust_count + 1,
-            ) > 0
-        ).sum(axis = 1).mean()
-    concentration = result.GEMPrior.concentration
-    discount = result.GEMPrior.discount
+#     avg_cluster_count =  (
+#         bincount2D_vectorized(
+#             result.samples.delta, 
+#             result.max_clust_count + 1,
+#             ) > 0
+#         ).sum(axis = 1).mean()
+#     concentration = result.GEMPrior.concentration
+#     discount = result.GEMPrior.discount
 
-    out = {
-        'path' : path,
-        'avg_cluster_count' : avg_cluster_count,
-        'discount' : discount,
-        'concentration' : concentration,
-        'n_train' : result.nDat,
-        }
-    result_summaries.append(out)
+#     out = {
+#         'path' : path,
+#         'avg_cluster_count' : avg_cluster_count,
+#         'discount' : discount,
+#         'concentration' : concentration,
+#         'n_train' : result.nDat,
+#         }
+#     result_summaries.append(out)
 
-res_df = pd.DataFrame(result_summaries)
-res_df.to_csv('./ad/result_summary.csv', index = False)
+# res_df = pd.DataFrame(result_summaries)
+# res_df.to_csv('./ad/result_summary.csv', index = False)
     
 
 

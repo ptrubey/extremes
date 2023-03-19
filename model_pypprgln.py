@@ -285,8 +285,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
                 )
         # Iterator
         self.curr_iter = 0
-        # Adaptive Metropolis related        
-        self.am_alpha     = np.zeros((self.nTemp, self.max_clust_count))
+        # Adaptive Metropolis related
         self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
         self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
         # Placeholders
@@ -324,7 +323,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         # compute swap log-probability
         sw_alpha = np.zeros(sw.shape[0])
         sw_alpha += lpl[sw.T[1]] - lpl[sw.T[0]]
-        sw_alpha *= self.itl[sw.T[0]] - self.itl[sw.T[1]]
+        sw_alpha *= self.itl[sw.T[1]] - self.itl[sw.T[0]]
         sw_alpha += lpp[sw.T[1]] - lpp[sw.T[0]]
         logp = np.log(uniform(size = sw_alpha.shape))
         for tt in sw[np.where(logp < sw_alpha)[0]]:
@@ -727,9 +726,9 @@ if __name__ == '__main__':
 
     # p = argparser()
     d = {
-        'in_data_path'      : './ad/solarflare/data_cat.csv',
-        'in_outcome_path'   : './ad/solarflare/outcome_cat.csv',
-        'out_path'          : './ad/solarflare/cat_results.pkl',
+        'in_data_path'      : './ad/solarflare/cat_data.csv',
+        'in_outcome_path'   : './ad/solarflare/cat_outcome.csv',
+        'out_path'          : './ad/solarflare/temp_cat_results.pkl',
         # 'in_data_path'    : './ad/cardio/data_new.csv',
         # 'in_outcome_path' : './ad/cardio/outcome_new.csv',
         # 'out_path' : './ad/cardio/results_test.pkl',

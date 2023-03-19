@@ -371,7 +371,10 @@ class Categorical(Multinomial):
         return Y, W
 
     def __init__(self, raw, values = None, index = None, outcome = 'None'):
-        self.fill_categorical(raw, values, index)
+        if raw.shape[1] == 0:
+            pass
+        else:
+            self.fill_categorical(raw, values, index)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
@@ -537,7 +540,8 @@ class Data(MixedData):
             self.fill_rank_transform(raw[:, real_vars])
         elif realtype == 'threshold':
             self.fill_real(raw[:, real_vars], decluster = decluster, quantile = quantile)
-        self.fill_categorical(raw[:, cat_vars], values, self.I)
+        if len(cat_vars) > 0:
+            self.fill_categorical(raw[:, cat_vars], values, self.I)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
@@ -546,8 +550,8 @@ class Data(MixedData):
 
 
 if __name__ == '__main__':
-    X = np.zeros((50, 0))
-    r = RankTransform(X)
+    # X = np.zeros((50, 0))
+    # r = RankTransform(X)
     pass
 
 # EOF

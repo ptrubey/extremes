@@ -15,6 +15,7 @@ DirichletProcessSampler assumes the existence of:
 import time
 import numpy as np
 from numpy.random import beta, uniform, gamma
+from scipy.special import loggamma, betaln
 import math
 import warnings
 
@@ -114,6 +115,37 @@ class StickBreakingSampler(DirichletProcessSampler):
             )
         return (cc > 0).sum(axis = 1).mean()
 
+def dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
+    '''
+    Args:
+        delta          : (N)      : current cluster assignment
+        log_likelihood : (N x J)  : log-likelihood of obs n under cluster j
+        prob           : (N)      : vector of random uniforms
+        eta            : (scalar) : concentration parameter
+    Note:
+        Modifies delta in place.
+    '''
+    N, J = log_likelihood.shape
+    curr_cluster_state = np.bincount(delta, minlength = J)
+    cand_cluster_state = (curr_cluster_state == 0)
+    scratch = np.empty(curr_cluster_state.shape)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        for n in range(N):
+            curr_cluster_state[delta[n]] -= 1
+            scratch[:] = curr_cluster_state
+            scratch += cand_cluster_state * (eta / (cand_cluster_state.sum() + EPS))
+            np.log(scratch, out = scratch)
+            scratch[np.isnan(scratch)] = -np.inf
+            scratch += log_likelihood[n]
+            scratch -= scratch.max()
+            np.exp(scratch, out = scratch)
+            np.cumsum(scratch, out = scratch)
+            scratch /= scratch[-1]
+            delta[n] = (prob[n] > scratch).sum()
+            curr_cluster_state[delta[n]] += 1
+            cand_cluster_state[delta[n]] = False
+    return
+
 def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
     """
     Args:
@@ -144,6 +176,22 @@ def pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
             cand_cluster_state[temps, delta.T[n]] = False
     return
 
+def dp_sample_chi_bgsb(delta, eta, J):
+    '''
+    args: 
+        delta : (N)    : current cluster assignment
+        eta   : scalar : concentration parameter
+        J     : scalar : Blocked-Gibbs Stick-breaking Truncation Point
+    Out: 
+        chi   : (J)
+    '''
+    clustcount = np.bincount(delta, minlength = J)
+    chi = beta(
+        a = 1 + clustcount,
+        b = eta + clustcount[::-1].cumsum()[::-1] - clustcount,
+        )
+    return chi
+
 def pt_dp_sample_chi_bgsb(delta, eta, J):
     """
     Args: 
@@ -159,6 +207,23 @@ def pt_dp_sample_chi_bgsb(delta, eta, J):
         b = eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount,
         )
     return chi
+
+def dp_sample_concentration_bgsb(chi, a, b):
+    """
+    Gibbs Sampler for Concentration Parameter under
+        Blocked-Gibbs Sticking-Breaking Representation of DP
+    Args:
+        chi : (J)
+        a   : scalar
+        b   : scalar
+    Out:
+        eta : scalar
+    """
+    eta = gamma(
+        shape = a + chi.shape[0] - 1,
+        scale = 1 / (b - np.log(1 - chi[:-1]).sum())
+        )
+    return eta
 
 def pt_dp_sample_concentration_bgsb(chi, a, b):
     """
@@ -176,6 +241,27 @@ def pt_dp_sample_concentration_bgsb(chi, a, b):
         scale = 1 / (b - np.log(1 - chi[:,:-1]).sum(axis = 1)),
         )
     return eta
+
+def dp_sample_cluster_bgsb(chi, log_likelihood):
+    """
+    Args:
+        chi            : (J)     : Random Weights (betas)
+        log_likelihood : (N x J) : log-likelihood of obs n under cluster j
+        eta ([type])   : Scalar
+    """
+    N, J = log_likelihood.shape
+    scratch = np.zeros((N,J))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        scratch += np.log(chi) # scalar
+        scratch += np.hstack(((0,),np.log(1 - chi[:-1]).cumsum())) # (J)
+        scratch += log_likelihood # (N, J)
+        scratch[np.isnan(scratch)] = -np.inf
+        scratch -= scratch.max(axis = 1)[:,None]
+        np.exp(scratch, out = scratch)
+        np.cumsum(scratch, axis = 1, out = scratch)
+        scratch /= scratch[:-1][:,None]
+    delta = (uniform(size = (N))[:,None] > scratch).sum(axis = 1)
+    return delta
 
 def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
     """
@@ -235,7 +321,13 @@ def pt_logd_gem_mx_st(chi, conc, disc):
         conc : scalar
         disc : scalar
     """
-    raise
+    if type(conc) is not np.ndarray:
+        conc = np.array([conc])
+    k = (np.arange(chi.shape[1]) + 1).reshape(1,-1)
+    a = (1 - disc) * np.ones(k.shape)
+    b = conc[:,None] + k * disc
+    ld = (a - 1) * np.log(chi) + (b - 1) * np.log(1 - chi) - betaln(a, b)
+    return ld.sum(axis = 1)
 
 class ParallelTemperingCRPSampler(DirichletProcessSampler):
     @property

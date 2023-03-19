@@ -371,7 +371,10 @@ class Categorical(Multinomial):
         return Y, W
 
     def __init__(self, raw, values = None, index = None, outcome = 'None'):
-        self.fill_categorical(raw, values, index)
+        if raw.shape[1] == 0:
+            pass
+        else:
+            self.fill_categorical(raw, values, index)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return
