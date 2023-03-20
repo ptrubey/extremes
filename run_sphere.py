@@ -27,9 +27,9 @@ def run_model_from_path(path, modeltype):
         p = 10,
         max_clust_count = 150,
         )
-    model.sample(1000)
+    model.sample(50000)
     out = BytesIO()
-    model.write_to_disk(out, 500, 10)
+    model.write_to_disk(out, 40000, 20)
     res = Results[modeltype](out)
     pp = res.generate_posterior_predictive_hypercube(10)
     es = energy_score_full_sc(pp, data.V)
