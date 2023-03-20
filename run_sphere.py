@@ -50,6 +50,6 @@ if __name__ == '__main__':
 
     pool = mp.Pool(processes = mp.cpu_count(), initializer = limit_cpu)
     args = [(file, model) for file in files for model in models]
-    res = pool.map(run_model_from_path, args)
-    
+    res = pool.map(run_model_from_path_wrapper, args)
+
 # EOF
