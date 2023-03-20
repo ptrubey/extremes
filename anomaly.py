@@ -24,6 +24,7 @@ from sklearn.ensemble import IsolationForest
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.svm import OneClassSVM
 # Custom Modules
+from damex import DAMEX_Vanilla
 from data import Projection, category_matrix, euclidean_to_catprob,             \
     euclidean_to_hypercube, euclidean_to_psphere
 from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
@@ -351,6 +352,29 @@ class Anomaly(Projection):
             raise
         return raw.max() - raw + 1
 
+    # def damex(self, V = None, W = None, R = None, **kwargs):
+    #     if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+    #         # Full Mixed Data Regime
+    #         dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+    #         dam = DAMEX_Vanilla(self.data.R[:, None] * self.data.V, )
+            
+    #         raw = svm.score_samples(np.hstack([R[:,None] * V, W]))
+    #     elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            
+    #         dat = np.hstack((self.data.V, self.data.W))
+    #         # svm = OneClassSVM(gamma = 'auto').fit(dat)
+    #         raw = svm.score_samples(np.hstack((V,W)))
+    #     elif chkarr(self.data, 'V'):
+    #         dat = self.data.V
+    #         # svm = OneClassSVM(gamma = 'auto').fit(dat)
+    #         raw = svm.score_samples(V)
+    #     elif chkarr(self.data, 'W'):
+    #         dat = self.data.W
+    #         # svm = OneClassSVM(gamma = 'auto').fit(dat)
+    #         raw = svm.score_samples(W)
+    #     else:
+    #         raise
+
     ## Extreme Anomaly Metrics:
     def knn_hypercube_distance_to_postpred(self, V = None, W = None, R = None, k = 5, **kwargs):
         knn = np.array(list(map(
@@ -555,6 +579,7 @@ class Anomaly(Projection):
             'iso'    : self.isolation_forest,
             'lof'    : self.local_outlier_factor,
             'svm'    : self.one_class_svm,
+            # 'damex'  : self.damex, 
             # 'kedp'   : self.knn_euclidean_distance_to_postpred,
             'khdp'   : self.knn_hypercube_distance_to_postpred,
             # 'cone'   : self.cone_density,

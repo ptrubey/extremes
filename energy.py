@@ -78,6 +78,11 @@ def postpred_loss_full(predictions, targets):
     pdev2 = ((targets - predictions.mean(axis = 0))**2).sum(axis = 1).mean()
     return pvari + pdev2
 
+def energy_score_full_sc(predictions, targets):
+    res1 = prediction_pairwise_distance(predictions)
+    res2 = map(target_pairwise_distance, zip(repeat(predictions), targets))
+    return np.array(list(res2)).mean() - 0.5 * res1
+
 def intrinsic_energy_score(dataset):
     pool = Pool(processes = cpu_count(), initializer = limit_cpu)
     res1 = prediction_pairwise_distance(dataset) # same for all elements of df.  only do once.
@@ -319,6 +324,12 @@ def mixed_energy_score(V, W, Vnew, Wnew):
     return (res2 + res4).mean() - 0.5 * (res1 + res3).mean()
 
 if __name__ == '__main__':
+
+    # X = np.random.uniform(size = )
+    
+
+
+
     pass
 
 # EOF

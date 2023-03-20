@@ -1,56 +1,55 @@
 import sys, os, glob, re
 import numpy as np
-from subprocess import Popen, PIPE, STDOUT
-from argparse import ArgumentParser, BooleanOptionalAction
+import pandas as pd
+import multiprocessing as mp
+import sqlite3 as sql
+from io import BytesIO
 
-source_path = './simulated/sphere/data_*.csv'
+from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
+from data import Data_From_Sphere
+from models import RealChains as Chains, RealResults as Results
+
+source_path = './simulated/sphere/data_m*_r*_i*.csv'
 dest_path   = './simulated/sphere'
 models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
+out_sql     = './simulated/sphere/result.sql'
+out_table   = 'energy'
 
+def run_model_from_path_wrapper(args):
+    return run_model_from_path(*args)
 
-def argparser():
-    p = ArgumentParser()
-    p.add_argument('replace', default = False, action = BooleanOptionalAction)
-    return p.parse_args()
+def run_model_from_path(path, modeltype):
+    raw = pd.read_csv(path).values
+    data = Data_From_Sphere(raw)
+    model = Chains[modeltype](
+        data, 
+        prior_eta = (2., 1.), 
+        p = 10,
+        max_clust_count = 150,
+        )
+    model.sample(1000)
+    out = BytesIO()
+    model.write_to_disk(out, 500, 10)
+    res = Results[modeltype](out)
+    pp = res.generate_posterior_predictive_hypercube(10)
+    es = energy_score_full_sc(pp, data.V)
+    ppl = postpred_loss_full(pp, data.V)
+    df = pd.DataFrame([{
+        'path' : path,
+        'model' : modeltype,
+        'es'  : es,
+        'ppl' : ppl,
+        }])
+    with sql.connect(out_sql) as conn:
+        df.to_sql(out_table, conn, if_exists = 'append', index = False)
+    return
 
 if __name__ == '__main__':
-    p = argparser()
-    
     files = glob.glob(source_path)
     search_string = r'data_m(\d+)_r(\d+).csv'
 
-    processes = []
-
-    # ensure that only data files are considered
-    files = [file for file in files if re.search(search_string, file)]
-
-    for file in files:
-        match = re.search(search_string, file)
-        
-        nMix = match.group(1)
-        nCol = match.group(2)
-
-        for model in models:
-            out_name = 'results_{}_{}_{}.pkl'.format(model, nMix, nCol)
-            out_path = os.path.join(dest_path, out_name)
-
-            if os.path.exists(out_path) and not p.replace:
-                pass
-            else:
-                # processes.append(['python','test_generic.py', file, out_path, model, 
-                #     '--sphere', 'True', '--nSamp', '30000', '--nKeep', '15000', '--nThin', '15'])
-                processes.append(Popen(
-                    [sys.executable, 'test_generic.py', file, 
-                        out_path, model, '--sphere', 'True', 
-                        '--nSamp', '30000', '--nKeep', '15000', '--nThin', '15']
-                    ))
+    pool = mp.Pool(processes = mp.cpu_count(), initializer = limit_cpu)
+    args = [(file, model) for file in files for model in models]
+    res = pool.map(run_model_from_path, args)
     
-    for process in processes:
-        process.wait()
-    
-    rcs = np.array([process.returncode for process in processes])
-    print(np.where(rcs != 0))
-    # for process in processes:
-    #     print(' '.join(process))
-
 # EOF

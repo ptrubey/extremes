@@ -245,14 +245,14 @@ def pt_dp_sample_concentration_bgsb(chi, a, b):
 def dp_sample_cluster_bgsb(chi, log_likelihood):
     """
     Args:
-        chi            : (J)     : Random Weights (betas)
+        chi            : (J)     : Random Weights (betas)  (should be J - 1; fixed here)
         log_likelihood : (N x J) : log-likelihood of obs n under cluster j
         eta ([type])   : Scalar
     """
     N, J = log_likelihood.shape
     scratch = np.zeros((N,J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch += np.log(chi) # scalar
+        scratch += np.log(np.hstack(chi[:,-1],(0,))) # scalar
         scratch += np.hstack(((0,),np.log(1 - chi[:-1]).cumsum())) # (J)
         scratch += log_likelihood # (N, J)
         scratch[np.isnan(scratch)] = -np.inf

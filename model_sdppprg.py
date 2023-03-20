@@ -10,6 +10,7 @@ import pandas as pd
 import os
 import pickle
 from math import log
+from io import BytesIO
 
 from cov import PerObsTemperedOnlineCovariance
 from samplers import ParallelTemperingStickBreakingSampler, bincount2D_vectorized,  \
@@ -451,11 +452,12 @@ class Chain(ParallelTemperingStickBreakingSampler):
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
-        folder = os.path.split(path)[0]
-        if not os.path.exists(folder):
-            os.mkdir(folder)
-        if os.path.exists(path):
-            os.remove(path)
+        if type(path) is str:
+            folder = os.path.split(path)[0]
+            if not os.path.exists(folder):
+                os.mkdir(folder)
+            if os.path.exists(path):
+                os.remove(path)
 
         zetas = self.samples.zeta[nBurn :: nThin, 0]
         alphas = self.samples.alpha[nBurn :: nThin, 0]
@@ -484,8 +486,11 @@ class Chain(ParallelTemperingStickBreakingSampler):
             if hasattr(self.data, attr):
                 out[attr] = self.data.__dict__[attr]
 
-        with open(path, 'wb') as file:
-            pickle.dump(out, file)
+        if type(path) is BytesIO:
+            path.write(pickle.dumps(out))
+        else:
+            with open(path, 'wb') as file:
+                pickle.dump(out, file)
         return
 
     def set_projection(self):
@@ -536,15 +541,13 @@ class Result(object):
     def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
         new_gammas = []
         for s in range(self.nSamp):
-            njs = np.bincount(
-                self.samples.delta[s], 
-                minlength = int(self.samples.delta[s].max() + 1 + m),
-                )
-            ljs = njs + (njs == 0) * self.samples.eta[s] / m
-            new_zetas = gamma(self.samples.alpha[s], scale = 1 / self.samples.beta[s], size = (m, self.nCol))
-            prob = ljs / ljs.sum()
+            chi = self.samples.chi[s]
+            prob = np.zeros(chi.shape[0])
+            prob += np.log(np.hstack((chi[:-1],(1,))))
+            prob += np.hstack(((0,), np.log(1 - chi[:-1]).cumsum()))
+            np.exp(prob, out = prob)
             deltas = generate_indices(prob, n_per_sample)
-            zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
+            zeta = self.samples.zeta[s][deltas]
             new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
 
@@ -565,8 +568,11 @@ class Result(object):
         return
 
     def load_data(self, path):
-        with open(path, 'rb') as file:
-            out = pickle.load(file)
+        if type(path) is BytesIO:
+            out = pickle.loads(path.getvalue())
+        else:
+            with open(path, 'rb') as file:
+                out = pickle.load(file)
         
         deltas = out['deltas']
         zetas  = out['zetas']
