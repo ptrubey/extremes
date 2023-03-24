@@ -59,16 +59,16 @@ class BaseSampler(object):
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
-        print('\rSampling 0% Completed', end = '')
+        # print('\rSampling 0% Completed', end = '')
 
         while (self.curr_iter < ns):
             if (self.curr_iter % 100) == 0:
                 ps = self.print_string_during.format(self.curr_iter / ns, self.time_elapsed)
-                print(ps.ljust(80), end = '')
+                # print(ps.ljust(80), end = '')
             self.iter_sample()
         
         ps = self.print_string_after.format(self.time_elapsed)
-        print(ps)
+        # print(ps)
         return
 
 class DirichletProcessSampler(BaseSampler):
@@ -89,18 +89,18 @@ class DirichletProcessSampler(BaseSampler):
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
-        print('\rSampling 0% Completed', end = '')
+        # print('\rSampling 0% Completed', end = '')
         
         while (self.curr_iter < ns):
             if (self.curr_iter % 100) == 0:
                 ps = self.print_string_during.format(
                     self.curr_iter / ns, self.time_elapsed, self.curr_cluster_count,
                     )
-                print(ps.ljust(80), end = '')
+                # print(ps.ljust(80), end = '')
             self.iter_sample()
         
         ps = self.print_string_after.format(self.time_elapsed, self.average_cluster_count(ns))
-        print(ps)
+        # print(ps)
         return
 
 class StickBreakingSampler(DirichletProcessSampler):

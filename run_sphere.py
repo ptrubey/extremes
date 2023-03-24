@@ -1,3 +1,4 @@
+from __future__ import division
 import sys, os, glob, re
 import numpy as np
 import pandas as pd
@@ -40,16 +41,27 @@ def run_model_from_path(path, modeltype):
         'es'  : es,
         'ppl' : ppl,
         }])
-    with sql.connect(out_sql) as conn:
-        df.to_sql(out_table, conn, if_exists = 'append', index = False)
+    conn = sql.connect(out_sql)
+    df.to_sql(out_table, conn, if_exists = 'append', index = False)
+    conn.commit()
+    conn.close()
     return
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
     search_string = r'data_m(\d+)_r(\d+).csv'
 
-    pool = mp.Pool(processes = mp.cpu_count(), initializer = limit_cpu)
+    pool = mp.Pool(
+        processes = mp.cpu_count(), 
+        initializer = limit_cpu, 
+        maxtasksperchild = 1,
+        )
     args = [(file, model) for file in files for model in models]
+    args_len = len(args)
+    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
+        sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
     res = pool.map(run_model_from_path_wrapper, args)
+    pool.close()
+    pool.join()
 
 # EOF
