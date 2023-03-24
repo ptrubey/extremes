@@ -116,7 +116,6 @@ class Samples(object):
 
     def __init__(self, nSamp, nDat, nCol, nTemp, nClust):
         self.zeta  = np.empty((nSamp + 1, nTemp, nClust, nCol))
-        self.log_zeta_hist = np.empty((nSamp + 1, nDat, nTemp, nCol))
         self.sigma = np.empty((nSamp + 1, nTemp, nClust, nCol))
         self.sigma[:,:,:,0] = 1.
         self.alpha = np.empty((nSamp + 1, nTemp, nCol))
