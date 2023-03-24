@@ -36,7 +36,7 @@ def run_model_from_path(path, modeltype):
         pp = res.generate_posterior_predictive_hypercube(10)
         es = energy_score_full_sc(pp, data.V)
         ppl = postpred_loss_full(pp, data.V)
-    except FloatingPointError:
+    except (ValueError, FloatingPointError):
         es = 999.
         ppl = 999.
     df = pd.DataFrame([{
