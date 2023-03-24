@@ -14,6 +14,7 @@ DirichletProcessSampler assumes the existence of:
 """
 import time
 import numpy as np
+np.seterr(divide = 'raise', invalid = 'raise')
 from numpy.random import beta, uniform, gamma
 from scipy.special import loggamma, betaln
 import math
