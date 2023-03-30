@@ -19,6 +19,7 @@ from numpy.random import beta, uniform, gamma
 from scipy.special import loggamma, betaln
 import math
 import warnings
+# rng = np.random.default_rng(seed = inr(time.time())
 
 # set_num_threads(4)
 
@@ -203,11 +204,15 @@ def pt_dp_sample_chi_bgsb(delta, eta, J):
         chi   : (T, J)
     """
     clustcount = bincount2D_vectorized(delta, J)
-    chi = beta(
-        a = 1 + clustcount,
-        b = eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount,
-        )
-    return chi
+    # chi = beta(
+    #     a = 1 + clustcount,
+    #     b = eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount,
+    #     )
+    # return chi
+    A = gamma(1 + clustcount)
+    B = gamma(eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount)
+    return np.exp(np.log(A) - np.log(A + B))
+    
 
 def dp_sample_concentration_bgsb(chi, a, b):
     """
@@ -237,11 +242,9 @@ def pt_dp_sample_concentration_bgsb(chi, a, b):
     Out:
         eta : (T)
     """
-    eta = gamma(
-        shape = a + chi.shape[1] - 1,
-        scale = 1 / (b - np.log(1 - chi[:,:-1]).sum(axis = 1)),
-        )
-    return eta
+    _shape = a + chi.shape[1] - 1
+    _scale = 1 / (b - np.log(np.maximum(1 - chi[:,:-1], 1e-9)).sum(axis = 1))
+    return gamma(shape = _shape, scale = _scale)
 
 def dp_sample_cluster_bgsb(chi, log_likelihood):
     """
@@ -274,7 +277,9 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
     N, T, J = log_likelihood.shape
     scratch = np.zeros((N, T, J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch += np.log(chi)[None] # Log Prior (part 1)
+        scratch += np.hstack(
+            (np.log(chi[:,:-1]), np.zeros((T,1))),
+            )[None] # Log Prior (part 1)
         scratch += np.hstack(        # Log Prior (part 2)
             (np.zeros((T,1)), np.log(1 - chi[:,:-1]).cumsum(axis = 1)),
             )[None]
@@ -324,11 +329,15 @@ def pt_logd_gem_mx_st(chi, conc, disc):
     """
     if type(conc) is not np.ndarray:
         conc = np.array([conc])
-    k = (np.arange(chi.shape[1]) + 1).reshape(1,-1)
+    k = (np.arange(chi.shape[1] - 1) + 1).reshape(1,-1)
     a = (1 - disc) * np.ones(k.shape)
     b = conc[:,None] + k * disc
-    ld = (a - 1) * np.log(chi) + (b - 1) * np.log(1 - chi) - betaln(a, b)
-    return ld.sum(axis = 1)
+    ld = np.zeros(chi.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += ((a - 1) * np.log(chi[:,:-1])).sum(axis = 1)
+        ld += ((b - 1) * np.log(1 - chi[:,:-1])).sum(axis = 1)
+        ld -= betaln(a,b).sum(axis = 1)
+    return ld
 
 class ParallelTemperingCRPSampler(DirichletProcessSampler):
     @property

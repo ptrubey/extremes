@@ -300,8 +300,9 @@ class Chain(ParallelTemperingStickBreakingSampler):
         sw_alpha = np.zeros(sw.shape[0])
 
         sw_alpha += (lpl[sw.T[1]] - lpl[sw.T[0]])
-        sw_alpha += (lpp[sw.T[1]] - lpp[sw.T[0]])
         sw_alpha *= (self.itl[sw.T[1]] - self.itl[sw.T[0]])
+        sw_alpha += (lpp[sw.T[1]] - lpp[sw.T[0]])
+        
         # sw_alpha *= self.itl[sw.T[0]] - self.itl[sw.T[1]]
         # sw_alpha += lpp[sw.T[1]] - lpp[sw.T[0]]
 

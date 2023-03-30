@@ -28,17 +28,17 @@ def run_model_from_path(path, modeltype):
         p = 10,
         max_clust_count = 150,
         )
-    try: 
-        model.sample(50000)
-        out = BytesIO()
-        model.write_to_disk(out, 40000, 20)
-        res = Results[modeltype](out)
-        pp = res.generate_posterior_predictive_hypercube(10)
-        es = energy_score_full_sc(pp, data.V)
-        ppl = postpred_loss_full(pp, data.V)
-    except (ValueError, FloatingPointError):
-        es = 999.
-        ppl = 999.
+    # try: 
+    model.sample(50000)
+    out = BytesIO()
+    model.write_to_disk(out, 40000, 20)
+    res = Results[modeltype](out)
+    pp = res.generate_posterior_predictive_hypercube(10)
+    es = energy_score_full_sc(pp, data.V)
+    ppl = postpred_loss_full(pp, data.V)
+    # except (ValueError, FloatingPointError):
+    #     es = 999.
+    #     ppl = 999.
     df = pd.DataFrame([{
         'path' : path,
         'model' : modeltype,
@@ -55,17 +55,24 @@ if __name__ == '__main__':
     files = glob.glob(source_path)
     search_string = r'data_m(\d+)_r(\d+).csv'
 
-    pool = mp.Pool(
-        processes = mp.cpu_count(), 
-        initializer = limit_cpu, 
-        maxtasksperchild = 1,
-        )
-    args = [(file, model) for file in files for model in models]
-    args_len = len(args)
-    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
-        sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
-    res = pool.map(run_model_from_path_wrapper, args)
-    pool.close()
-    pool.join()
+    # pool = mp.Pool(
+    #     processes = mp.cpu_count(), 
+    #     initializer = limit_cpu, 
+    #     maxtasksperchild = 1,
+    #     )
+    # args = [(file, model) for file in files for model in models]
+    # args_len = len(args)
+    # for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
+    #     sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
+    # res = pool.map(run_model_from_path_wrapper, args)
+    # pool.close()
+    # pool.join()
+
+    path = './simulated/sphere/data_m5_r3_i8.csv'
+    model = 'sdppprg'
+    
+    run_model_from_path(path, model)
+
+    raise
 
 # EOF
