@@ -56,7 +56,7 @@ if __name__ == '__main__':
     search_string = r'data_m(\d+)_r(\d+)_i(\d+).csv'
 
     pool = mp.Pool(
-        processes = mp.cpu_count(), 
+        processes = mp.cpu_count() // 2, 
         initializer = limit_cpu, 
         maxtasksperchild = 1,
         )
