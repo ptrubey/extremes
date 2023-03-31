@@ -236,7 +236,10 @@ class Chain(DirichletProcessSampler):
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
-        self.priors = Prior(prior_eta, prior_alpha, prior_beta)
+        _prior_eta = GammaPrior(*prior_eta)
+        _prior_alpha = GammaPrior(*prior_alpha)
+        _prior_beta = GammaPrior(*prior_beta)
+        self.priors = Prior(_prior_eta, _prior_alpha, _prior_beta)
         self.set_projection()
         return
 

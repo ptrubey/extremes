@@ -821,7 +821,12 @@ class Chain(DirichletProcessSampler):
             self.nCol + prior_Sigma[0],
             np.eye(self.nCol) * prior_Sigma[1],
             )
-        self.priors = Prior(prior_eta, _prior_mu, _prior_Sigma, prior_xi, prior_tau)
+        _prior_eta = GammaPrior(*prior_eta)
+        _prior_xi  = GammaPrior(*prior_xi)
+        _prior_tau = GammaPrior(*prior_tau)
+        self.priors = Prior(
+            _prior_eta, _prior_mu, _prior_Sigma, _prior_xi, _prior_tau
+            )
         self.set_projection()
         self.itl = 1 / stepping**np.arange(ntemps)
         self.nTemp = ntemps
