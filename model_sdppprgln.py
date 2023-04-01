@@ -288,7 +288,7 @@ class Chain(DirichletProcessSampler):
                 self.curr_zeta[
                     self.temp_unravel, self.curr_delta.ravel()
                     ].reshape(
-                        self.nTemp, self.nDat, self.tCol
+                        self.nTemp, self.nDat, self.nCol
                         )
                 ),
             0, 1,
