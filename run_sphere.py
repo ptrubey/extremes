@@ -85,8 +85,8 @@ if __name__ == '__main__':
         maxtasksperchild = 1,
         )
     
-    # args = [(file, model) for file in files for model in models]
-    args = [(file, p.model) for file in files]
+    args = [(file, model) for file in files for model in p.models]
+    # args = [(file, p.model) for file in files]
     args_len = len(args)
     for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
         sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
