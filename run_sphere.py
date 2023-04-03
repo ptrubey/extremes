@@ -79,20 +79,20 @@ if __name__ == '__main__':
     # search_string = r'data_m(\d+)_r(\d+)_i(\d+).csv'
     p = argparser()
     
-    # pool = mp.Pool(
-    #     processes = mp.cpu_count(), 
-    #     initializer = limit_cpu, 
-    #     maxtasksperchild = 1,
-    #     )
+    pool = mp.Pool(
+        processes = mp.cpu_count(), 
+        initializer = limit_cpu, 
+        maxtasksperchild = 1,
+        )
     
-    # # args = [(file, model) for file in files for model in models]
-    # args = [(file, p.model) for file in files]
-    # args_len = len(args)
-    # for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
-    #     sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
-    # res = pool.map(run_model_from_path_wrapper, args)
-    # pool.close()
-    # pool.join()
+    # args = [(file, model) for file in files for model in models]
+    args = [(file, p.model) for file in files]
+    args_len = len(args)
+    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
+        sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
+    res = pool.map(run_model_from_path_wrapper, args)
+    pool.close()
+    pool.join()
 
     # path = './simulated/sphere/data_m5_r3_i8.csv'
     # model = 'sdppprg'
