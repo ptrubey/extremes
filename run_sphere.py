@@ -25,7 +25,7 @@ def run_model_from_path(path, modeltype):
     testpath = os.path.join(basepath, 'test' + fname[4:])
     if not os.path.exists(testpath):
         return
-    test = pd.read_csv(testpath)
+    test = pd.read_csv(testpath).values
     data = Data_From_Sphere(raw)
     
     model = Chains[modeltype](
