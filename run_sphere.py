@@ -85,15 +85,25 @@ if __name__ == '__main__':
         maxtasksperchild = 1,
         )
     
-    args = [(file, model) for file in files for model in p.models]
-    # args = [(file, p.model) for file in files]
-    args_len = len(args)
-    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
-        sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
-    res = pool.map(run_model_from_path_wrapper, args)
+    if p.models == ['missing']:
+        conn = sql.connect(out_sql)
+        df   = pd.read_sql('select * from energy;', conn)[['path','model']]
+        done = list(map(tuple, df.drop_duplicates().values))
+        args = [(file, model) for file in files for model in models]
+        todo = set(args).difference(set(done))
+        todo_len = len(todo)
+        for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
+            sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
+    else:
+        pass
+        args = [(file, model) for file in files for model in p.models]
+        args_len = len(args)
+        for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
+            sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
+    
     pool.close()
     pool.join()
-
+    
     # path = './simulated/sphere/data_m5_r3_i8.csv'
     # model = 'sdppprg'
     # run_model_from_path(path, model)
