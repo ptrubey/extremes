@@ -10,10 +10,9 @@ from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
 from data import Data_From_Sphere
 from models import RealChains as Chains, RealResults as Results
 
-source_path = './simulated/sphere/data_m*_r*_i*.csv'
-dest_path   = './simulated/sphere'
+source_path = './simulated/sphere2/data_m*_r*_i*.csv'
 models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
-out_sql     = './simulated/sphere/result.sql'
+out_sql     = './simulated/sphere2/result.sql'
 out_table   = 'energy'
 
 def run_model_from_path_wrapper(args):
