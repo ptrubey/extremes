@@ -5,6 +5,8 @@ import pandas as pd
 import multiprocessing as mp
 import sqlite3 as sql
 from io import BytesIO
+from time import sleep
+from numpy.random import uniform
 
 from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
 from data import Data_From_Sphere
@@ -62,8 +64,15 @@ def run_model_from_path(path, modeltype):
         'pplbl2' : pplbl2,
         }])
     conn = sql.connect(out_sql)
-    df.to_sql(out_table, conn, if_exists = 'append', index = False)
-    conn.commit()
+    for _ in range(10):
+        try:
+            df.to_sql(out_table, conn, if_exists = 'append', index = False)
+            conn.commit()
+            break
+        except sql.OperationalError:
+            sleep(uniform())
+            pass
+    
     conn.close()
     return
 
