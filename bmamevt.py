@@ -11,8 +11,8 @@ from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
 import time
 from numpy.random import uniform
 
-source_path = './simulated/sphere/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere/result.sql'
+source_path = './simulated/sphere2/data_m*_r*_i*.csv'
+out_sql     = './simulated/sphere2/result.sql'
 out_table   = 'energy'
 
 nSim = 20000
@@ -79,12 +79,16 @@ def run_model_from_path_wrapper(args):
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
+    with sql.connect(out_sql) as conn:
+        files_done = pd.read_sql('select path from energy;', conn).values.T[0]
+        files_to_do = list(set(files).difference(set(files_done))) 
+    
     pool = mp.Pool(
-        processes = mp.cpu_count(),
+        processes = int(0.8 * mp.cpu_count()),
         initializer = limit_cpu,
         maxtasksperchild = 1,
         )
-    args = list(zip(files, repeat(nSim), repeat(nBurn), repeat(nPer)))
+    args = list(zip(files_to_do, repeat(nSim), repeat(nBurn), repeat(nPer)))
     args_len = len(args)
     for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
        sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
