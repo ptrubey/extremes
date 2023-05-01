@@ -13,7 +13,8 @@ from data import Data_From_Sphere
 from models import RealChains as Chains, RealResults as Results
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
+# models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
+models      = ['sd']
 out_sql     = './simulated/sphere2/result.sql'
 out_table   = 'energy'
 
@@ -31,9 +32,10 @@ def run_model_from_path(path, modeltype):
     
     model = Chains[modeltype](
         data, 
-        prior_eta = (2., 1.), 
-        p = 10,
-        max_clust_count = 150,
+        # prior_eta = (2., 1.), 
+        # p = 10,
+        p = 1,
+        # max_clust_count = 150,
         )
     
     model.sample(50000)
