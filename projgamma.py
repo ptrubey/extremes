@@ -31,6 +31,16 @@ InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
 
 ## Functions related to projected gamma density
 
+def logd_gamma(vY, alpha, beta):
+    out = np.errstate(vY.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += alpha * np.log(beta)
+        out -= loggamma(alpha)
+        out += (alpha - 1) * np.log(vY)
+        out -= beta * vY
+    np.nan_to_num(out, False, -np.inf)
+    return out
+
 def logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     """
     Product of Gammas log-density for multiple Y, multiple theta (not paired)
@@ -70,6 +80,25 @@ def pt_logd_prodgamma_my_mt(aY, aAlpha, aBeta):
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
+def logd_prodgamma_paired(aY, aAlpha, aBeta):
+    """
+    product of gammas log-density for paired y, theta
+    ----
+    aY     : array of Y     (n x d) [Y in R^d]
+    aAlpha : array of alpha (n x d)
+    aBeta  : array of beta  (n x d)
+    ----
+    returns: (n)
+    """
+    out = np.zeros(aY.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += np.einsum('nd,nd->n', aAlpha, np.log(aBeta))    # beta^alpha
+        out -= np.einsum('nd->n', loggamma(aAlpha))            # gamma(alpha)
+        out += np.einsum('nd,nd->n', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
+        out -= np.einsum('nd,nd->n', aY, aBeta)                # e^(-y beta)
+    np.nan_to_num(out, False, -np.inf)
+    return out
+
 def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
     """
     product of gammas log-density for paired y, theta
@@ -83,11 +112,21 @@ def pt_logd_prodgamma_paired(aY, aAlpha, aBeta):
     out = np.zeros(aY.shape[:-1])                             # n temps x n Y
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         out += np.einsum('tnd,tnd->tn', aAlpha, np.log(aBeta))    # beta^alpha
-        out -= np.einsum('tnd->tn', loggamma(aAlpha))              # gamma(alpha)
+        out -= np.einsum('tnd->tn', loggamma(aAlpha))             # gamma(alpha)
         out += np.einsum('tnd,tnd->tn', np.log(aY), (aAlpha - 1)) # y^(alpha - 1)
         out -= np.einsum('tnd,tnd->tn', aY, aBeta)                # e^(-y beta)
     np.nan_to_num(out, False, -np.inf)
-    return out                                                # per-temp,Y log-density
+    return out                                     # per-temp,Y log-density
+
+def logd_prodgamma_my_st(aY, vAlpha, vBeta):
+    out = np.zeros(aY.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += (vAlpha * np.log(vBeta)).sum()  # scalar
+        out -= sum(loggamma(vAlpha))           # scalar
+        out += np.einsum('nd,d->n', np.log(aY), vAlpha - 1)
+        out -= np.einsum('nd,d->n', aY, vBeta)
+    np.nan_to_num(out, False, -np.inf)
+    return out
 
 def pt_logd_prodgamma_my_st(aY, aAlpha, aBeta):
     """

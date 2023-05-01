@@ -1,15 +1,16 @@
-import model_sdpppg as sdpppg
-import model_sdppprg as sdppprg
+import model_sdpppg    as sdpppg
+import model_sdppprg   as sdppprg
 import model_sdppprgln as sdppprgln
-import model_sdpppgln as sdpppgln
+import model_sdpppgln  as sdpppgln
 # import model_cdppprg as cdppprg
 import model_cdppprgln as cdppprgln
 # import model_mdppprg_pt as mdppprg
 import model_mdppprgln as mdppprgln
 import model_mpypprgln as mpypprgln
-import model_pypprgln as pypprgln
+import model_pypprgln  as pypprgln
 import model_fpypprgln as fpypprgln
 import model_gpypprgln as gpypprgln
+import model_sd        as sd
 
 ## Real Data
 RealResults = {
@@ -17,12 +18,14 @@ RealResults = {
     'sdppprg'   : sdppprg.Result,
     'sdpppgln'  : sdpppgln.Result,
     'sdppprgln' : sdppprgln.Result,
+    'sd'        : sd.Result, 
     }
 RealChains = {
     'sdpppg'    : sdpppg.Chain,
     'sdppprg'   : sdppprg.Chain,
     'sdpppgln'  : sdpppgln.Chain,
     'sdppprgln' : sdppprgln.Chain,
+    'sd'        : sd.Chain,
     }
 
 ## Mixed Data
