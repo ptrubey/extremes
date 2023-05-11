@@ -101,16 +101,22 @@ if __name__ == '__main__':
         df   = pd.read_sql('select * from energy;', conn)[['path','model']]
         done = list(map(tuple, df.drop_duplicates().values))
         args = [(file, model) for file in files for model in models]
-        todo = set(args).difference(set(done))
+        todo = list(set(args).difference(set(done)))
         todo_len = len(todo)
         for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
             sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
     else:
-        pass
+        conn = sql.connect(out_sql)
+        try:
+            df = pd.read_sql('select * from energy;', conn)[['path','model']]
+            done = list(map(tuple, df.drop_duplicates().values))
+        except:
+            done = []
         args = [(file, model) for file in files for model in p.models]
-        args_len = len(args)
-        for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, args), 1):
-            sys.stderr.write('\rdone {0:.2%}'.format(i/args_len))
+        todo = list(set(args).difference(set(done)))
+        todo_len = len(args)
+        for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
+            sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
     
     pool.close()
     pool.join()
