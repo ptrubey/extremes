@@ -12,7 +12,7 @@ import time
 from numpy.random import uniform
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere2/result.sql'
+out_sql     = './simulated/sphere2/result_bmamevt2.sql'
 out_table   = 'energy'
 
 nSim = 20000
@@ -39,13 +39,13 @@ def run_model_from_path(path, nsim, nburn, nper):
     test = pd.read_csv(testpath).values
     pp = postpred_pairwise_betas(path, nsim, nburn, nper)
 
-    es1 = energy_score_full_sc(pp, test)
-    ppl1 = postpred_loss_full(pp, test)
-    es2 = energy_score_full_sc(pp, test)
-    ppl2 = postpred_loss_full(pp, test)
-    esbl1 = energy_score_full_sc(raw, test)
+    es1    = energy_score_full_sc(pp, raw)
+    ppl1   = postpred_loss_full(pp, raw)
+    es2    = energy_score_full_sc(pp, test)
+    ppl2   = postpred_loss_full(pp, test)
+    esbl1  = energy_score_full_sc(raw, test)
     pplbl1 = postpred_loss_full(raw, test)
-    esbl2 = energy_score_full_sc(test, raw)
+    esbl2  = energy_score_full_sc(test, raw)
     pplbl2 = postpred_loss_full(test, raw)
     
     df = pd.DataFrame([{
@@ -79,12 +79,13 @@ def run_model_from_path_wrapper(args):
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
+    files = [file for file in files if 'r2_' not in file]
     with sql.connect(out_sql) as conn:
         files_done = pd.read_sql('select path from energy;', conn).values.T[0]
         files_to_do = list(set(files).difference(set(files_done))) 
     
     pool = mp.Pool(
-        processes = int(0.8 * mp.cpu_count()),
+        processes = int(mp.cpu_count()),
         initializer = limit_cpu,
         maxtasksperchild = 1,
         )
