@@ -20,7 +20,9 @@ from cUtility import diriproc_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
-from projgamma import GammaPrior, logd_prodgamma_my_mt
+from projgamma import GammaPrior, logd_prodgamma_my_mt, logd_prodgamma_my_st,   \
+    logd_prodgamma_paired, logd_gamma
+
 
 def update_zeta_j_wrapper(args):
     # parse arguments
@@ -59,6 +61,7 @@ class Samples(object):
     delta = None
     r     = None
     eta   = None
+    ld    = None
 
     def __init__(self, nSamp, nDat, nCol):
         self.zeta  = [None] * (nSamp + 1)
@@ -69,7 +72,9 @@ class Samples(object):
         self.tau   = np.empty((nSamp + 1, nCol - 1))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
         self.r     = np.empty((nSamp + 1, nDat))
-        self.eta   = np.empty(nSamp + 1)
+        self.eta   = np.empty((nSamp + 1))
+        self.ld    = np.empty((nSamp + 1))
+
         return
 
 class Chain(DirichletProcessSampler):
@@ -213,6 +218,24 @@ class Chain(DirichletProcessSampler):
         self.curr_iter = 0
         return
 
+    def record_log_density(self):
+        lpl = 0.
+        lpp = 0.
+        Y = self.curr_r[:,None] * self.data.Yp
+        lpl += logd_prodgamma_paired(
+            Y,
+            self.curr_zeta[self.curr_delta],
+            self.curr_sigma[self.curr_delta],
+            ).sum()
+        lpl += logd_prodgamma_my_st(self.curr_zeta, self.curr_alpha, self.curr_beta).sum()
+        lpl += logd_prodgamma_my_st(self.curr_sigma[:,1:], self.curr_xi, self.curr_tau).sum()
+        lpp += logd_gamma(self.curr_alpha, *self.priors.alpha).sum()
+        lpp += logd_gamma(self.curr_beta, *self.priors.beta).sum()
+        lpp += logd_gamma(self.curr_xi, *self.priors.xi).sum()
+        lpp += logd_gamma(self.curr_tau, *self.priors.tau).sum()
+        self.samples.ld[self.curr_iter] = lpl + lpp
+        return
+
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
         delta = self.curr_delta.copy();  m = self.max_clust_count - (delta.max() + 1)
@@ -247,6 +270,8 @@ class Chain(DirichletProcessSampler):
         self.samples.xi[self.curr_iter]    = self.sample_xi(self.curr_sigma, xi)
         self.samples.tau[self.curr_iter]   = self.sample_tau(self.curr_sigma, self.curr_xi)
         self.samples.eta[self.curr_iter]   = self.sample_eta(eta, self.curr_delta)
+
+        self.record_log_density()
         return
     
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -286,6 +311,7 @@ class Chain(DirichletProcessSampler):
             'nCol'   : self.nCol,
             'nDat'   : self.nDat,
             'V'      : self.data.V,
+            'logd'   : self.samples.ld
             }
         
         # try to add outcome / radius to dictionary
@@ -415,6 +441,7 @@ class Result(object):
             sigmas[np.where(sigmas.T[0] == i)[0], 1:] for i in range(self.nSamp)
             ]
         self.samples.r     = rs
+        self.samples.ld    = out['logd']
         return
 
     def __init__(self, path):
@@ -424,18 +451,17 @@ class Result(object):
 if __name__ == '__main__':
     pass
 
-    # from data import Data_From_Raw
-    # from projgamma import GammaPrior
-    # from pandas import read_csv
-    # import os
+    from data import Data_From_Raw
+    from projgamma import GammaPrior
+    from pandas import read_csv
+    import os
 
-    # raw = read_csv('./datasets/ivt_nov_mar.csv')
-    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    # data.write_empirical('./test/empirical.csv')
-    # model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    # model.sample(50000)
-    # model.write_to_disk('./test/results.pickle', 20000, 30)
-    # res = Result('./test/results.pickle')
-    # res.write_posterior_predictive('./test/postpred.csv')
+    raw = read_csv('./datasets/ivt_nov_mar.csv')
+    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
+    model.sample(10000)
+    model.write_to_disk('./test/results.pkl', 5000, 10)
+    res = Result('./test/results.pkl')
+    res.write_posterior_predictive('./test/postpred.csv')
 
 # EOF

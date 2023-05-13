@@ -54,6 +54,7 @@ class Samples(object):
     delta = None
     r     = None
     eta   = None
+    ld    = None
 
     def __init__(self, nSamp, nDat, nCol, nTemp):
         self.zeta  = [None] * (nSamp + 1)
@@ -62,6 +63,7 @@ class Samples(object):
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
         self.r     = np.empty((nSamp + 1, nTemp, nDat))
         self.eta   = np.empty((nSamp + 1, nTemp))
+        self.ld    = np.empty((nSamp + 1))
         return
 
 class Samples_(Samples):
@@ -72,6 +74,7 @@ class Samples_(Samples):
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
         self.r     = np.empty((nSamp + 1, nDat))
         self.eta   = np.empty((nSamp + 1))
+        self.ld    = np.empty((nSamp + 1))
         return
 
 class Chain(DirichletProcessSampler):
@@ -311,6 +314,39 @@ class Chain(DirichletProcessSampler):
         self.curr_iter = 0
         return
 
+    def record_log_density(self):
+        lpl = np.zeros(self.nTemp)
+        lpp = np.zeros(self.nTemp)
+        Y = self.curr_r[:,:,None] * self.data.Yp[None,:,:] 
+            # np.einsum('tn,nd->tnd', self.curr_r, self.data.Yp)
+        # Compute log-likelihood
+        lpl += pt_logd_prodgamma_paired(
+            Y,
+            self.curr_zeta[
+                self.temp_unravel, self.curr_delta.ravel(),
+                ].reshape(
+                    self.nTemp, self.nDat, self.nCol,
+                    ),
+            self.sigma_ph2,
+            ).sum(axis = 1)
+        ext_clust = bincount2D_vectorized(self.curr_delta, self.max_clust_count) > 0
+        lpl += ((self.nCol - 1) * np.log(self.curr_r)).sum(axis = 1)
+        lpl += np.einsum('tj,tj->t', 
+                pt_logd_mvnormal_mx_st(np.log(self.curr_zeta), 
+                    self.curr_mu, 
+                    cholesky(self.curr_Sigma),
+                    inv(self.curr_Sigma),
+                    ), 
+                ext_clust,
+                )
+        # Compute prior log-density
+        lpp += logd_mvnormal_mx_st(self.curr_mu, *self.priors.mu)
+        lpp += logd_invwishart_ms(self.curr_Sigma, *self.priors.Sigma)
+        lpp += logd_gamma_my(self.curr_eta, *self.priors.eta)
+        # assemble them, record cold chain value
+        self.samples.ld[self.curr_iter] = (lpl + lpp)[0]
+        return
+        
     def iter_sample(self):
         # Setup, parsing
         delta = self.curr_delta.copy()
@@ -366,7 +402,9 @@ class Chain(DirichletProcessSampler):
             lpp += logd_gamma_my(self.curr_eta, *self.priors.eta)
 
             sw = choice(self.nTemp, 2 * self.nSwap_per, replace = False).reshape(-1,2)
-            sw_alpha = (self.itl[sw.T[1]] - self.itl[sw.T[0]]) * (lpl[sw.T[0]] - lpl[sw.T[1]]) + (lpp[sw.T[0]] - lpp[sw.T[1]])
+            lpo = lpl + lpp
+            sw_alpha = (self.itl[sw.T[0]] - self.itl[sw.T[1]]) * (lpo[sw.T[0]] - lpo[sw.T[1]])
+            # sw_alpha = (self.itl[sw.T[1]] - self.itl[sw.T[0]]) * (lpl[sw.T[0]] - lpl[sw.T[1]]) + (lpp[sw.T[0]] - lpp[sw.T[1]])
             logp = np.log(uniform(size = sw.shape[0]))
             for tt in sw[np.where(logp < sw_alpha)[0]]:
                 self.samples.r[self.curr_iter, tt[0]], self.samples.r[self.curr_iter, tt[1]] = \
@@ -379,6 +417,8 @@ class Chain(DirichletProcessSampler):
                     self.samples.Sigma[self.curr_iter, tt[1]].copy(), self.samples.Sigma[self.curr_iter, tt[0]].copy()
                 self.samples.delta[self.curr_iter, tt[0]], self.samples.delta[self.curr_iter, tt[1]] = \
                     self.samples.delta[self.curr_iter, tt[1]].copy(), self.samples.delta[self.curr_iter, tt[0]].copy()
+        
+        self.record_log_density()
         return
 
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -408,6 +448,7 @@ class Chain(DirichletProcessSampler):
             'rs'     : rs,
             'etas'   : etas,
             'V'      : self.data.V,
+            'logd'   : self.samples.ld
             }
         
         try:
@@ -521,6 +562,7 @@ class Result(object):
         zetas  = out['zetas']
         etas   = out['etas']
         rs     = out['rs']
+        ld     = out['logd']
         
         self.nSamp = deltas.shape[0]
         self.nDat  = deltas.shape[1]
@@ -539,6 +581,7 @@ class Result(object):
         self.samples.mu    = mus
         self.samples.Sigma = Sigmas.reshape(self.nSamp, self.nCol, self.nCol)
         self.samples.r     = rs
+        self.samples.ld    = ld
         return
 
     def __init__(self, path):
@@ -554,7 +597,6 @@ if __name__ == '__main__':
 
     raw = read_csv('./datasets/ivt_updated_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    data.write_empirical('./test/empirical.csv')
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
     model.sample(10000)
     model.write_to_disk('./test/results.pkl', 5000, 5)

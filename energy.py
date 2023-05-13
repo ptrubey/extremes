@@ -118,6 +118,11 @@ def knn_kl_divergence(empirical, postpred, k = 10, metric = hcdev):
     kld = np.log(m/n) + p * (np.log(d2).mean(axis = 0) - np.log(d1).mean(axis = 0))
     return kld
 
+def kl_divergence_knn(empirical, postpred, k = 2, metric = hcdev):
+    distance = pairwise_distances(empirical, )
+    pass
+
+
 def postpred_loss_single(predicted, empirical):
     """
     predicted:  (nSamp x nDat x nCol)

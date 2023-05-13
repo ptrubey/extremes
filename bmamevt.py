@@ -81,11 +81,15 @@ if __name__ == '__main__':
     files = glob.glob(source_path)
     files = [file for file in files if 'r2_' not in file]
     with sql.connect(out_sql) as conn:
-        files_done = pd.read_sql('select path from energy;', conn).values.T[0]
-        files_to_do = list(set(files).difference(set(files_done))) 
+        try: 
+            files_done = pd.read_sql('select path from energy;', conn).values.T[0]
+            files_to_do = list(set(files).difference(set(files_done)))
+        except:
+            files_to_do = files
+    
     
     pool = mp.Pool(
-        processes = int(mp.cpu_count()),
+        processes = int(0.8 * mp.cpu_count()),
         initializer = limit_cpu,
         maxtasksperchild = 1,
         )
