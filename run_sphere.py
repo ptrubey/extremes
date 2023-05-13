@@ -15,7 +15,7 @@ from models import RealChains as Chains, RealResults as Results
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
 models      = ['sdpppg', 'sdppprg', 'sdpppgln', 'sdppprgln']
 # models      = ['sd']
-out_sql     = './simulated/sphere2/result_highp.sql'
+out_sql     = './simulated/sphere2/result_highp_230512.sql'
 out_table   = 'energy'
 
 def run_model_from_path_wrapper(args):
