@@ -18,10 +18,15 @@ if __name__ == '__main__':
     raw = raw[~np.isnan(raw).any(axis = 1)] # equivalent to na.omit
 
     ## Initialize Data
-    data = MixedData(
-        raw, cat_vars = eval(p.cats), realtype = p.realtype, 
-        decluster = eval(p.decluster), quantile = float(p.quantile),
-        )
+    if eval(p.cats):
+        data = MixedData(
+            raw, cat_vars = eval(p.cats), realtype = p.realtype, 
+            decluster = eval(p.decluster), quantile = float(p.quantile),
+            )
+    else:
+        data = Data_From_Raw(
+            raw, decluster = eval(p.decluster), quantile=float(p.quantile),
+            )
     if os.path.exists(p.outcome):
         raw_out = read_csv(p.outcome).values
         raw_out = raw_out[~np.isnan(raw).any(axis = 1)].ravel().astype(int)

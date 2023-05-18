@@ -479,7 +479,8 @@ class Chain(DirichletProcessSampler):
             p           = 10,
             max_clust_count = 300,
             ntemps      = 5,
-            stepping    = 1.3,
+            stepping    = 1.15,
+            **kwargs
             ):
         self.data = data
         self.max_clust_count = max_clust_count

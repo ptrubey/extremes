@@ -290,6 +290,7 @@ class Multinomial(DataBase):
     nCat = None  # total number of categories (sum of Cats)
     spheres = None # For each variable, np.array(int) that identifies which 
                    #    columns are associated with that var.
+    W = None
 
     def fill_multinomial(self, raw, cats = None, index = None):
         if cats is None:
@@ -540,7 +541,8 @@ class Data(MixedData):
             self.fill_rank_transform(raw[:, real_vars])
         elif realtype == 'threshold':
             self.fill_real(raw[:, real_vars], decluster = decluster, quantile = quantile)
-        self.fill_categorical(raw[:, cat_vars], values, self.I)
+        if len(cat_vars) > 0:
+            self.fill_categorical(raw[:, cat_vars], values, self.I)
         if type(outcome) is np.ndarray:
             self.fill_outcome(outcome)
         return

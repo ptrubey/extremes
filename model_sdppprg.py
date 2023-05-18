@@ -252,6 +252,7 @@ class Chain(DirichletProcessSampler):
             prior_beta  = GammaPrior(2., 2.),
             p           = 10,
             max_clust_count = 300,
+            **kwargs
             ):
         self.data = data
         self.max_clust_count = max_clust_count
