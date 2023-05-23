@@ -473,7 +473,7 @@ class Chain(DirichletProcessSampler):
             data,
             prior_eta   = GammaPrior(2., 0.5),
             prior_mu    = (0., 4.),
-            prior_Sigma = (10, 0.5),
+            prior_Sigma = (10, 1.),
             prior_xi    = GammaPrior(1., 1.),
             prior_tau   = GammaPrior(2., 2.),
             p           = 10,

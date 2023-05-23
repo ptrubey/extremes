@@ -122,7 +122,6 @@ def kl_divergence_knn(empirical, postpred, k = 2, metric = hcdev):
     distance = pairwise_distances(empirical, )
     pass
 
-
 def postpred_loss_single(predicted, empirical):
     """
     predicted:  (nSamp x nDat x nCol)

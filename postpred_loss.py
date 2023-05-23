@@ -2,240 +2,52 @@
 import numpy as np
 import pandas as pd
 import os, glob
-import sqlite3 as sql
-import itertools as it
-
-from numpy.random import gamma, normal
-from scipy.linalg import cholesky
-from random import sample
 from collections import namedtuple
-
-from multiprocessing import Pool
-
-from argparser import argparser_ppl as argparser
-from hypercube_deviance import energy_score_euclidean, energy_score_hypercube
-from energy import energy_score, energy_score_full, postpred_loss_full, limit_cpu
-import cUtility as cu
-import models #, models_mpi
-# import model_dppn as dppn
-
-# Results = {**models.Results, **models_mpi.Results}
-Results = models.Results
-
-from data import Data, euclidean_to_hypercube, euclidean_to_simplex, angular_to_euclidean
+from energy import energy_score_full
+from models import Results
 
 np.seterr(under = 'ignore')
-
 epsilon = 1e-30
 
-# Object defining loss criterion
 class PostPredLoss(object):
-    def L1(self, data):
-        data2 = np.empty(data.shape)
-        for n in range(data.shape[0]):
-            data2[n] = (data[n].T / data[n].sum(axis = 1)).T
-        return data2
-
-    def L2(self, data):
-        data2 = np.empty(data.shape)
-        for n in range(data.shape[0]):
-            data2[n] = (data[n].T / np.sqrt((data[n] * data[n]).sum(axis = 1))).T
-        return data2
-
-    def Linf(self, data):
-        # return euclidean_to_hypercube(data)
-        data2 = np.empty(data.shape)
-        for n in range(data.shape[0]):
-            data2[n] = (data[n].T / data[n].max(axis = 1)).T
-        return data2
-
-    def __postpredloss(self, predicted, empirical):
-        pmean = predicted.mean(axis = 0)
-        pdiff = pmean - empirical
-        avg_bias = ((pdiff * pdiff).sum(axis = 1)).mean()
-
-        pdevi = predicted - pmean
-        pvari = np.empty(self.nDat)
-        for d in range(self.nDat):
-            pvari[d] = np.trace(np.cov(pdevi[:,d].T))
-        avg_vari = pvari.mean()
-        return avg_bias + avg_vari
-
-    def __postpredloss_new(self, predicted, empirical):
-        pmean = predicted.mean(axis = 0)
-        pdiff = pmean - empirical
-        avg_bias = (pdiff * pdiff).sum(axis = 1).mean()
-        # pdevi = predicted - pmean
-        pvari = np.trace(np.cov(predicted.T))
-        return pvari + avg_bias
-    
-    def posterior_predictive_loss_L1(self):
-        predicted = self.L1(self.prediction())
-        return self.__postpredloss(predicted, euclidean_to_simplex(self.data.Yl))
-
-    def posterior_predictive_loss_L2(self):
-        predicted = self.L2(self.prediction())
-        return self.__postpredloss(predicted, self.data.Yl)
-
-    def posterior_predictive_loss_Linf(self):
-        predicted = self.Linf(self.prediction())
-        return self.__postpredloss(predicted, self.data.V)
-
-    def energy_score_L1(self):
-        predicted = self.L1(self.prediction())
-        return energy_score_euclidean(predicted, euclidean_to_simplex(self.data.Yl))
-
-    def energy_score_L2(self):
-        predicted = self.L2(self.prediction())
-        res = energy_score_euclidean(
-                # predicted, 
-                np.moveaxis(predicted, 0, 1),
-                self.data.Yl
-                )
-        return res
-
     def energy_score_Linf(self):
-        predicted = self.Linf(self.prediction())
-        # res = energy_score(predicted, self.data.V)
-        res = energy_score(np.moveaxis(predicted, 0, 1), self.data.V)
-        return res
-    
-    def energy_score_Linf_full(self):
-        predicted = self.prediction_new()
-        return energy_score_full(predicted, self.data.V)
-    
-    def postpred_loss_Linf_full(self):
-        predicted = self.prediction_new()
-        return postpred_loss_full(predicted, self.data.V)
+        Vnew = self.generate_posterior_predictive_hypercube()
+        return energy_score_full(Vnew, self.data.V)
 
-# Object defining how predictive distribution is assembled.
-# All of the gamma-based models share a basic prediction method
-class Prediction_Gamma_Vanilla_Restricted(object):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            zeta = self.samples.zeta[s]
-            predicted[s] = gamma(shape = zeta, size = (self.nDat, self.nCol)) + epsilon
-        return predicted
-
-class Prediction_Gamma_Vanilla(object):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            zeta = self.samples.zeta[s]
-            sigma = self.samples.sigma[s]
-            predicted[s] = gamma(shape = zeta, scale = 1/sigma, size = (self.nDat, self.nCol)) + epsilon
-        return predicted
-
-class Prediction_Gamma_Restricted(object):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            zeta = self.samples.zeta[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = zeta) + epsilon
-        return predicted
-
-class Prediction_Gamma(object):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            zeta = self.samples.zeta[s][self.samples.delta[s]]
-            sigma = self.samples.sigma[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = zeta, scale = 1/sigma) + epsilon
-        return predicted
-
-class Prediction_Gamma_Alter(object):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            beta = self.samples.beta[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = alpha, scale = 1/beta) + epsilon
-        return predicted
-
-class Prediction_Gamma_Alter_Restricted(object):
-    def prediction_new(self):
-        return self.generate_posterior_predictive_hypercube()
-
-    def prediction(self):
-        predicted = np.empty((self.nSamp, self.nDat, self.nCol))
-        for s in range(self.nSamp):
-            alpha = self.samples.alpha[s][self.samples.delta[s]]
-            predicted[s] = gamma(shape = alpha) + epsilon
-        return predicted
-
-Prediction_Gammas = {}
-for model in ['mdppprg', 'sdppprg', 'sdppprgln']:
-    Prediction_Gammas[model] = Prediction_Gamma_Restricted
-for model in ['mdpppg', 'sdpppg', 'sdpppgln']:
-    Prediction_Gammas[model] = Prediction_Gamma
-
-
-def ResultFactory(model, path):
-    class Result(Results[model], PostPredLoss, Prediction_Gammas[model]):
+def ResultFactory(modelname, path):
+    class Result(Results[modelname], PostPredLoss):
         pass
     return Result(path)
 
-# PPLResult = namedtuple('PPLResult', 'type name PPL_L1 PPL_L2 PPL_Linf ES_Linf')
-PPLResult = namedtuple('PPLResult', 'type name PPL_Linf ES_Linf PPL_Linf_F ES_Linf_F')
+PPLResult = namedtuple('PPLResult', 'model source es')
 
 def ppl_generation(model):
     result = ResultFactory(*model)
     pplr = PPLResult(
         model[0],
         os.path.splitext(os.path.split(model[1])[1])[0],
-        # result.posterior_predictive_loss_L1(),
-        # result.posterior_predictive_loss_L2(),
-        result.posterior_predictive_loss_Linf(),
         result.energy_score_Linf(),
-        result.postpred_loss_Linf_full(),
-        result.energy_score_Linf_full(),
         )
     return pplr
 
 if __name__ == '__main__':
-    args = argparser()
-    # model_types = sorted(Prediction_Gammas.keys())
-    # model_types = ['dphprg','dphprgln','dphpg','dppn']
-    # model_types = ['dppprg','dppprgln','dpppg','dpppgln','dppn']
-    model_types = ['sdppprg', 'sdpppg', 'sdpppgln', 'sdppprgln', 'mdppprg', 'mdpppg']
+    model_types = ['sdppprg','sdppprgln','sdpppg','sdppprg']
+    base_path = './output/new'
 
     models = []
     for model_type in model_types:
-        mm = glob.glob(os.path.join(args.path, model_type, 'results*.db'))
-        for m in mm:
-            models.append((model_type, m))
+        results = glob.glob(
+            os.path.join(base_path, '*_result_{}.pkl'.format(model_type)),
+            )
+        for result in results:
+            models.append((model_type, result))
 
     pplrs = []
     for model in models:
         print('Processing model {}   '.format(model[0]), end = ' ')
-        try:
-            pplrs.append(ppl_generation(model))
-            print('Passed')
-        except pd.io.sql.DatabaseError:
-            print('Failed')
-            pass
-
-    df = pd.DataFrame(
-        pplrs,
-        # columns = ('type','name','PPL_L1','PPL_L2','PPL_Linf','ES_Linf'),
-        columns = ('type','name','PPL_Linf','ES_Linf','PPL_Linf_F','ES_Linf_F'),
-        )
-    df.to_csv(os.path.join(args.path, 'post_pred_loss_results.csv'), index = False)
+        pplrs.append(ppl_generation(model))
+    
+    df = pd.DataFrame(pplrs)
+    df.to_csv(os.path.join(base_path, 'energy_score.csv'), index = False)
 
 # EOF

@@ -33,7 +33,7 @@ def run_model_from_path(path, modeltype):
     model = Chains[modeltype](
         data, 
         prior_eta = (2., 1.), 
-        p = 20,
+        p = 10,
         # p = 1,
         max_clust_count = 150,
         prior_Sigma = (5, 1.),
