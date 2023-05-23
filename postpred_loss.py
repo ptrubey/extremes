@@ -31,7 +31,7 @@ def ppl_generation(model):
     return pplr
 
 if __name__ == '__main__':
-    model_types = ['sdppprg','sdppprgln','sdpppg','sdppprg']
+    model_types = ['sdppprg','sdppprgln','sdpppg','sdpppgln']
     base_path = './output/new'
 
     models = []
