@@ -9,7 +9,7 @@ postpred_pairwise_betas <- function(path, nsim, nburn, nper){
   dfs <- df / apply(df, 1, sum) # project to simplex
   hpar <- list(mean.alpha = 0., sd.alpha = 3., mean.beta = 0., sd.beta = 3.)
   mcpar <- list(sd = 0.1)
-  sink('/dev/null')
+  # sink('/dev/null')
   model <- BMAmevt::posteriorMCMC(
     Nsim = nsim,
     Nbin = nburn,
@@ -20,7 +20,7 @@ postpred_pairwise_betas <- function(path, nsim, nburn, nper){
     Hpar = hpar,
     MCpar = mcpar
     )
-  sink()
+  # sink()
   nCol <- ncol(dfs); nSamp <- nrow(model$stored.vals)
   f <- function(x){BMAmevt::rpairbeta(n = nper, dimData = ncol(dfs), par = x)}
   out <- array(t(apply(model$stored.vals, 1, f)), dim = c(nper * nSamp, nCol))
