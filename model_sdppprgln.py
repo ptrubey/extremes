@@ -494,7 +494,7 @@ class Chain(DirichletProcessSampler):
             )
         _prior_Sigma = InvWishartPrior(
             self.nCol + prior_Sigma[0],
-            np.eye(self.nCol) * prior_Sigma[1],
+            (self.ncol + prior_Sigma[0]) * np.eye(self.nCol) * prior_Sigma[1],
             )
         _prior_eta = GammaPrior(*prior_eta)
         _prior_xi  = GammaPrior(*prior_xi)
