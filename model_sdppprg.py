@@ -224,7 +224,8 @@ class Chain(DirichletProcessSampler):
             'nCol'   : self.nCol,
             'nDat'   : self.nDat,
             'V'      : self.data.V,
-            'logd'   : self.samples.ld
+            'logd'   : self.samples.ld,
+            'time'   : self.time_elapsed_numeric,
             }
         
         try:

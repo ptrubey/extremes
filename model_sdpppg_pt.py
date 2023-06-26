@@ -17,13 +17,12 @@ from scipy.special import gammaln
 from io import BytesIO
 
 from cUtility import diriproc_cluster_sampler, generate_indices
-from samplers import DirichletProcessSampler
+from samplers import DirichletProcessSampler, pt_dp_sample_cluster_bgsb, pt_dp_sample_chi_bgsb
 from cProjgamma import sample_alpha_k_mh_summary, sample_alpha_1_mh_summary
 from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, logd_prodgamma_my_mt, logd_prodgamma_my_st,   \
-    logd_prodgamma_paired, logd_gamma
-import time
-
+    logd_prodgamma_paired, logd_gamma,                                          \
+    pt_logd_projgamma_my_mt_inplace_unstable
 
 def update_zeta_j_wrapper(args):
     # parse arguments
@@ -64,18 +63,32 @@ class Samples(object):
     eta   = None
     ld    = None
 
-    def __init__(self, nSamp, nDat, nCol):
-        self.zeta  = [None] * (nSamp + 1)
-        self.sigma = [None] * (nSamp + 1)
-        self.alpha = np.empty((nSamp + 1, nCol))
-        self.beta  = np.empty((nSamp + 1, nCol))
-        self.xi    = np.empty((nSamp + 1, nCol - 1))
-        self.tau   = np.empty((nSamp + 1, nCol - 1))
-        self.delta = np.empty((nSamp + 1, nDat), dtype = int)
-        self.r     = np.empty((nSamp + 1, nDat))
-        self.eta   = np.empty((nSamp + 1))
-        self.ld    = np.empty((nSamp + 1))
+    def __init__(self, nSamp, nDat, nCol, nTemp, nClustMax):
+        self.zeta  = np.empty((nSamp + 1, nTemp, nClustMax, nCol))
+        self.sigma = np.empty((nSamp + 1, nTemp, nClustMax, nCol))
+        self.sigma[:,:,:,0] = 1.
+        self.alpha = np.empty((nSamp + 1, nTemp, nCol))
+        self.beta  = np.empty((nSamp + 1, nTemp, nCol))
+        self.xi    = np.empty((nSamp + 1, nTemp, nCol - 1))
+        self.tau   = np.empty((nSamp + 1, nTemp, nCol - 1))
+        self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
+        self.r     = np.empty((nSamp + 1, nTemp, nDat))
+        self.eta   = np.empty((nSamp + 1, nTemp))
+        self.ld    = np.empty((nSamp + 1)) # log-density of cold chain
+        return
 
+class Samples_(Samples): # same as samples, but with 1 temperature
+    def __init__(self, nSamp, nDat, nCol, nClustMax):
+        self.zeta = np.empty((nSamp, nClustMax, nCol))
+        self.sigma = np.empty((nSamp, nClustMax, nCol))
+        self.alpha = np.empty((nSamp, nCol))
+        self.beta  = np.empty((nSamp, nCol))
+        self.xi    = np.empty((nSamp, nCol - 1))
+        self.tau   = np.empty((nSamp, nCol - 1))
+        self.delta = np.empty((nSamp, nDat))
+        self.r     = np.empty((nSamp, nDat))
+        self.eta   = np.empty((nSamp))
+        self.ld    = np.empty((nSamp))
         return
 
 class Chain(DirichletProcessSampler):
@@ -107,6 +120,40 @@ class Chain(DirichletProcessSampler):
     def curr_eta(self):
         return self.samples.eta[self.curr_iter]
     
+    max_clust_count = None
+    swap_attempts = None
+    swap_succeeds = None
+    
+    def log_delta_likelihood(self, zeta, sigma):
+        out = np.zeros((self.nDat, self.nTemp, self.max_clust_count))
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            pt_logd_projgamma_my_mt_inplace_unstable(
+                out, self.data.Yp, zeta, sigma,
+                )
+        np.nan_to_num(out, False, -np.inf)
+        return out
+
+    def sample_delta(self, chi, zeta, sigma):
+        log_likelihood = self.log_delta_likelihood(self, zeta, sigma)
+        delta = pt_dp_sample_cluster_bgsb(chi, log_likelihood)
+        return delta
+    
+    def sample_chi(self, delta, eta):
+        return pt_dp_sample_chi_bgsb(delta, eta, trumc = self.max_clust_count)   
+
+    def sample_zeta(zeta, delta, r, alpha, beta):
+        pass
+
+    def sample_sigma(delta, r, xi, tau):
+        pass
+    
+    def sample_alpha(self, alpha, zeta)
+
+
+
+
+
+
     def clean_delta_zeta_sigma(self, delta, zeta, sigma):
         """
         delta : cluster indicator vector (n)
@@ -312,8 +359,7 @@ class Chain(DirichletProcessSampler):
             'nCol'   : self.nCol,
             'nDat'   : self.nDat,
             'V'      : self.data.V,
-            'logd'   : self.samples.ld,
-            'time'   : self.time_elapsed_numeric,
+            'logd'   : self.samples.ld
             }
         
         # try to add outcome / radius to dictionary
@@ -462,7 +508,7 @@ if __name__ == '__main__':
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     model = Chain(data, prior_eta = GammaPrior(2, 1), p = 10)
-    model.sample(10000, True)
+    model.sample(10000)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
     res.write_posterior_predictive('./test/postpred.csv')

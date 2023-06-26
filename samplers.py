@@ -45,9 +45,13 @@ class BaseSampler(object):
     print_string_after = '\rSampling 100% Completed in {}'
 
     @property
+    def time_elapsed_numeric(self):
+        return time.time() - self.start_time
+
+    @property
     def time_elapsed(self):
         """ returns current time elapsed since sampling start in human readable format """
-        elapsed = time.time() - self.start_time
+        elapsed = self.time_elapsed_numeric
         if elapsed < 60:
             return '{:.0f} Seconds'.format(elapsed)
         elif elapsed < 3600: 
@@ -56,21 +60,24 @@ class BaseSampler(object):
             return '{:.2f} Hours'.format(elapsed / 3600)
         pass
 
-    def sample(self, ns):
+    def sample(self, ns, verbose = False):
         """ Run the Sampler """
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
-        # print('\rSampling 0% Completed', end = '')
+        if verbose:
+            print('\rSampling 0% Completed', end = '')
 
         while (self.curr_iter < ns):
             if (self.curr_iter % 100) == 0:
                 ps = self.print_string_during.format(self.curr_iter / ns, self.time_elapsed)
-                # print(ps.ljust(80), end = '')
+                if verbose:
+                    print(ps.ljust(80), end = '')
             self.iter_sample()
         
         ps = self.print_string_after.format(self.time_elapsed)
-        # print(ps)
+        if verbose:
+            print(ps)
         return
 
 class DirichletProcessSampler(BaseSampler):
@@ -86,23 +93,26 @@ class DirichletProcessSampler(BaseSampler):
         acc = self.samples.delta[(ns//2):].max(axis = 1).mean() + 1
         return '{:.2f}'.format(acc)
 
-    def sample(self, ns):
+    def sample(self, ns, verbose = False):
         """ Run the sampler """
         self.initialize_sampler(ns)
         self.start_time = time.time()
         
-        # print('\rSampling 0% Completed', end = '')
+        if verbose:
+            print('\rSampling 0% Completed', end = '')
         
         while (self.curr_iter < ns):
             if (self.curr_iter % 100) == 0:
                 ps = self.print_string_during.format(
                     self.curr_iter / ns, self.time_elapsed, self.curr_cluster_count,
                     )
-                # print(ps.ljust(80), end = '')
+                if verbose:
+                    print(ps.ljust(80), end = '')
             self.iter_sample()
         
         ps = self.print_string_after.format(self.time_elapsed, self.average_cluster_count(ns))
-        # print(ps)
+        if verbose:
+            print(ps)
         return
 
 class StickBreakingSampler(DirichletProcessSampler):

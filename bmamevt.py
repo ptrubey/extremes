@@ -17,7 +17,6 @@ source_path = './simulated/sphere2/data_m*_r*_i*.csv'
 out_sql     = './output/new/result_bmamevt.sql'
 out_table   = 'energy'
 
-
 nSim = 20000
 nBurn = 15000
 nPer = 1
@@ -40,9 +39,12 @@ def run_model_from_path(path, nsim, nburn, nper):
     # if not os.path.exists(testpath):
     #     return
     # test = pd.read_csv(testpath).values
+    print(path)
+    starttime = time.time()
     pp = postpred_pairwise_betas(path, nsim, nburn, nper)
-
-    es1    = energy_score_full_sc(pp, raw)
+    elapsed = time.time() - starttime
+    print(elapsed)
+    # es1    = energy_score_full_sc(pp, raw)
     # ppl1   = postpred_loss_full(pp, raw)
     # es2    = energy_score_full_sc(pp, test)
     # ppl2   = postpred_loss_full(pp, test)
@@ -51,30 +53,30 @@ def run_model_from_path(path, nsim, nburn, nper):
     # esbl2  = energy_score_full_sc(test, raw)
     # pplbl2 = postpred_loss_full(test, raw)
     
-    df = pd.DataFrame([{
-        'path'   : path,
-        'model'  : 'pairwise_betas',
-        'es1'    : es1,
-        # 'ppl1'   : ppl1,
-        # 'es2'    : es2,
-        # 'ppl2'   : ppl2,
-        # 'esbl1'  : esbl1,
-        # 'pplbl1' : pplbl1,
-        # 'esbl2'  : esbl2,
-        # 'pplbl2' : pplbl2,
-        }])
-    conn = sql.connect(out_sql)
-    for _ in range(10):
-        try:
-            df.to_sql(out_table, conn, if_exists = 'append', index = False)
-            conn.commit()
-            break
-        except sql.OperationalError:
-            time.sleep(uniform())
-            pass
+    # df = pd.DataFrame([{
+    #     'path'   : path,
+    #     'model'  : 'pairwise_betas',
+    #     'es1'    : es1,
+    #     # 'ppl1'   : ppl1,
+    #     # 'es2'    : es2,
+    #     # 'ppl2'   : ppl2,
+    #     # 'esbl1'  : esbl1,
+    #     # 'pplbl1' : pplbl1,
+    #     # 'esbl2'  : esbl2,
+    #     # 'pplbl2' : pplbl2,
+    #     }])
+    # conn = sql.connect(out_sql)
+    # for _ in range(10):
+    #     try:
+    #         df.to_sql(out_table, conn, if_exists = 'append', index = False)
+    #         conn.commit()
+    #         break
+    #     except sql.OperationalError:
+    #         time.sleep(uniform())
+    #         pass
         
     
-    conn.close()
+    # conn.close()
     return
 
 def run_model_from_path_wrapper(args):
