@@ -7,8 +7,8 @@ concentration = '1e-1'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
 cardio = {
-    'source'    : './ad/cardio/data_new.csv',
-    'outcome'   : './ad/cardio/outcome_new.csv',
+    'source'    : './ad/cardio/rank_data.csv',
+    'outcome'   : './ad/cardio/rank_outcome.csv',
     'results'   : './ad/cardio/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[19,20,21]',
@@ -16,8 +16,8 @@ cardio = {
     'model_radius' : 'True',
     }
 cover = {
-    'source'    : './ad/cover/data_new.csv',
-    'outcome'   : './ad/cover/outcome_new.csv',
+    'source'    : './ad/cover/rank_data.csv',
+    'outcome'   : './ad/cover/rank_outcome.csv',
     'results'   : './ad/cover/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[9,10,11,12]',
@@ -25,8 +25,8 @@ cover = {
     'model_radius' : 'True',
     }
 mammography = {
-    'source'    : './ad/mammography/data_new.csv',
-    'outcome'   : './ad/mammography/outcome_new.csv',
+    'source'    : './ad/mammography/rank_data.csv',
+    'outcome'   : './ad/mammography/rank_outcome.csv',
     'results'   : './ad/mammography/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8]',
@@ -34,8 +34,8 @@ mammography = {
     'model_radius' : 'True',
     }
 annthyroid = {
-    'source'    : './ad/annthyroid/data_new.csv',
-    'outcome'   : './ad/annthyroid/outcome_new.csv',
+    'source'    : './ad/annthyroid/rank_data.csv',
+    'outcome'   : './ad/annthyroid/rank_outcome.csv',
     'results'   : './ad/annthyroid/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
@@ -43,8 +43,8 @@ annthyroid = {
     'model_radius' : 'True',
     }
 yeast = {
-    'source'    : './ad/yeast/data_new.csv',
-    'outcome'   : './ad/yeast/outcome_new.csv',
+    'source'    : './ad/yeast/rank_data.csv',
+    'outcome'   : './ad/yeast/rank_outcome.csv',
     'results'   : './ad/yeast/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[6,7]',
@@ -52,8 +52,8 @@ yeast = {
     'model_radius' : 'True',
     }
 pima = {
-    'source'    : './ad/pima/data_new.csv',
-    'outcome'   : './ad/pima/outcome_new.csv',
+    'source'    : './ad/pima/rank_data.csv',
+    'outcome'   : './ad/pima/rank_outcome.csv',
     'results'   : './ad/pima/rank_results_{}_{}.pkl',
     'realtype'  : 'rank',
     'cats'      : '[8,9,10,11,12]',
@@ -88,9 +88,10 @@ if __name__ == '__main__':
             ]
         process_args.append(args)
         processes.append(Popen(args))
+        processes[-1].wait() # operate in sequential rather than parallel
 
-    for process in processes:
-        process.wait()
+    # for process in processes:
+    #     process.wait()
     
     error_proc_ids = np.where(
         np.array([process.returncode for process in processes]) != 0

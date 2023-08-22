@@ -6,61 +6,35 @@ discount = '1e-1'
 concentration = '1e-1'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
-cardio = {
-    'source'    : './ad/cardio/data_cat.csv',
-    'outcome'   : './ad/cardio/outcome_cat.csv',
-    'results'   : './ad/cardio/cat_results_{}_{}.pkl',
-    'model'     : 'pypprgln',    
-    }
 cover = {
-    'source'    : './ad/cover/data_cat.csv',
-    'outcome'   : './ad/cover/outcome_cat.csv',
+    'source'    : './ad/cover/cat_data.csv',
+    'outcome'   : './ad/cover/cat_outcome.csv',
     'results'   : './ad/cover/cat_results_{}_{}.pkl',
     'model'     : 'pypprgln',
     'cats'      : '[0,1,2,3,4,5,6,7,8,9]',
     }
-mammography = {
-    'source'    : './ad/mammography/data_cat.csv',
-    'outcome'   : './ad/mammography/outcome_cat.csv',
-    'results'   : './ad/mammography/cat_results_{}_{}.pkl',
-    'model'     : 'pypprgln',
-    }
 pima = {
-    'source'    : './ad/pima/data_cat.csv',
-    'outcome'   : './ad/pima/outcome_cat.csv',
+    'source'    : './ad/pima/cat_data.csv',
+    'outcome'   : './ad/pima/cat_outcome.csv',
     'results'   : './ad/pima/cat_results_{}_{}.pkl',
     'model'     : 'pypprgln',
     'cats'      : '[0,1,2,3,4,5,6,7]',
     }
-satellite = {
-    'source'    : './ad/satellite/data_cat.csv',
-    'outcome'   : './ad/satellite/outcome_cat.csv',
-    'results'   : './ad/satellite/cat_results_{}_{}.pkl',
-    'model'     : 'pypprgln',
-    }
-annthyroid = {
-    'source'    : './ad/annthyroid/data_cat.csv',
-    'outcome'   : './ad/annthyroid/outcome_cat.csv',
-    'results'   : './ad/annthyroid/cat_results_{}_{}.pkl',
-    'model'     : 'pypprgln',
-    }
 yeast = {
-    'source'    : './ad/yeast/data_cat.csv',
-    'outcome'   : './ad/yeast/outcome_cat.csv',
+    'source'    : './ad/yeast/cat_data.csv',
+    'outcome'   : './ad/yeast/cat_outcome.csv',
     'results'   : './ad/yeast/cat_results_{}_{}.pkl',
     'model'     : 'pypprgln',
     'cats'      : '[0,1,2,3,4,5,6,7]',
     }
 solarflare = {
-    'source'    : './ad/solarflare/data_cat.csv',
-    'outcome'   : './ad/solarflare/outcome_cat.csv',
+    'source'    : './ad/solarflare/cat_data.csv',
+    'outcome'   : './ad/solarflare/cat_outcome.csv',
     'results'   : './ad/solarflare/cat_results_{}_{}.pkl',
     'model'     : 'pypprgln',
     'cats'      : '[0,1,2,3,4,5,6,7,8,9]',
     }
 
-
-# datasets = [cardio, cover, mammography, annthyroid, yeast, pima]
 datasets = [cover, pima, solarflare, yeast]
 
 stepping = '1.1'
@@ -88,9 +62,10 @@ if __name__ == '__main__':
             ]
         process_args.append(args)
         processes.append(Popen(args))
+        processes[-1].wait() # operate in sequential rather than parallel
 
-    for process in processes:
-        process.wait()
+    # for process in processes:
+    #     process.wait()
     
     error_proc_ids = np.where(
         np.array([process.returncode for process in processes]) != 0

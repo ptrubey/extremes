@@ -47,7 +47,7 @@ if __name__ == '__main__':
         )
         
     ## Run Sampler
-    model.sample(int(p.nSamp))
+    model.sample(int(p.nSamp), verbose = True)
 
     ## Write to disk
     model.write_to_disk(p.out_path, int(p.nKeep), int(p.nThin))

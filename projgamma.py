@@ -256,6 +256,26 @@ def logd_gamma_my(aY, alpha, beta):
     np.nan_to_num(lp, False, -np.inf)
     return lp
 
+def pt_logd_gamma_my(aY, aAlpha, aBeta):
+    """
+    log-density of Gamma distribution
+    
+    Args:
+        aY      : (t, j, d)
+        aAlpha  : (t, d)
+        aBeta   : (t, d)
+    Returns:
+        ld      : (t, j)
+    """
+    ld = np.zeros(aY.shape)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += (aAlpha * np.log(aBeta))[:, None]
+        ld -= loggamma(aAlpha)[:, None]
+        ld += (aAlpha - 1)[:, None] * np.log(aY)
+        ld -= aBeta[:, None] * aY
+    np.nan_to_num(ld, False, -np.inf)
+    return ld.sum(axis = 2)
+
 ## Functions relating to MVnormal density
 
 def pt_logd_mvnormal_mx_st(x, mu, cov_chol, cov_inv):
@@ -593,6 +613,23 @@ def pt_logd_loggamma_mx_st(x, a, b):
         logd -= np.einsum('td,tjd->tj', b, np.exp(x))
     np.nan_to_num(logd, False, -np.inf)
     return logd
+
+def pt_logpost_loggammagamma(logalpha, n, sy, sly, a, b, c, d):
+    """
+    logalpha    : (t, d), log-shape parameter (variable) in gamma-gamma model
+    n,          : (t), number of observations
+    sy, sly     : (t, d), (number of obs, summed y, summed log-y)
+    a, b        : (1), gamma prior parameters for shape
+    c, d        : (1), gamma prior parameters for rate
+    """
+    alpha = np.exp(logalpha)
+    ld = np.zeros(logalpha.shape)
+    ld += (alpha - 1) * sly
+    ld += a * logalpha
+    ld -= b * alpha
+    ld += loggamma(n[:,None] * alpha + c)
+    ld -= (n[:,None] * alpha + c) * np.log(sy + d)
+    return ld
 
 ## Functions relating to Pareto Density
 

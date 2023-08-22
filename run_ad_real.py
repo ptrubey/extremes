@@ -7,8 +7,8 @@ concentration = '1e-1'
 prior_chi = '[{},{}]'.format(discount, concentration)
 
 cardio = {
-    'source'    : './ad/cardio/data.csv',
-    'outcome'   : './ad/cardio/outcome.csv',
+    'source'    : './ad/cardio/real_data.csv',
+    'outcome'   : './ad/cardio/real_outcome.csv',
     'results'   : './ad/cardio/real_results_{}_{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[15,16,17,18,19,20,21,22,23,24]',
@@ -16,8 +16,8 @@ cardio = {
     'model'     : 'pypprgln',    
     }
 cover = {
-    'source'    : './ad/cover/data.csv',
-    'outcome'   : './ad/cover/outcome.csv',
+    'source'    : './ad/cover/real_data.csv',
+    'outcome'   : './ad/cover/real_outcome.csv',
     'results'   : './ad/cover/real_results_{}_{}.pkl',
     'quantile'  : '0.98',
     'cats'      : '[9,10,11,12]',
@@ -25,8 +25,8 @@ cover = {
     'model'     : 'pypprgln',
     }
 mammography = {
-    'source'    : './ad/mammography/data.csv',
-    'outcome'   : './ad/mammography/outcome.csv',
+    'source'    : './ad/mammography/real_data.csv',
+    'outcome'   : './ad/mammography/real_outcome.csv',
     'results'   : './ad/mammography/real_results_{}_{}.pkl',
     'quantile'  : '0.95',
     'cats'      : '[5,6,7,8,9]',
@@ -34,26 +34,17 @@ mammography = {
     'model'     : 'pypprgln',
     }
 pima = {
-    'source'    : './ad/pima/data.csv',
-    'outcome'   : './ad/pima/outcome.csv',
+    'source'    : './ad/pima/real_data.csv',
+    'outcome'   : './ad/pima/real_outcome.csv',
     'results'   : './ad/pima/real_results_{}_{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[7,8,9,10,11,12]',
     'decluster' : 'False',
     'model'     : 'pypprgln',
     }
-satellite = {
-    'source'    : './ad/satellite/data.csv',
-    'outcome'   : './ad/satellite/outcome.csv',
-    'results'   : './ad/satellite/real_results_{}_{}.pkl',
-    'quantile'  : '0.95',
-    'cats'      : '[36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55]',
-    'decluster' : 'False',
-    'model'     : 'pypprgln',
-    }
 annthyroid = {
-    'source'    : './ad/annthyroid/data.csv',
-    'outcome'   : './ad/annthyroid/outcome.csv',
+    'source'    : './ad/annthyroid/real_data.csv',
+    'outcome'   : './ad/annthyroid/real_outcome.csv',
     'results'   : './ad/annthyroid/real_results_{}_{}.pkl',
     'quantile'  : '0.85',
     'cats'      : '[6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21]',
@@ -61,29 +52,16 @@ annthyroid = {
     'model'     : 'pypprgln',
     }
 yeast = {
-    'source'    : './ad/yeast/data.csv',
-    'outcome'   : './ad/yeast/outcome.csv',
+    'source'    : './ad/yeast/real_data.csv',
+    'outcome'   : './ad/yeast/real_outcome.csv',
     'results'   : './ad/yeast/real_results_{}_{}.pkl',
     'quantile'  : '0.90',
     'cats'      : '[4,5,8,9,10]',
     'decluster' : 'False',
     'model'     : 'pypprgln',
     }
-## Categorical
-solarflare = {
-    'source'    : './ad/solarflare/data.csv',
-    'outcome'   : './ad/solarflare/outcome.csv',
-    'results'   : './ad/solarflare/results_{}_{}.pkl',
-    'quantile'  : 'None',
-    'cats'      : 'None',
-    'decluster' : 'False',
-    'model'     : 'cdppprgln',
-    }
-
 
 datasets = [cardio, cover, mammography, annthyroid, yeast, pima]
-# datasets = [mammography, annthyroid, yeast]
-# datasets = [cardio,cover,pima]
 stepping = '1.1'
 ntemps = '5'
 
@@ -109,9 +87,10 @@ if __name__ == '__main__':
             ]
         process_args.append(args)
         processes.append(Popen(args))
+        processes[-1].wait() # operate sequentially rather than in parallel
 
-    for process in processes:
-        process.wait()
+    # for process in processes:
+    #     process.wait()
     
     error_proc_ids = np.where(
         np.array([process.returncode for process in processes]) != 0
