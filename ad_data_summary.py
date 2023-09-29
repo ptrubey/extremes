@@ -179,14 +179,15 @@ for dataset in rank_datasets:
         'path'     : rank[dataset]['source'],
         'raw_cols' : raw.shape[1],
         'mod_cols' : dat.nCol + dat.nCat + 1,
+        'real_vars': dat.nCol,
+        'cat_vars' : raw.shape[1] - dat.nCol,
+        'cat_cols' : dat.nCat,
         'N_raw'    : out.shape[0],
         'N_over'   : dat.nDat,
         'A_raw'    : out.sum(),
         'A_over'   : dat.Y.sum(),
         }
     summaries.append(desc)
-    
-
 
 for dataset in real_datasets:
     raw = pd.read_csv(real[dataset]['source']).values
@@ -207,6 +208,9 @@ for dataset in real_datasets:
         'quantile' : real[dataset]['quantile'],
         'raw_cols' : raw.shape[1],
         'mod_cols' : dat.nCol + dat.nCat,
+        'real_vars': dat.nCol,
+        'cat_vars' : raw.shape[1] - dat.nCol,
+        'cat_cols' : dat.nCat,
         'N_raw'    : out.shape[0],
         'N_over'   : dat.nDat,
         'A_raw'    : out.sum(),
@@ -234,6 +238,9 @@ for dataset in cat_datasets:
         'path'     : cat[dataset]['source'],
         'raw_cols' : raw.shape[1],
         'mod_cols' : dat.nCol + dat.nCat,
+        'real_vars': dat.nCol,
+        'cat_vars' : raw.shape[1] - dat.nCol,
+        'cat_cols' : dat.nCat,
         'N_raw'    : out.shape[0],
         'N_over'   : dat.nDat,
         'A_raw'    : out.sum(),

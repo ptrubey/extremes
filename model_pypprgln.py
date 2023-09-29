@@ -410,6 +410,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             'GEM'    : tuple(self.priors.chi),
             'chis'   : chis,
             'model_radius' : self.model_radius,
+            'time'   : self.time_elapsed_numeric,
             }
         self.data.write_to_dict(out)
         # try to add outcome / radius to dictionary
