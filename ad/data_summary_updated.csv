@@ -1,0 +1,17 @@
+name,regime,path,raw_cols,mod_cols,real_vars,cat_vars,cat_cols,N_raw,N_over,A_raw,A_over,quantile
+annthyroid,rank,./ad/annthyroid/rank_data.csv,22,38,6,16,31,1200,1200,105,105,
+cardio,rank,./ad/cardio/rank_data.csv,22,27,19,3,7,1831,1831,176,176,
+cover,rank,./ad/cover/rank_data.csv,13,19,9,4,9,1907,1907,20,20,
+mammography,rank,./ad/mammography/rank_data.csv,9,12,6,3,5,1864,1864,42,42,
+pima,rank,./ad/pima/rank_data.csv,13,19,8,5,10,768,768,268,268,
+yeast,rank,./ad/yeast/rank_data.csv,8,12,6,2,5,1484,1484,90,90,
+annthyroid,threshold,./ad/annthyroid/real_data.csv,22,38,6,16,32,3600,715,270,150,0.85
+cardio,threshold,./ad/cardio/real_data.csv,25,36,15,10,21,1831,715,176,152,0.85
+cover,threshold,./ad/cover/real_data.csv,13,18,9,4,9,19070,5504,194,194,0.98
+mammography,threshold,./ad/mammography/real_data.csv,10,16,5,5,11,11183,2390,260,227,0.95
+pima,threshold,./ad/pima/real_data.csv,13,19,7,6,12,768,205,268,106,0.90
+yeast,threshold,./ad/yeast/real_data.csv,11,17,6,5,11,1484,343,90,35,0.90
+cover,categorical,./ad/cover/cat_data.csv,10,30,0,10,30,1907,1907,20,20,
+pima,categorical,./ad/pima/cat_data.csv,8,28,0,8,28,768,768,268,268,
+solarflare,categorical,./ad/solarflare/cat_data.csv,10,32,0,10,32,1389,1389,12,12,
+yeast,categorical,./ad/yeast/cat_data.csv,8,23,0,8,23,1484,1484,90,90,
