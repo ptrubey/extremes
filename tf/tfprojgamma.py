@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ============================================================================
-"""The Dirichlet distribution class."""
+"""The Projected Gamma distribution class."""
 
 # Dependency imports
 import numpy as np
@@ -21,6 +21,7 @@ import tensorflow as tf
 
 from tensorflow_probability.python.bijectors import softmax_centered as softmax_centered_bijector
 from tensorflow_probability.python.bijectors import softplus as softplus_bijector
+from tensorflow_probability.python.bijectors import softmax as softmax_bijector
 from tensorflow_probability.python.distributions import distribution
 from tensorflow_probability.python.distributions import gamma as gamma_lib
 from tensorflow_probability.python.distributions import kullback_leibler
@@ -36,13 +37,89 @@ from tensorflow_probability.python.internal import tensorshape_util
 
 __all__ = [
     'ProjectedGamma',
+    'FiniteMixProjectedGamma',
 ]
-
 
 _dirichlet_sample_note = """Note: `value` must be a non-negative tensor with
 dtype `self.dtype` and be in the `(self.event_shape() - 1)`-simplex, i.e.,
 `tf.reduce_sum(value, -1) = 1`. It must have a shape compatible with
 `self.batch_shape() + self.event_shape()`."""
+
+class FiniteMixProjectedGamma(distribution.AutoCompositeTensorDistribution):
+    def __init__(
+            self, 
+            shape, 
+            mixprob, 
+            power = 10, 
+            validate_args = False, 
+            allow_nan_stats = True, 
+            force_probs_to_zero_outside_support = False, 
+            name = 'FiniteMixProjectedGamma',
+        ):
+        parameters = dict(locals())
+        self._force_probs_to_zero_outside_support = (
+            force_probs_to_zero_outside_support
+            )
+        with tf.name_scope(name) as name:
+            dtype = dtype_util.common_dtype([shape], dtype_hint = tf.float32)
+        self._shape = tensor_util.convert_nonref_to_tensor(shape, dtype = dtype, name = 'shape')
+        self._mixprob = tensor_util.convert_nonref_to_tensor(shape, dtype = dtype, name = 'mixprob')
+        self._power = power
+        super(FiniteMixProjectedGamma, self).__init__(
+            dtype = self._shape.dtype,
+            validate_args = validate_args,
+            allow_nan_stats = allow_nan_stats,
+            reparameterization_type = reparameterization.FULLY_REPARAMETERIZED,
+            name = name,
+            )
+        return
+    
+    @classmethod
+    def _parameter_properties(cls, dtype, num_classes=None):
+        return dict(
+            scale = parameter_properties.ParameterProperties(
+                event_ndims=2,
+                default_constraining_bijector_fn=(
+                    lambda: softplus_bijector.Softplus(low=dtype_util.eps(dtype))
+                    )
+                ),
+            mixprob = parameter_properties.ParameterProperties(
+                event_ndims = 1,
+                default_contsraining_bijector_fn=(
+                    lambda: softmax_bijector.Softmax(low=dtype_util.eps(dtype))
+                    )
+                )
+            )
+    
+    @property 
+    def shape(self):
+        return self._shape
+    
+    @property
+    def mixprob(self):
+        return self._mixprob
+
+    @property
+    def power(self):
+        return self._power
+    
+    @property
+    def force_probs_to_zero_outside_support(self):
+        return self._force_probs_to_zero_outside_support
+
+    # dunno what's going on here.  check later.
+    def _event_shape_tensor(self):
+        shape = tf.convert_to_tensor(self.shape)
+        return ps.shape(shape)[-1:]
+    def _event_shape(self):
+        return tensorshape_util.with_rank(self.shape.shape[-1:], rank = 1)
+
+    def _sample_n(self, n, seed = None):
+        gamma_sample = gamma_lib.random_gamma()
+    
+    # @distribution_util.AppendDocstring(_dirichlet_sample_note)
+    # def _log_prob(self, x):
+    #     shape = self.
 
 
 class ProjectedGamma(distribution.AutoCompositeTensorDistribution):
@@ -98,8 +175,6 @@ class ProjectedGamma(distribution.AutoCompositeTensorDistribution):
         return self._force_probs_to_zero_outside_support
 
     def _event_shape_tensor(self):
-        # NOTE: In TF1, tf.shape(x) can call `tf.convert_to_tensor(x)` **twice**,
-        # so we pre-emptively convert-to-tensor.
         concentration = tf.convert_to_tensor(self.concentration)
         return ps.shape(concentration)[-1:]
 
@@ -143,69 +218,6 @@ class ProjectedGamma(distribution.AutoCompositeTensorDistribution):
     @distribution_util.AppendDocstring(_dirichlet_sample_note)
     def _prob(self, x):
         return tf.exp(self._log_prob(x))
-
-    # def _entropy(self):
-    #     concentration = tf.convert_to_tensor(self.concentration)
-    #     k = tf.cast(tf.shape(concentration)[-1], self.dtype)
-    #     total_concentration = tf.reduce_sum(concentration, axis=-1)
-    #     return (
-    #         + tf.math.lbeta(concentration) 
-    #         + ((total_concentration - k) * tf.math.digamma(total_concentration)) 
-    #         - tf.reduce_sum(
-    #             (concentration - 1.) * tf.math.digamma(concentration), axis=-1
-    #             )
-    #         )
-
-#   def _mean(self):
-#     concentration = tf.convert_to_tensor(self.concentration)
-#     total_concentration = tf.reduce_sum(concentration, axis=-1, keepdims=True)
-#     return concentration / total_concentration
-
-#   def _covariance(self):
-#     concentration = tf.convert_to_tensor(self.concentration)
-#     total_concentration = tf.reduce_sum(concentration, axis=-1, keepdims=True)
-#     mean = concentration / total_concentration
-#     scale = tf.math.rsqrt(1. + total_concentration)
-#     x = scale * mean
-#     variance = x * (scale - x)
-#     return tf.linalg.set_diag(
-#         tf.matmul(-x[..., tf.newaxis], x[..., tf.newaxis, :]),
-#         variance)
-
-#   def _variance(self):
-#     concentration = tf.convert_to_tensor(self.concentration)
-#     total_concentration = tf.reduce_sum(concentration, axis=-1, keepdims=True)
-#     mean = concentration / total_concentration
-#     scale = tf.math.rsqrt(1. + total_concentration)
-#     x = scale * mean
-#     return x * (scale - x)
-
-    # @distribution_util.AppendDocstring(
-    #     """Note: The mode is undefined when any `concentration <= 1`. If
-    #     `self.allow_nan_stats` is `True`, `NaN` is used for undefined modes. If
-    #     `self.allow_nan_stats` is `False` an exception is raised when one or more
-    #     modes are undefined."""
-    #     )
-    # def _mode(self):
-    #     concentration = tf.convert_to_tensor(self.concentration)
-    #     k = tf.cast(tf.shape(concentration)[-1], self.dtype)
-    #     total_concentration = tf.reduce_sum(concentration, axis=-1)
-    #     mode = (concentration - 1.) / (total_concentration[..., tf.newaxis] - k)
-    #     if self.allow_nan_stats:
-    #         return tf.where(
-    #         tf.reduce_all(concentration > 1., axis=-1, keepdims=True),
-    #         mode,
-    #         dtype_util.as_numpy_dtype(self.dtype)(np.nan),
-    #         )
-    # assertions = [
-    #     assert_util.assert_less(
-    #         tf.ones([], self.dtype),
-    #         concentration,
-    #         message='Mode undefined when any concentration <= 1',
-    #         )
-    #     ]
-    # with tf.control_dependencies(assertions):
-    #     return tf.identity(mode)
 
     def _default_event_space_bijector(self):
         # TODO(b/145620027) Finalize choice of bijector.
@@ -273,82 +285,5 @@ class ProjectedGamma(distribution.AutoCompositeTensorDistribution):
                     ),
                 )
         return assertions
-
-# @kullback_leibler.RegisterKL(Dirichlet, Dirichlet)
-# def _kl_dirichlet_dirichlet(d1, d2, name=None):
-#   """Batchwise KL divergence KL(d1 || d2) with d1 and d2 Dirichlet.
-
-#   Args:
-#     d1: instance of a Dirichlet distribution object.
-#     d2: instance of a Dirichlet distribution object.
-#     name: Python `str` name to use for created operations.
-#       Default value: `None` (i.e., `'kl_dirichlet_dirichlet'`).
-
-#   Returns:
-#     kl_div: Batchwise KL(d1 || d2)
-#   """
-#   with tf.name_scope(name or 'kl_dirichlet_dirichlet'):
-#     # The KL between Dirichlet distributions can be derived as follows. We have
-#     #
-#     #   Dir(x; a) = 1 / B(a) * prod_i[x[i]^(a[i] - 1)]
-#     #
-#     # where B(a) is the multivariate Beta function:
-#     #
-#     #   B(a) = Gamma(a[1]) * ... * Gamma(a[n]) / Gamma(a[1] + ... + a[n])
-#     #
-#     # The KL is
-#     #
-#     #   KL(Dir(x; a), Dir(x; b)) = E_Dir(x; a){log(Dir(x; a) / Dir(x; b))}
-#     #
-#     # so we'll need to know the log density of the Dirichlet. This is
-#     #
-#     #   log(Dir(x; a)) = sum_i[(a[i] - 1) log(x[i])] - log B(a)
-#     #
-#     # The only term that matters for the expectations is the log(x[i]). To
-#     # compute the expectation of this term over the Dirichlet density, we can
-#     # use the following facts about the Dirichlet in exponential family form:
-#     #   1. log(x[i]) is a sufficient statistic
-#     #   2. expected sufficient statistics (of any exp family distribution) are
-#     #      equal to derivatives of the log normalizer with respect to
-#     #      corresponding natural parameters: E{T[i](x)} = dA/d(eta[i])
-#     #
-#     # To proceed, we can rewrite the Dirichlet density in exponential family
-#     # form as follows:
-#     #
-#     #   Dir(x; a) = exp{eta(a) . T(x) - A(a)}
-#     #
-#     # where '.' is the dot product of vectors eta and T, and A is a scalar:
-#     #
-#     #   eta[i](a) = a[i] - 1
-#     #     T[i](x) = log(x[i])
-#     #        A(a) = log B(a)
-#     #
-#     # Now, we can use fact (2) above to write
-#     #
-#     #   E_Dir(x; a)[log(x[i])]
-#     #       = dA(a) / da[i]
-#     #       = d/da[i] log B(a)
-#     #       = d/da[i] (sum_j lgamma(a[j])) - lgamma(sum_j a[j])
-#     #       = digamma(a[i])) - digamma(sum_j a[j])
-#     #
-#     # Putting it all together, we have
-#     #
-#     # KL[Dir(x; a) || Dir(x; b)]
-#     #     = E_Dir(x; a){log(Dir(x; a) / Dir(x; b)}
-#     #     = E_Dir(x; a){sum_i[(a[i] - b[i]) log(x[i])} - (lbeta(a) - lbeta(b))
-#     #     = sum_i[(a[i] - b[i]) * E_Dir(x; a){log(x[i])}] - lbeta(a) + lbeta(b)
-#     #     = sum_i[(a[i] - b[i]) * (digamma(a[i]) - digamma(sum_j a[j]))]
-#     #          - lbeta(a) + lbeta(b))
-
-#     concentration1 = tf.convert_to_tensor(d1.concentration)
-#     concentration2 = tf.convert_to_tensor(d2.concentration)
-#     digamma_sum_d1 = tf.math.digamma(
-#         tf.reduce_sum(concentration1, axis=-1, keepdims=True))
-#     digamma_diff = tf.math.digamma(concentration1) - digamma_sum_d1
-#     concentration_diff = concentration1 - concentration2
-
-#     return (
-#         tf.reduce_sum(concentration_diff * digamma_diff, axis=-1) -
-#         tf.math.lbeta(concentration1) + tf.math.lbeta(concentration2))
 
 # EOF
