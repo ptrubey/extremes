@@ -21,7 +21,7 @@ import tensorflow as tf
 
 from tensorflow_probability.python.bijectors import softmax_centered as softmax_centered_bijector
 from tensorflow_probability.python.bijectors import softplus as softplus_bijector
-from tensorflow_probability.python.bijectors import softmax as softmax_bijector
+# from tensorflow_probability.python.bijectors import softmax as softmax_bijector
 from tensorflow_probability.python.distributions import distribution
 from tensorflow_probability.python.distributions import gamma as gamma_lib
 from tensorflow_probability.python.distributions import kullback_leibler
@@ -45,81 +45,81 @@ dtype `self.dtype` and be in the `(self.event_shape() - 1)`-simplex, i.e.,
 `tf.reduce_sum(value, -1) = 1`. It must have a shape compatible with
 `self.batch_shape() + self.event_shape()`."""
 
-class FiniteMixProjectedGamma(distribution.AutoCompositeTensorDistribution):
-    def __init__(
-            self, 
-            shape, 
-            mixprob, 
-            power = 10, 
-            validate_args = False, 
-            allow_nan_stats = True, 
-            force_probs_to_zero_outside_support = False, 
-            name = 'FiniteMixProjectedGamma',
-        ):
-        parameters = dict(locals())
-        self._force_probs_to_zero_outside_support = (
-            force_probs_to_zero_outside_support
-            )
-        with tf.name_scope(name) as name:
-            dtype = dtype_util.common_dtype([shape], dtype_hint = tf.float32)
-        self._shape = tensor_util.convert_nonref_to_tensor(shape, dtype = dtype, name = 'shape')
-        self._mixprob = tensor_util.convert_nonref_to_tensor(shape, dtype = dtype, name = 'mixprob')
-        self._power = power
-        super(FiniteMixProjectedGamma, self).__init__(
-            dtype = self._shape.dtype,
-            validate_args = validate_args,
-            allow_nan_stats = allow_nan_stats,
-            reparameterization_type = reparameterization.FULLY_REPARAMETERIZED,
-            name = name,
-            )
-        return
+# class FiniteMixProjectedGamma(distribution.AutoCompositeTensorDistribution):
+#     def __init__(
+#             self, 
+#             shape, 
+#             mixprob, 
+#             power = 10, 
+#             validate_args = False, 
+#             allow_nan_stats = True, 
+#             force_probs_to_zero_outside_support = False, 
+#             name = 'FiniteMixProjectedGamma',
+#         ):
+#         parameters = dict(locals())
+#         self._force_probs_to_zero_outside_support = (
+#             force_probs_to_zero_outside_support
+#             )
+#         with tf.name_scope(name) as name:
+#             dtype = dtype_util.common_dtype([shape], dtype_hint = tf.float32)
+#         self._shape = tensor_util.convert_nonref_to_tensor(shape, dtype = dtype, name = 'shape')
+#         self._mixprob = tensor_util.convert_nonref_to_tensor(shape, dtype = dtype, name = 'mixprob')
+#         self._power = power
+#         super(FiniteMixProjectedGamma, self).__init__(
+#             dtype = self._shape.dtype,
+#             validate_args = validate_args,
+#             allow_nan_stats = allow_nan_stats,
+#             reparameterization_type = reparameterization.FULLY_REPARAMETERIZED,
+#             name = name,
+#             )
+#         return
     
-    @classmethod
-    def _parameter_properties(cls, dtype, num_classes=None):
-        return dict(
-            scale = parameter_properties.ParameterProperties(
-                event_ndims=2,
-                default_constraining_bijector_fn=(
-                    lambda: softplus_bijector.Softplus(low=dtype_util.eps(dtype))
-                    )
-                ),
-            mixprob = parameter_properties.ParameterProperties(
-                event_ndims = 1,
-                default_contsraining_bijector_fn=(
-                    lambda: softmax_bijector.Softmax(low=dtype_util.eps(dtype))
-                    )
-                )
-            )
+#     @classmethod
+#     def _parameter_properties(cls, dtype, num_classes=None):
+#         return dict(
+#             scale = parameter_properties.ParameterProperties(
+#                 event_ndims=2,
+#                 default_constraining_bijector_fn=(
+#                     lambda: softplus_bijector.Softplus(low=dtype_util.eps(dtype))
+#                     )
+#                 ),
+#             mixprob = parameter_properties.ParameterProperties(
+#                 event_ndims = 1,
+#                 default_contsraining_bijector_fn=(
+#                     lambda: softmax_bijector.Softmax(low=dtype_util.eps(dtype))
+#                     )
+#                 )
+#             )
     
-    @property 
-    def shape(self):
-        return self._shape
+#     @property 
+#     def shape(self):
+#         return self._shape
     
-    @property
-    def mixprob(self):
-        return self._mixprob
+#     @property
+#     def mixprob(self):
+#         return self._mixprob
 
-    @property
-    def power(self):
-        return self._power
+#     @property
+#     def power(self):
+#         return self._power
     
-    @property
-    def force_probs_to_zero_outside_support(self):
-        return self._force_probs_to_zero_outside_support
+#     @property
+#     def force_probs_to_zero_outside_support(self):
+#         return self._force_probs_to_zero_outside_support
 
-    # dunno what's going on here.  check later.
-    def _event_shape_tensor(self):
-        shape = tf.convert_to_tensor(self.shape)
-        return ps.shape(shape)[-1:]
-    def _event_shape(self):
-        return tensorshape_util.with_rank(self.shape.shape[-1:], rank = 1)
+#     # dunno what's going on here.  check later.
+#     def _event_shape_tensor(self):
+#         shape = tf.convert_to_tensor(self.shape)
+#         return ps.shape(shape)[-1:]
+#     def _event_shape(self):
+#         return tensorshape_util.with_rank(self.shape.shape[-1:], rank = 1)
 
-    def _sample_n(self, n, seed = None):
-        gamma_sample = gamma_lib.random_gamma()
+#     def _sample_n(self, n, seed = None):
+#         gamma_sample = gamma_lib.random_gamma()
     
-    # @distribution_util.AppendDocstring(_dirichlet_sample_note)
-    # def _log_prob(self, x):
-    #     shape = self.
+#     # @distribution_util.AppendDocstring(_dirichlet_sample_note)
+#     # def _log_prob(self, x):
+#     #     shape = self.
 
 
 class ProjectedGamma(distribution.AutoCompositeTensorDistribution):
