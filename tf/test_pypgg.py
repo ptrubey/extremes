@@ -1,7 +1,7 @@
 import silence_tensorflow.auto
-
 import json
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -10,29 +10,37 @@ from tensorflow_probability import bijectors as tfb
 from numpy.random import gamma
 
 from tfprojgamma import ProjectedGamma
-# Set random seeds for reproducibility
 np.random.seed(1)
 tf.random.set_seed(1)
 
-alpha_true = gamma(size = (3,5), shape = 1.5)
-pi_true = (0.3, 0.5, 0.2)
+# alpha_true = gamma(size = (3,5), shape = 1.5)
+# pi_true = (0.3, 0.5, 0.2)
 
-MixProjectedGamma = tfp.distributions.MixtureSameFamily(
-    mixture_distribution = tfd.Categorical(
-        probs = pi_true,
+# MixProjectedGamma = tfp.distributions.MixtureSameFamily(
+#     mixture_distribution = tfd.Categorical(
+#         probs = pi_true,
+#         ),
+#     components_distribution = ProjectedGamma(
+#         concentration = alpha_true,
+#         )
+#     )
+# Yp = tf.cast(MixProjectedGamma.sample(1000), tf.float64)
+
+def euclidean_to_psphere(euc, p = 10, EPS = np.finfo(float).eps):
+    Yp = (euc + EPS) / (((euc + EPS)**p).sum(axis = -1)**(1/p))[...,None]
+    Yp[Yp < EPS] = EPS
+    return Yp
+Yp = tf.cast(
+    euclidean_to_psphere(
+        pd.read_csv('~/git/projgamma/datasets/ivt_updated_nov_mar_angular.csv').values,
         ),
-    components_distribution = ProjectedGamma(
-        concentration = alpha_true,
-        )
+    tf.float64,
     )
-# print(alpha_true)
-# print(pi_true)
-Yp = tf.cast(MixProjectedGamma.sample(1000), tf.float64)
 
-N, D = Yp.shape; J = 20 # N = nobs, D = ncols, J = nclust
-a = 0.5; b = 0.5        # strength (inherently unstable)
-c = 2.0; d = 2.0        # rate (biased towards 1)
-eta, dis = 0.1, 0.1     # PY Strength / Discount Parameters
+N, D = Yp.shape; J = 200 # N = nobs, D = ncols, J = nclust
+a = 0.5; b = 0.5         # strength (inherently unstable)
+c = 2.0; d = 2.0         # rate (biased towards 1)
+eta, dis = 0.1, 0.1      # PY Strength / Discount Parameters
 
 # Thanks to Dave Moore for extending this to work with batch dimensions!
 # This turns out to be necessary for ADVI to work properly.
@@ -112,7 +120,7 @@ s = surrogate_posterior.sample(100)
 
 p = target_log_prob_fn(**s)
 
-def run_advi(optimizer, sample_size=50, num_steps=2000, seed=1):
+def run_advi(optimizer, sample_size=200, num_steps=5000, seed=1):
     return tfp.vi.fit_surrogate_posterior(
         target_log_prob_fn=target_log_prob_fn,
         surrogate_posterior=surrogate_posterior,
