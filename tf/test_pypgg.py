@@ -11,7 +11,7 @@ from numpy.random import gamma
 
 from tfprojgamma import ProjectedGamma
 np.random.seed(1)
-tf.random.set_seed(1)
+tf.random.set_seed(2)
 
 # alpha_true = gamma(size = (3,5), shape = 1.5)
 # pi_true = (0.3, 0.5, 0.2)
@@ -47,8 +47,18 @@ eta, dis = 0.1, 0.1      # PY Strength / Discount Parameters
 def stickbreak(v):
     batch_ndims = len(v.shape) - 1
     cumprod_one_minus_v = tf.math.cumprod(1 - v, axis=-1)
-    one_v = tf.pad(v, [[0, 0]] * batch_ndims + [[0, 1]], "CONSTANT", constant_values=1)
-    c_one = tf.pad(cumprod_one_minus_v, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
+    one_v = tf.pad(
+        v, 
+        [[0, 0]] * batch_ndims + [[0, 1]], 
+        "CONSTANT", 
+        constant_values = 1,
+        )
+    c_one = tf.pad(
+        cumprod_one_minus_v, 
+        [[0, 0]] * batch_ndims + [[1, 0]], 
+        "CONSTANT", 
+        constant_values = 1,
+        )
     return one_v * c_one
 
 def create_model(N, D, J, eta, discount, dtype = np.float64):
@@ -74,13 +84,19 @@ def create_model(N, D, J, eta, discount, dtype = np.float64):
             reinterpreted_batch_ndims = 1,
             ),
         nu = tfd.Independent(
-            tfd.Beta(np.ones(J - 1, dtype) - discount, eta + np.arange(1, J) * discount),
+            # tfd.Beta(np.ones(J - 1, dtype) - discount, eta + np.arange(1, J) * discount),
+            tfd.Beta(
+                tf.ones(J - 1, dtype) - discount, 
+                eta + tf.range(1, J, dtype = dtype) * discount,
+                ),
             reinterpreted_batch_ndims = 1,
             ),
         alpha = lambda xi, tau: tfd.Independent(
             tfd.Gamma(
-                concentration = np.ones((J, D), dtype) * tf.expand_dims(xi, -2),
-                rate = np.ones((J, D), dtype) * tf.expand_dims(tau, -2),
+                # concentration = np.ones((J, D), dtype) * tf.expand_dims(xi, -2),
+                concentration = tf.broadcast_to(xi, (J,D)),
+                # rate = np.ones((J, D), dtype) * tf.expand_dims(tau, -2),
+                rate = tf.broadcast_to(tau, (J,D))
                 ),
             reinterpreted_batch_ndims = 2,
             ),        
@@ -111,29 +127,63 @@ q_tau_mu   = tf.Variable(tf.random.normal([D],   dtype = np.float64), name = 'q_
 q_tau_sd   = tf.Variable(tf.random.normal([D],   dtype = np.float64), name = 'q_tau_sd')
 
 surrogate_posterior = tfd.JointDistributionNamed(dict(
-    xi = tfd.Independent(tfd.LogNormal(q_xi_mu, tf.nn.softplus(q_xi_sd)), reinterpreted_batch_ndims = 1),
-    tau = tfd.Independent(tfd.LogNormal(q_tau_mu, tf.nn.softplus(q_tau_sd)), reinterpreted_batch_ndims = 1),
-    nu = tfd.Independent(tfd.LogitNormal(q_nu_mu, tf.nn.softplus(q_nu_sd)), reinterpreted_batch_ndims = 1),
-    alpha = tfd.Independent(tfd.LogNormal(q_alpha_mu, tf.nn.softplus(q_alpha_sd)), reinterpreted_batch_ndims = 2),
+    xi = tfd.Independent(
+        tfd.LogNormal(q_xi_mu, tf.nn.softplus(q_xi_sd)), 
+        reinterpreted_batch_ndims = 1,
+        ),
+    tau = tfd.Independent(
+        tfd.LogNormal(q_tau_mu, tf.nn.softplus(q_tau_sd)), 
+        reinterpreted_batch_ndims = 1,
+        ),
+    nu = tfd.Independent(
+        tfd.LogitNormal(q_nu_mu, tf.nn.softplus(q_nu_sd)), 
+        reinterpreted_batch_ndims = 1,
+        ),
+    alpha = tfd.Independent(
+        tfd.LogNormal(q_alpha_mu, tf.nn.softplus(q_alpha_sd)), 
+        reinterpreted_batch_ndims = 2,
+        ),
     ))
-s = surrogate_posterior.sample(100)
 
-p = target_log_prob_fn(**s)
+s0 = surrogate_posterior.sample(100)
+p = target_log_prob_fn(**s0)
 
-def run_advi(optimizer, sample_size=200, num_steps=5000, seed=1):
+def run_advi(optimizer, sample_size=10, num_steps=2000, seed=2):
     return tfp.vi.fit_surrogate_posterior(
-        target_log_prob_fn=target_log_prob_fn,
-        surrogate_posterior=surrogate_posterior,
-        optimizer=optimizer,
-        sample_size=sample_size,
-        seed=seed, num_steps=num_steps)  # 200, 2000
+        target_log_prob_fn = target_log_prob_fn,
+        surrogate_posterior = surrogate_posterior,
+        optimizer = optimizer,
+        sample_size = sample_size,
+        seed = seed, 
+        num_steps = num_steps,
+        )
 
 opt = tf.optimizers.Adam(learning_rate=1e-2)
-losses = run_advi(opt, sample_size=1)
+losses = run_advi(opt)
 
-plt.plot(losses.numpy())
-plt.xlabel('Optimizer Iteration')
-plt.ylabel('ELBO')
-plt.show()
+# plt.plot(losses.numpy())
+# plt.xlabel('Optimizer Iteration')
+# plt.ylabel('ELBO')
+# plt.show()
+
+s = surrogate_posterior.sample(1000)
+p = stickbreak(s['nu']).numpy()
+plt.boxplot(p)
+plt.savefig('py_weights.png')
+
+# s1 = surrogate_posterior.sample(1000)
+# initlogdens = target_log_prob_fn(**s0).numpy()
+# postlogdens = target_log_prob_fn(**s1).numpy()
+
+# plt.plot(initlogdens)
+# plt.show()
+# plt.plot(postlogdens)
+# plt.show()
+
+# plt.boxplot(s0['nu'].numpy())
+# plt.show()
+# plt.boxplot(s1['nu'].numpy())
+# plt.show()
+
 
 # EOF
