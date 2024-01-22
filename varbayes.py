@@ -4,10 +4,16 @@ import data
 from scipy.special import digamma
 from samplers import bincount2D_vectorized
 
+def gradient_normal(x, mu, sigma):
+    """
+    calculates gradient on 
+    """
+
 
 def gradient_pypg_alpha(alpha, xi, tau, delta, log_y, logs_y):
     """
-    calculates gradient on alpha_{jl} for sample of size S
+    calculates gradient on alpha_{jl} (shape parameter) for sample of size S
+    on projected gamma distribution with product of gammas prior
     alpha   : PG shape              (S, J, D)
     xi      : PG prior shape        (S, D)
     tau     : PG prior rate         (S, D)
@@ -34,7 +40,8 @@ def gradient_pypg_alpha(alpha, xi, tau, delta, log_y, logs_y):
 
 def gradient_pypg_xi(alpha, xi, tau, a, b):
     """
-    calculates gradient on xi_{l} for sample of size S
+    calculates gradient on xi_{l} (prior shape parameter) for sample of size S
+    for Projected Gamma distribution with product of gammas prior
     alpha : PG Shape            (S, J, D)
     xi    : PG Prior Shape      (S, D)
     tau   : PG Prior Rate       (S, D)
