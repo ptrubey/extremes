@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import silence_tensorflow.auto
 import tensorflow as tf
 import tensorflow_probability as tfp
+import time
 from tensorflow_probability import distributions as tfd
 from tensorflow_probability import bijectors as tfb
 
@@ -189,6 +190,8 @@ class VarPYPG(object):
         Variational Approximation of Pitman-Yor Mixture of Projected Gammas
         Constructed using TensorFlow, AutoDiff
     """
+    start_time, end_time, time_elapsed = None, None, None
+
     def init_model(self):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
@@ -247,6 +250,7 @@ class VarPYPG(object):
     
     def fit_advi(self, num_steps = 5000, sample_size = 50, seed = 1):
         optimizer = tf.optimizers.Adam(learning_rate=1e-2)
+        self.start_time = time.time()
         losses = tfp.vi.fit_surrogate_posterior(
             target_log_prob_fn = self.log_prob_fn,
             surrogate_posterior = self.surrogate,
@@ -255,6 +259,8 @@ class VarPYPG(object):
             seed = seed,
             num_steps = num_steps,
             )
+        self.end_time = time.time()
+        self.time_elapsed = self.end_time - self.start_time
         return(losses)
 
     def __init__(
@@ -300,10 +306,9 @@ if __name__ == '__main__':
         obs = slosh_obs[idx].T
         dat = Data(obs, real_vars = np.arange(obs.shape[1]))
         mod = VarPYPG(dat)
+        
 
-
-        sloshes[category] = [idx, ids, dat,]
-        model = VarPYPG()
+        sloshes[category] = [idx, ids, dat, mod]
 
 raise
 # EOF
