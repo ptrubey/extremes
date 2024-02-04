@@ -84,19 +84,19 @@ def create_model(N, D, J, eta, discount, dtype = np.float64):
             reinterpreted_batch_ndims = 1,
             ),
         nu = tfd.Independent(
-            # tfd.Beta(np.ones(J - 1, dtype) - discount, eta + np.arange(1, J) * discount),
-            tfd.Beta(
-                tf.ones(J - 1, dtype) - discount, 
-                eta + tf.range(1, J, dtype = dtype) * discount,
-                ),
+            tfd.Beta(np.ones(J - 1, dtype) - discount, eta + np.arange(1, J) * discount),
+            # tfd.Beta(
+            #     tf.ones(J - 1, dtype) - discount, 
+            #     eta + tf.range(1, J, dtype = dtype) * discount,
+            #     ),
             reinterpreted_batch_ndims = 1,
             ),
         alpha = lambda xi, tau: tfd.Independent(
             tfd.Gamma(
-                # concentration = np.ones((J, D), dtype) * tf.expand_dims(xi, -2),
-                concentration = tf.broadcast_to(xi, (J,D)),
-                # rate = np.ones((J, D), dtype) * tf.expand_dims(tau, -2),
-                rate = tf.broadcast_to(tau, (J,D))
+                concentration = np.ones((J, D), dtype) * tf.expand_dims(xi, -2),
+                # concentration = tf.expand_dims(tf.broadcast_to(xi, (J,D)), -2),
+                rate = np.ones((J, D), dtype) * tf.expand_dims(tau, -2),
+                # rate = tf.expand_dims(tf.broadcast_to(tau, (J,D)), -2),
                 ),
             reinterpreted_batch_ndims = 2,
             ),        
