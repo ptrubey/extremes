@@ -304,11 +304,16 @@ if __name__ == '__main__':
         idx = (slosh_ids.Category == category)
         ids = slosh_ids[idx]
         obs = slosh_obs[idx].T
-        dat = Data(obs, real_vars = np.arange(obs.shape[1]))
-        mod = VarPYPG(dat)
+        dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.99)
         
+        mod = VarPYPG(dat)
+        mod.fit_advi()
+        
+        sloshes[category] = [ids.shape[0], mod.time_elapsed]
 
-        sloshes[category] = [idx, ids, dat, mod]
+    for slosh in sloshes.keys():
+        print(sloshes[slosh])
+
 
 raise
 # EOF
