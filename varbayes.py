@@ -99,6 +99,13 @@ def stickbreak(nu):
     out[:, 1:] += np.cumsum(np.log(1 - nu))
     return np.exp(out)
 
+def stickbreak_tf(nu):
+    batch_ndims = len(nu.shape) - 1
+    cumprod_one_minus_nu = tf.math.cumprod(1 - nu, axis=-1)
+    one_v = tf.pad(nu, [[0, 0]] * batch_ndims + [[0, 1]], "CONSTANT", constant_values=1)
+    c_one = tf.pad(cumprod_one_minus_nu, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
+    return one_v * c_one
+
 class MVarPYPG:
     """ 
         Variational Approximation of Pitman-Yor Mixture of Projected Gammas
@@ -228,7 +235,7 @@ class VarPYPG(object):
                 ),        
             obs = lambda alpha, nu: tfd.Sample(
                 tfd.MixtureSameFamily(
-                    mixture_distribution = tfd.Categorical(probs = stickbreak(nu)),
+                    mixture_distribution = tfd.Categorical(probs = stickbreak_tf(nu)),
                     components_distribution = ProjectedGamma(
                         alpha, np.ones((self.J, self.D), self.dtype)
                         ),
@@ -303,12 +310,12 @@ if __name__ == '__main__':
     for category in slosh_ids.Category.unique():
         idx = (slosh_ids.Category == category)
         ids = slosh_ids[idx]
-        obs = slosh_obs[idx].T
-        dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.99)
-        
+        obs = slosh_obs[idx].values.T.astype(np.float64)
+        dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
         mod = VarPYPG(dat)
         mod.fit_advi()
-        
+        raise
+
         sloshes[category] = [ids.shape[0], mod.time_elapsed]
 
     for slosh in sloshes.keys():
