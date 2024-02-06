@@ -260,7 +260,7 @@ class VarPYPG(object):
         self.start_time = time.time()
         losses = tfp.vi.fit_surrogate_posterior(
             target_log_prob_fn = self.log_prob_fn,
-            surrogate_posterior = self.surrogate,
+            surrogate_posterior = self.surrogate.model,
             optimizer = optimizer,
             sample_size = sample_size,
             seed = seed,
