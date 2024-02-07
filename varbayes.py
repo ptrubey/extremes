@@ -3,7 +3,7 @@ import pandas as pd
 import projgamma as pg
 from scipy.special import digamma
 from samplers import bincount2D_vectorized
-from data import Data
+from data import Data, euclidean_to_psphere
 import matplotlib.pyplot as plt
 import silence_tensorflow.auto
 import tensorflow as tf
@@ -120,29 +120,29 @@ class MVarPYPG:
 
 class SurrogateVars(object):
     def init_vars(self, J, D, dtype):
-        self.q_nu_mu    = tf.Variable(
-            tf.random.normal([J-1], dtype = dtype), name = 'q_nu_mu',
+        self.nu_mu    = tf.Variable(
+            tf.random.normal([J-1], dtype = dtype), name = 'nu_mu',
             )
-        self.q_nu_sd    = tf.Variable(
-            tf.random.normal([J-1], dtype = dtype), name = 'q_nu_sd',
+        self.nu_sd    = tf.Variable(
+            tf.random.normal([J-1], dtype = dtype), name = 'nu_sd',
             )
-        self.q_alpha_mu = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'q_alpha_mu',
+        self.alpha_mu = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
             )
-        self.q_alpha_sd = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'q_alpha_sd',
+        self.alpha_sd = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
             )
-        self.q_xi_mu    = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'q_xi_mu',
+        self.xi_mu    = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
             )
-        self.q_xi_sd    = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'q_xi_sd',
+        self.xi_sd    = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
             )
-        self.q_tau_mu   = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'q_tau_mu',
+        self.tau_mu   = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
             )
-        self.q_tau_sd   = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'q_tau_sd',
+        self.tau_sd   = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
             )
         return
         
@@ -159,25 +159,25 @@ class SurrogateModel(object):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
                 tfd.LogNormal(
-                    self.vars.q_xi_mu, tf.nn.softplus(self.vars.q_xi_sd),
+                    self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
                     ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             tau = tfd.Independent(
                 tfd.LogNormal(
-                    self.vars.q_tau_mu, tf.nn.softplus(self.vars.q_tau_sd),
+                    self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
                     ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             nu = tfd.Independent(
                 tfd.LogitNormal(
-                    self.vars.q_nu_mu, tf.nn.softplus(self.vars.q_nu_sd),
+                    self.vars.nu_mu, tf.nn.softplus(self.vars.nu_sd),
                     ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             alpha = tfd.Independent(
                 tfd.LogNormal(
-                    self.vars.q_alpha_mu, tf.nn.softplus(self.vars.q_alpha_sd),
+                    self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd),
                     ), 
                 reinterpreted_batch_ndims = 2,
                 ),
@@ -246,7 +246,7 @@ class VarPYPG(object):
         _ = self.model.sample()
         def log_prob_fn(xi, tau, nu, alpha):
             return self.model.log_prob(
-                xi = xi, tau = tau, nu = nu, alpha = alpha, obs = self.data.Yp,
+                xi = xi, tau = tau, nu = nu, alpha = alpha, obs = self.Yp,
                 )
         self.log_prob_fn = log_prob_fn
         return
@@ -255,7 +255,7 @@ class VarPYPG(object):
         self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
         return
     
-    def fit_advi(self, num_steps = 5000, sample_size = 50, seed = 1):
+    def fit_advi(self, num_steps = 5000, sample_size = 1, seed = 1):
         optimizer = tf.optimizers.Adam(learning_rate=1e-2)
         self.start_time = time.time()
         losses = tfp.vi.fit_surrogate_posterior(
@@ -278,9 +278,11 @@ class VarPYPG(object):
             prior_xi = (0.5, 0.5), 
             prior_tau = (2., 2.), 
             max_clusters = 200,
-            dtype = np.float64
+            dtype = np.float64,
+            p = 10,
             ):
         self.data = data
+        self.Yp = euclidean_to_psphere(self.data.V)
         self.J = max_clusters
         self.N = self.data.nDat
         self.D = self.data.nCol
@@ -314,7 +316,6 @@ if __name__ == '__main__':
         dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
         mod = VarPYPG(dat)
         mod.fit_advi()
-        raise
 
         sloshes[category] = [ids.shape[0], mod.time_elapsed]
 
