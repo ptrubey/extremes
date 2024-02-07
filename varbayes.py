@@ -318,9 +318,10 @@ if __name__ == '__main__':
         mod.fit_advi()
 
         sloshes[category] = [ids.shape[0], mod.time_elapsed]
+        print(sloshes[category])
+    
+    pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
 
-    for slosh in sloshes.keys():
-        print(sloshes[slosh])
 
 
 raise
