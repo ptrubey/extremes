@@ -17,6 +17,7 @@ import numpy as np
 np.seterr(divide = 'raise', invalid = 'raise')
 from numpy.random import beta, uniform, gamma
 from scipy.special import loggamma, betaln
+from collections import namedtuple
 import math
 import warnings
 # rng = np.random.default_rng(seed = inr(time.time())
@@ -26,6 +27,7 @@ import warnings
 EPS = np.finfo(float).eps
 MAX = np.finfo(float).max
 
+GEMPrior = namedtuple('GEMPrior', 'discount concentration')
 
 def bincount2D_vectorized(arr, m):
     """
@@ -223,7 +225,6 @@ def pt_dp_sample_chi_bgsb(delta, eta, J):
     B = gamma(eta[:,None] + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount)
     return np.exp(np.log(A) - np.log(A + B))
     
-
 def dp_sample_concentration_bgsb(chi, a, b):
     """
     Gibbs Sampler for Concentration Parameter under
@@ -356,7 +357,6 @@ class ParallelTemperingCRPSampler(DirichletProcessSampler):
     def average_cluster_count(self, ns):
         acc = self.samples.delta[(ns//2):,0].max(axis = 1).mean() + 1
         return '{:.2f}'.format(acc)
-        
 
 class ParallelTemperingStickBreakingSampler(DirichletProcessSampler):
     @property

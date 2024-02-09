@@ -11,7 +11,7 @@ import tensorflow_probability as tfp
 import time
 from tensorflow_probability import distributions as tfd
 from tensorflow_probability import bijectors as tfb
-
+from collections import namedtuple
 from tfprojgamma import ProjectedGamma
 
 def gradient_normal(x):
@@ -149,6 +149,8 @@ class SurrogateVars(object):
     def __init__(self, J, D, dtype = np.float64):
         self.init_vars(J, D, dtype)
         return
+    
+    pass
 
 class SurrogateModel(object):
     def init_vars(self):
@@ -191,6 +193,8 @@ class SurrogateModel(object):
         self.init_vars()
         self.init_model()
         return
+    
+    pass
 
 class VarPYPG(object):
     """ 
@@ -255,17 +259,25 @@ class VarPYPG(object):
         self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
         return
     
-    def fit_advi(self, num_steps = 5000, sample_size = 1, seed = 1):
+    def fit_advi(self, min_steps = 2000, max_steps = 10000, 
+                 relative_tolerance = 1e-6, sample_size = 1, seed = 1):
         optimizer = tf.optimizers.Adam(learning_rate=1e-2)
+        concrit = tfp.optimizer.convergence_criteria.LossNotDecreasing(
+            rtol = relative_tolerance, min_num_steps = min_steps,
+            )
         self.start_time = time.time()
         losses = tfp.vi.fit_surrogate_posterior(
             target_log_prob_fn = self.log_prob_fn,
             surrogate_posterior = self.surrogate.model,
             optimizer = optimizer,
+            convergence_criterion = concrit,
             sample_size = sample_size,
             seed = seed,
-            num_steps = num_steps,
+            num_steps = max_steps,
             )
+        # if num_steps and convergence criteria are both defined, then
+        # num_steps becomes max_steps.  min_steps is defined in convergence
+        # criteria object.
         self.end_time = time.time()
         self.time_elapsed = self.end_time - self.start_time
         return(losses)
@@ -308,7 +320,9 @@ if __name__ == '__main__':
     slosh_ids = slosh.T[:8].T
     slosh_obs = slosh.T[8:].T
     
-    sloshes = dict()
+    Result = namedtuple('Result','type ncol ndat time')
+    sloshes = []
+
     for category in slosh_ids.Category.unique():
         idx = (slosh_ids.Category == category)
         ids = slosh_ids[idx]
@@ -317,8 +331,8 @@ if __name__ == '__main__':
         mod = VarPYPG(dat)
         mod.fit_advi()
 
-        sloshes[category] = [ids.shape[0], mod.time_elapsed]
-        print(sloshes[category])
+        sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
+        print(sloshes[-1])
     
     pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
 
