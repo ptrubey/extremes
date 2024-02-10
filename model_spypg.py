@@ -499,8 +499,6 @@ class Result(object):
         return
 
 if __name__ == '__main__':
-    pass
-
     from data import Data_From_Raw
     from projgamma import GammaPrior
     from pandas import read_csv
