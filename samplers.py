@@ -278,6 +278,30 @@ def dp_sample_cluster_bgsb(chi, log_likelihood):
     delta = (uniform(size = (N))[:,None] > scratch).sum(axis = 1)
     return delta
 
+def py_sample_cluster_bgsb_fixed(chi, log_likelihood):
+    """
+    Args:
+        chi            : (J - 1  : Random Weights (betas)
+        log_likelihood : (N x J) : log-likelihood of obs n under cluster j
+        eta ([type])   : Scalar
+    """
+    N, J = log_likelihood.shape
+    scratch = np.zeros((N,J))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        scratch[:,:-1] += np.log(chi)
+        scratch[:,1: ] += np.cumsum(1 - chi)
+        scratch += log_likelihood # (N, J)
+        scratch[np.isnan(scratch)] = -np.inf
+        scratch -= scratch.max(axis = 1)[:,None]
+        np.exp(scratch, out = scratch)
+        np.cumsum(scratch, axis = 1, out = scratch)
+        scratch /= scratch[:-1][:,None]
+    delta = (uniform(size = (N))[:,None] > scratch).sum(axis = 1)
+    return delta
+
+def py_sample_cluster_bgsb(chi, log_likelihood):
+    return dp_sample_cluster_bgsb(chi, log_likelihood)
+
 def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
     """
     Args:
@@ -306,7 +330,30 @@ def pt_dp_sample_cluster_bgsb(chi, log_likelihood):
         ).T
     return delta
 
-pt_dp_sample_cluster = pt_dp_sample_cluster_crp8
+def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
+    """
+    Args:
+        chi            : (T, J - 1)
+        log_likelihood : (N x T x J)
+    """
+    N, T, J = log_likelihood.shape
+    scratch = np.zeros((N, T, J))
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        scratch[:,:,:-1] += np.log(chi)
+        scratch[:,:,1: ] += np.cumsum(np.log(1 - chi), axis = 1)
+        scratch += log_likelihood # log likelihood
+        scratch[np.isnan(scratch)] = -np.inf
+        scratch -= scratch.max(axis = 2)[:,:,None]
+        np.exp(scratch, out = scratch)
+        np.cumsum(scratch, axis = 2, out = scratch)
+        scratch /= scratch[:,:,-1][:,:,None]
+    delta = (
+        (uniform(size = (N,T))[:,:,None] > scratch) @ np.ones(J, dtype = int)
+        ).T
+    return delta
+
+def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
+    return(pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta))
 
 def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
     """
@@ -328,7 +375,28 @@ def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
     chi = beta(a = shape1, b = shape2)
     return chi
 
-pt_py_sample_cluster_bgsb = pt_dp_sample_cluster_bgsb
+def pt_py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
+    """
+    Args:
+        delta : (T x N)
+        disc  : (T)
+        conc  : (T)
+        trunc : Scalar (Blocked Gibbs Stick-Breaking Truncation Point)
+    Out:
+        chi   : (T, trunc)
+    """
+    clustcount = bincount2D_vectorized(delta, trunc)
+    shape1 = 1 + clustcount - disc
+    shape2 = (
+        + conc
+        + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount
+        + (np.arange(trunc) + 1)[None,:] * disc
+        )
+    chi = beta(a = shape1[:,:-1], b = shape2[:,:-1])
+    return chi
+
+def pt_py_sample_cluster_bgsb(chi, log_likelihood):
+    return pt_dp_sample_cluster_bgsb(chi, log_likelihood)
 
 def pt_logd_gem_mx_st(chi, conc, disc):
     """ 
@@ -367,8 +435,7 @@ class ParallelTemperingStickBreakingSampler(DirichletProcessSampler):
             self.samples.delta[(ns//2):,0], 
             self.samples.delta[:,0].max() + 1,
             )
-        return '{:.2f}'.format((cc > 0).sum(axis = 1).mean())
-    
+        return '{:.2f}'.format((cc > 0).sum(axis = 1).mean()) 
 
 if __name__ == '__main__':
     pass
