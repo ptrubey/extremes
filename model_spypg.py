@@ -147,18 +147,18 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def log_alpha_likelihood(self, alpha, r, delta):
         Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
         dmat = sparse.COO.from_numpy(delta[:,:,None] == range(self.nClust))
-        # dmat = sparse.COO(coords = delta.T, data = 1, fill_value = 0) # (t,n,j)
         slY = sparse.einsum('tnd,tnj->tjd', np.log(Y), dmat).todense()  # (t,j,d)
         out = np.zeros(alpha.shape)
-        out -= self._curr_cluster_state[:,:,None] * gammaln(alpha)
-        out += (alpha - 1) * slY
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            out -= self._curr_cluster_state[:,:,None] * gammaln(alpha)
+            out += (alpha - 1) * slY
         return out
 
     def log_logalpha_prior(self, logalpha, xi, tau):
-        logd = np.empty(logalpha.shape)
+        logd = np.zeros(logalpha.shape)
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            logd += xi[:,None] * np.log(tau[:,None])
-            logd -= gammaln(tau[:,None])
+            # logd += xi[:,None] * np.log(tau[:,None])
+            # logd -= gammaln(tau[:,None])
             logd += xi[:,None] * logalpha
             logd -= tau[:,None] * np.exp(logalpha)
         np.nan_to_num(logd, False, -np.inf)
@@ -171,11 +171,13 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self._scratch_alpha[:] = -np.inf
         self._scratch_alpha[idx] = 0.
         
-        acurr = alpha.copy()
-        lacurr = np.log(acurr)
-        lacand = lacurr.copy()
-        lacand[idx] += normal(scale = 0.1, size = (idx[0].shape[0], self.nCol))
-        acand = np.exp(lacand)
+        assert(~(alpha[self._extant_clust_state] == 0).any())
+        with np.errstate(divide = 'ignore'):
+            acurr = alpha.copy()
+            lacurr = np.log(acurr)
+            lacand = lacurr.copy()
+            lacand[idx] += normal(scale = 0.1, size = (idx[0].shape[0], self.nCol))
+            acand = np.exp(lacand)
         
         self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
         self._scratch_alpha -= self.log_alpha_likelihood(acurr, r, delta)
@@ -260,6 +262,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self.samples.r[0] = self.sample_r(
             self.samples.delta[0], self.samples.alpha[0],
             )
+        self.samples.chi[0] = self.sample_chi(self.samples.delta[0])
         # Adaptive Metropolis related
         self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
         self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
@@ -419,8 +422,8 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def __init__(
             self,
             data,
-            prior_xi  = (0.5, 0.5),
-            prior_tau = (2., 2.),
+            prior_xi  = (1.5, 1.5),
+            prior_tau = (3., 3.),
             prior_chi = (0.1, 0.1),
             p         = 10,
             max_clust = 200,
@@ -484,7 +487,7 @@ class Result(object):
         except KeyError:
             pass
 
-        self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples       = Samples1T(self.nSamp, self.nDat, self.nCol, self.nClust)
         self.samples.chi   = chis
         self.samples.delta = deltas
         self.samples.alpha = alphas

@@ -353,7 +353,7 @@ def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
     return delta
 
 def pt_dp_sample_cluster(delta, log_likelihood, prob, eta):
-    return(pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta))
+    return pt_dp_sample_cluster_crp8(delta, log_likelihood, prob, eta)
 
 def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
     """
