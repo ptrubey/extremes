@@ -517,4 +517,7 @@ if __name__ == '__main__':
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
 
+    from matplotlib import pyplot as plt
+    plt.plot(res.samples.ld)
+
 # EOF
