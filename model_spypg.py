@@ -172,6 +172,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self._scratch_alpha[idx] = 0.
         
         assert(~(alpha[self._extant_clust_state] == 0).any())
+
         with np.errstate(divide = 'ignore'):
             acurr = alpha.copy()
             lacurr = np.log(acurr)
@@ -181,14 +182,16 @@ class Chain(ParallelTemperingStickBreakingSampler):
         
         self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
         self._scratch_alpha -= self.log_alpha_likelihood(acurr, r, delta)
-        with np.errstate(invalid = 'ignore'):
-            self._scratch_alpha *= self.itl[:,None,None]
         self._scratch_alpha += self.log_logalpha_prior(lacand, xi, tau)
         self._scratch_alpha -= self.log_logalpha_prior(lacurr, xi, tau)
+        with np.errstate(invalid = 'ignore'):
+            self._scratch_alpha *= self.itl[:,None,None]
 
-        keep = np.where(np.log(uniform(size = alpha.shape)) < self._scratch_alpha)
+        keep = np.where(np.log(uniform(size = acurr.shape)) < self._scratch_alpha)
         acurr[keep] = acand[keep]
         acurr[ndx] = self.sample_alpha_new(xi, tau)[ndx]
+        
+        assert (~(acurr[keep] == 0.).any())
         return(acurr)
 
     def log_logxi_posterior(self, logxi, sum_alpha, sum_log_alpha, n):
@@ -422,7 +425,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def __init__(
             self,
             data,
-            prior_xi  = (1.5, 1.5),
+            prior_xi  = (3., 3.),
             prior_tau = (3., 3.),
             prior_chi = (0.1, 0.1),
             p         = 10,
@@ -510,8 +513,8 @@ if __name__ == '__main__':
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     model = Chain(data)
-    model.sample(5000)
-    model.write_to_disk('./test/results.pkl', 2000, 10)
+    model.sample(15000)
+    model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
 
 # EOF
