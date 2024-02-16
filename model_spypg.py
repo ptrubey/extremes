@@ -22,7 +22,7 @@ from samplers import ParallelTemperingStickBreakingSampler, GEMPrior,           
 from data import euclidean_to_psphere, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, logd_gamma_my, pt_logd_gamma_my,              \
     pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt,      \
-    pt_logd_prodgamma_my_st
+    pt_logd_prodgamma_my_st, pt_logd_mixprojresgamma
 
 Prior = namedtuple('Prior', 'xi tau chi')
 
@@ -177,7 +177,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             acurr = alpha.copy()
             lacurr = np.log(acurr)
             lacand = lacurr.copy()
-            lacand[idx] += normal(scale = 0.1, size = (idx[0].shape[0], self.nCol))
+            lacand[idx] += normal(scale = 0.2, size = (idx[0].shape[0], self.nCol))
             acand = np.exp(lacand)
         
         self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
@@ -211,7 +211,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         xcurr = xi.copy()
         lxcurr = np.log(xcurr)
         lxcand = lxcurr.copy()
-        lxcand += normal(scale = 0.1, size = lxcand.shape)
+        lxcand += normal(scale = 0.2, size = lxcand.shape)
 
         with np.errstate(divide = 'ignore'):
             sa = np.einsum('tjd,tj->td', alpha, self._extant_clust_state)
@@ -279,21 +279,23 @@ class Chain(ParallelTemperingStickBreakingSampler):
         return
 
     def log_likelihood(self):
-        extant_clusters = (bincount2D_vectorized(self.curr_delta, self.nClust) > 0)
+        # extant_clusters = (bincount2D_vectorized(self.curr_delta, self.nClust) > 0)
         ll = np.zeros(self.nTemp)
-        ll += pt_logd_projgamma_paired_yt(
-            self.data.Yp, 
-            self.curr_alpha[
-                self.temp_unravel, self.curr_delta.ravel()
-                ].reshape(self.nTemp, self.nDat, self.nCol),
-            self._placeholder_sigma_2,
-            ).sum(axis = 1)
-        ll += np.einsum(
-            'tj,tj->t',
-            pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau),
-            extant_clusters,
-            )
+        # ll += pt_logd_projgamma_paired_yt(
+        #     self.data.Yp, 
+        #     self.curr_alpha[
+        #         self.temp_unravel, self.curr_delta.ravel()
+        #         ].reshape(self.nTemp, self.nDat, self.nCol),
+        #     self._placeholder_sigma_2,
+        #     ).sum(axis = 1)
+        # ll += np.einsum(
+        #     'tj,tj->t',
+        #     pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau),
+        #     extant_clusters,
+        #     )
+        ll += pt_logd_mixprojresgamma(self.data.Yp, self.curr_alpha, self.curr_chi).sum(axis = 0)
         ll += pt_logd_gem_mx_st(self.curr_chi, *self.priors.chi)
+        ll += pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau).sum(axis = 1)
         return ll
 
     def log_prior(self):
@@ -370,6 +372,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             'V'      : self.data.V,
             'logd'   : self.samples.ld,
             'priors' : self.priors,
+            'time'   : self.time_elapsed_numeric,
             }
         
         # try to add outcome / radius to dictionary
@@ -401,8 +404,8 @@ class Chain(ParallelTemperingStickBreakingSampler):
             self.swap_attempts[s[1],s[0]] += 1
         # compute swap log-probability
         sw_alpha = np.zeros(sw.shape[0])
-        sw_alpha += lp[sw.T[1]] - lp[sw.T[0]]
-        sw_alpha *= self.itl[sw.T[1]] - self.itl[sw.T[0]]
+        sw_alpha += lp[sw.T[0]] - lp[sw.T[1]]
+        sw_alpha *= self.itl[sw.T[0]] - self.itl[sw.T[1]]
         logp = np.log(uniform(size = sw_alpha.shape))
         for tt in sw[np.where(logp < sw_alpha)[0]]:
             # report successful swap
@@ -498,6 +501,8 @@ class Result(object):
         self.samples.tau   = taus
         self.samples.r     = rs
         self.samples.ld    = out['logd']
+
+        self.time_elapsed = out['time']
         return
 
     def __init__(self, path):
@@ -513,11 +518,12 @@ if __name__ == '__main__':
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     model = Chain(data)
-    model.sample(15000)
+    model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
 
     from matplotlib import pyplot as plt
     plt.plot(res.samples.ld)
+    plt.show()
 
 # EOF

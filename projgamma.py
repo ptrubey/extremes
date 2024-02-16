@@ -234,6 +234,37 @@ def pt_logd_dirichlet_mx_ma(aY, aAlpha):
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
     return out
 
+def pt_stickbreak(nu):
+    """
+    parallel tempered stickbreaking function.
+    nu : (T x (J-1))
+    out : (T x J)
+    """
+    out = np.zeros((nu.shape[0], nu.shape[1] + 1))
+    out[..., :-1] += np.log(nu)
+    out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
+    np.exp(out, out = out)
+    return out
+
+def pt_logd_mixprojresgamma(aY, aAlpha, nu):
+    """ 
+    Parallel tempered mixture of projected gammas (omitting normalizing constant) 
+    aY: (N x D)
+    aAlpha : (T x J x D)
+    nu : (T x J-1)    
+    """
+    pi = pt_stickbreak(nu)
+    scratch = np.zeros((aY.shape[0], *aAlpha.shape[:-1])) # (N, ..., J)
+    asum = aAlpha.sum(axis = -1)
+    ysum = aY.sum(axis = -1)
+
+    scratch -= loggamma(aAlpha).sum(axis = -1)
+    scratch += np.einsum('n...d,...tjd->n...tj', np.log(aY), aAlpha - 1)
+    scratch += loggamma(aAlpha.sum(axis = -1))
+    scratch -= np.einsum('...tj,...n->n...tj', asum, np.log(ysum))
+    np.exp(scratch, out = scratch)
+    return np.log(np.einsum('ntj,tj->nt', scratch, pi))
+
 ## functions relating to gamma density
 
 def logd_gamma_my(aY, alpha, beta):
@@ -614,6 +645,7 @@ def pt_logd_loggamma_mx_st(x, a, b):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
+
 def pt_logpost_loggammagamma(logalpha, n, sy, sly, a, b, c, d):
     """
     logalpha    : (t, d), log-shape parameter (variable) in gamma-gamma model
@@ -787,6 +819,5 @@ def logd_gamma(Y, alpha, beta):
     out += (alpha - 1) * np.log(Y)
     out -= beta * Y
     return out
-
 
 # EOF

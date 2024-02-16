@@ -106,18 +106,6 @@ def stickbreak_tf(nu):
     c_one = tf.pad(cumprod_one_minus_nu, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
     return one_v * c_one
 
-class MVarPYPG:
-    """ 
-        Variational Approximation of Pitman-Yor Mixture of Projected Gammas
-        with exact sampling of cluster membership / cluster weights
-    """
-    def __init__(self, data, max_clusters = 200):
-        self.data = data
-        self.max_clusters = max_clusters
-        pass
-    
-    pass
-
 class SurrogateVars(object):
     def init_vars(self, J, D, dtype):
         self.nu_mu    = tf.Variable(
@@ -248,6 +236,7 @@ class VarPYPG(object):
                 ),
             ))
         _ = self.model.sample()
+        
         def log_prob_fn(xi, tau, nu, alpha):
             return self.model.log_prob(
                 xi = xi, tau = tau, nu = nu, alpha = alpha, obs = self.Yp,
@@ -308,6 +297,119 @@ class VarPYPG(object):
         return
 
     pass
+
+class ReducedSurrogateVars(SurrogateVars):
+    def init_vars(self, J, D, dtype):
+        self.alpha_mu = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+            )
+        self.alpha_sd = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
+            )
+        self.xi_mu    = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
+            )
+        self.xi_sd    = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
+            )
+        self.tau_mu   = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+            )
+        self.tau_sd   = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+            )
+        return
+    
+    pass
+
+class ReducedSurrogateModel(SurrogateModel):
+    def init_model(self):
+        self.model = tfd.JointDistributionNamed(dict(
+            xi = tfd.Independent(
+                tfd.LogNormal(
+                    self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
+                    ), 
+                reinterpreted_batch_ndims = 1,
+                ),
+            tau = tfd.Independent(
+                tfd.LogNormal(
+                    self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
+                    ), 
+                reinterpreted_batch_ndims = 1,
+                ),
+            alpha = tfd.Independent(
+                tfd.LogNormal(
+                    self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd),
+                    ), 
+                reinterpreted_batch_ndims = 2,
+                ),
+            ))
+        return
+
+    def __init__(self, J, D, dtype = np.float64):
+        self.J = J
+        self.D = D
+        self.dtype = dtype
+        pass
+
+class MVarPYPG(VarPYPG):
+    """ 
+        Variational Approximation of Pitman-Yor Mixture of Projected Gammas
+        with exact sampling of cluster membership / cluster weights
+    """
+    nu = None
+
+    def update_nu(self, alpha, nu):
+        
+        pass
+
+    def init_model(self):
+        self.exactmodel = ProjectedGamma()
+        self.model = tfd.JointDistributionNamed(dict(
+            tau = tfd.Independent(
+                tfd.Gamma(
+                    concentration = np.full(self.D, self.c, self.dtype),
+                    rate = np.full(self.D, self.d, self.dtype),
+                    ),
+                reinterpreted_batch_ndims = 1,
+                ),
+            nu = tfd.Independent(
+                tfd.Beta(
+                    np.ones(self.J - 1, self.dtype) - self.discount, 
+                    self.eta + np.arange(1, self.J) * self.discount
+                    ),
+                reinterpreted_batch_ndims = 1,
+                ),
+            alpha = lambda xi, tau: tfd.Independent(
+                tfd.Gamma(
+                    concentration = np.ones(
+                        (self.J, self.D), self.dtype,
+                        ) * tf.expand_dims(xi, -2),
+                    rate = np.ones(
+                        (self.J, self.D), self.dtype,
+                        ) * tf.expand_dims(tau, -2),
+                    ),
+                reinterpreted_batch_ndims = 2,
+                ),        
+            obs = lambda alpha, nu: tfd.Sample(
+                tfd.MixtureSameFamily(
+                    mixture_distribution = tfd.Categorical(
+                        probs = stickbreak_tf(self.nu)
+                        ),
+                    components_distribution = ProjectedGamma(
+                        alpha, np.ones((self.J, self.D), self.dtype)
+                        ),
+                    ),
+                sample_shape = (self.N),
+                ),
+            ))
+        _ = self.model.sample()
+        def log_prob_fn(xi, tau, alpha):
+            return(self.model.log_prob(xi = xi, tau = tau, alpha = alpha, nu = self.nu))
+        
+        self.log_prob_fn = log_prob_fn
+    pass
+
 
 if __name__ == '__main__':
     np.random.seed(1)

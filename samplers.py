@@ -437,6 +437,41 @@ class ParallelTemperingStickBreakingSampler(DirichletProcessSampler):
             )
         return '{:.2f}'.format((cc > 0).sum(axis = 1).mean()) 
 
+class Stepsize(object):
+    """ Stepsize calculator for adaptive Metropolis (univariate) """
+    shape = None
+    init_stepsize = None
+    curr_log_stepsize = None
+    nIter = None
+    update_interval = None
+    succeed = None
+    
+    @property
+    def step(self):
+        return self.curr_stepsize
+
+    def update(self, succeed, fail):
+        self.succeed += succeed
+        self.nIter += 1
+
+        if self.nIter == self.update_interval:
+            prob = self.succeed / self.update_interval
+            self.succeed[:] = 0
+            self.curr_stepsize[prob > 0.30] *= 1.2
+            self.curr_stepsize[prob < 0.20] *= 0.8
+        return
+
+    def __init__(self, shape, init_stepsize = 0.2, update_interval = 100,):
+        self.shape = shape
+        self.init_stepsize = init_stepsize
+        self.curr_stepsize = np.ones(shape) * init_stepsize
+        self.succeed = np.zeros(shape, dtype = int)
+        self.nIter = 0
+        self.update_interval = update_interval
+        return
+    
+    pass 
+
 if __name__ == '__main__':
     pass
 
