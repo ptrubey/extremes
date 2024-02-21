@@ -17,8 +17,9 @@ from io import BytesIO
 import sparse
 
 from samplers import ParallelTemperingStickBreakingSampler, GEMPrior,           \
-    bincount2D_vectorized, pt_logd_gem_mx_st, pt_py_sample_cluster_bgsb_fixed,  \
-    pt_py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed
+    bincount2D_vectorized, pt_logd_gem_mx_st_fixed,                             \
+    pt_py_sample_cluster_bgsb_fixed, pt_py_sample_chi_bgsb_fixed,               \
+    py_sample_cluster_bgsb_fixed
 from data import euclidean_to_psphere, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, logd_gamma_my, pt_logd_gamma_my,              \
     pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt,      \
@@ -294,7 +295,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         #     extant_clusters,
         #     )
         ll += pt_logd_mixprojresgamma(self.data.Yp, self.curr_alpha, self.curr_chi).sum(axis = 0)
-        ll += pt_logd_gem_mx_st(self.curr_chi, *self.priors.chi)
+        ll += pt_logd_gem_mx_st_fixed(self.curr_chi, *self.priors.chi)
         ll += pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau).sum(axis = 1)
         return ll
 
@@ -353,12 +354,12 @@ class Chain(ParallelTemperingStickBreakingSampler):
             if os.path.exists(path):
                 os.remove(path)
         
-        alphas = self.samples.alpha[nBurn :: nThin]
-        xis    = self.samples.xi[nBurn :: nThin]
-        taus   = self.samples.tau[nBurn :: nThin]
-        deltas = self.samples.delta[nBurn :: nThin]
-        chis   = self.samples.chi[nBurn :: nThin]
-        rs     = self.samples.r[nBurn :: nThin]
+        alphas = self.samples.alpha[nBurn :: nThin, 0]
+        xis    = self.samples.xi[nBurn :: nThin, 0]
+        taus   = self.samples.tau[nBurn :: nThin, 0]
+        deltas = self.samples.delta[nBurn :: nThin, 0]
+        chis   = self.samples.chi[nBurn :: nThin, 0]
+        rs     = self.samples.r[nBurn :: nThin, 0]
         
         out = {
             'alphas' : alphas,
@@ -485,7 +486,7 @@ class Result(object):
         self.nSamp  = deltas.shape[0]
         self.nDat   = deltas.shape[1]
         self.nCol   = alphas.shape[1]
-        self.nClust = chis.shape[1]
+        self.nClust = chis.shape[1] + 1
         
         self.data = Data_From_Sphere(out['V'])
         try:
@@ -521,6 +522,9 @@ if __name__ == '__main__':
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
+    postpred = res.generate_posterior_predictive_hypercube(n_per_sample = 10)
+
+    print(postpred.mean(axis = 0))
 
     from matplotlib import pyplot as plt
     plt.plot(res.samples.ld)

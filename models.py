@@ -11,6 +11,7 @@ import model_pypprgln  as pypprgln
 import model_fpypprgln as fpypprgln
 import model_gpypprgln as gpypprgln
 import model_sd        as sd
+import model_spypg     as spypg
 
 ## Real Data
 RealResults = {
@@ -18,7 +19,8 @@ RealResults = {
     'sdppprg'   : sdppprg.Result,
     'sdpppgln'  : sdpppgln.Result,
     'sdppprgln' : sdppprgln.Result,
-    'sd'        : sd.Result, 
+    'sd'        : sd.Result,
+    'spypg'     : spypg.Result,
     }
 RealChains = {
     'sdpppg'    : sdpppg.Chain,
@@ -26,6 +28,7 @@ RealChains = {
     'sdpppgln'  : sdpppgln.Chain,
     'sdppprgln' : sdppprgln.Chain,
     'sd'        : sd.Chain,
+    'spypg'     : spypg.Chain,
     }
 
 ## Mixed Data

@@ -289,13 +289,13 @@ def py_sample_cluster_bgsb_fixed(chi, log_likelihood):
     scratch = np.zeros((N,J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         scratch[:,:-1] += np.log(chi)
-        scratch[:,1: ] += np.cumsum(1 - chi)
+        scratch[:,1: ] += np.cumsum(np.log(1 - chi))
         scratch += log_likelihood # (N, J)
         scratch[np.isnan(scratch)] = -np.inf
         scratch -= scratch.max(axis = 1)[:,None]
         np.exp(scratch, out = scratch)
         np.cumsum(scratch, axis = 1, out = scratch)
-        scratch /= scratch[:-1][:,None]
+        scratch /= scratch[:,-1][:,None]
     delta = (uniform(size = (N))[:,None] > scratch).sum(axis = 1)
     return delta
 
@@ -415,6 +415,26 @@ def pt_logd_gem_mx_st(chi, conc, disc):
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         ld += ((a - 1) * np.log(chi[:,:-1])).sum(axis = 1)
         ld += ((b - 1) * np.log(1 - chi[:,:-1])).sum(axis = 1)
+        ld -= betaln(a,b).sum(axis = 1)
+    return ld
+
+def pt_logd_gem_mx_st_fixed(chi, conc, disc):
+    """ 
+    Log-density for Griffith, Engen, & McCloskey distribution.
+    Args:
+        chi  : (T, J-1)
+        conc : scalar
+        disc : scalar
+    """
+    if type(conc) is not np.ndarray:
+        conc = np.array([conc])
+    k = (np.arange(chi.shape[1] - 1) + 1).reshape(1,-1)
+    a = (1 - disc) * np.ones(k.shape)
+    b = conc[:,None] + k * disc
+    ld = np.zeros(chi.shape[0])
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        ld += ((a - 1) * np.log(chi)).sum(axis = 1)
+        ld += ((b - 1) * np.log(1 - chi)).sum(axis = 1)
         ld -= betaln(a,b).sum(axis = 1)
     return ld
 
