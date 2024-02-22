@@ -428,7 +428,7 @@ def pt_logd_gem_mx_st_fixed(chi, conc, disc):
     """
     if type(conc) is not np.ndarray:
         conc = np.array([conc])
-    k = (np.arange(chi.shape[1] - 1) + 1).reshape(1,-1)
+    k = (np.arange(chi.shape[1]) + 1).reshape(1,-1)
     a = (1 - disc) * np.ones(k.shape)
     b = conc[:,None] + k * disc
     ld = np.zeros(chi.shape[0])

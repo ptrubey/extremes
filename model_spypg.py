@@ -143,7 +143,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             shape = xi, scale = 1 / tau, 
             size = (self.nClust, self.nTemp, self.nCol),
             ).swapaxes(0,1)
-        return(out)
+        return out
 
     def log_alpha_likelihood(self, alpha, r, delta):
         Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
@@ -280,7 +280,6 @@ class Chain(ParallelTemperingStickBreakingSampler):
         return
 
     def log_likelihood(self):
-        # extant_clusters = (bincount2D_vectorized(self.curr_delta, self.nClust) > 0)
         ll = np.zeros(self.nTemp)
         # ll += pt_logd_projgamma_paired_yt(
         #     self.data.Yp, 
