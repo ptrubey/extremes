@@ -11,8 +11,10 @@ import tensorflow_probability as tfp
 import time
 from tensorflow_probability import distributions as tfd
 from tensorflow_probability import bijectors as tfb
-from collections import namedtuple
+from collections import namedtuple, deque
 from tfprojgamma import ProjectedGamma
+from numpy.random import beta
+from projgamma import pt_logd_projgamma_my_mt_inplace_unstable
 
 def gradient_normal(x):
     """
@@ -352,15 +354,34 @@ class ReducedSurrogateModel(SurrogateModel):
         self.dtype = dtype
         pass
 
+class Samples(object):
+    def __init__(self, nClust, nSamp, nKeep):
+        self.nu = deque(maxlen = nKeep)
+        self.nu.append(beta())
+        return
+
 class MVarPYPG(VarPYPG):
     """ 
         Variational Approximation of Pitman-Yor Mixture of Projected Gammas
         with exact sampling of cluster membership / cluster weights
     """
-    nu = None
+    rate_placeholder = None
+    
+    @property
+    def curr_nu(self):
+        return self.samples.nu[-1]
 
-    def update_nu(self, alpha, nu):
+    def sample_delta(self, alpha, nu):
+        scratch = np.zeros((self.nDat, self.nSamp, self.nClust))
+        pt_logd_projgamma_my_mt_inplace_unstable(scratch, self.Yp, alpha, self.rate_placeholder)
+        pass
         
+
+    def update_nu(self, alpha):
+        """ Gibbs step update of nu given past nu, current alpha. """
+        delta = self.sample_delta(alpha, self.curr_nu)
+        nu    = self.sample_nu(delta)
+        self.curr_nu
         pass
 
     def init_model(self):
@@ -404,10 +425,33 @@ class MVarPYPG(VarPYPG):
                 ),
             ))
         _ = self.model.sample()
+
         def log_prob_fn(xi, tau, alpha):
             return(self.model.log_prob(xi = xi, tau = tau, alpha = alpha, nu = self.nu))
         
         self.log_prob_fn = log_prob_fn
+        return
+    def __init__(
+            self, 
+            data, 
+            eta = 0.1, 
+            discount = 0.1, 
+            prior_xi = (0.5, 0.5), 
+            prior_tau = (2., 2.), 
+            max_clusters = 200,
+            dtype = np.float64,
+            p = 10,
+            ):
+        super().__init__(
+            data, eta, discount, prior_xi, prior_tau, max_clusters, dtype, p
+            )
+        self.rate_placeholder = np.ones(
+            (self.nSamp, self.nClust, self.nCol), dtype = dtype,
+            )
+        return
+
+        
+
     pass
 
 

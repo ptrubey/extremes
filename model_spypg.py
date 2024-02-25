@@ -517,7 +517,7 @@ if __name__ == '__main__':
 
     raw = read_csv('./datasets/ivt_nov_mar.csv')
     data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    model = Chain(data)
+    model = Chain(data, ntemps = 10)
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
