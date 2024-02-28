@@ -3,7 +3,7 @@ import pandas as pd
 import projgamma as pg
 from scipy.special import digamma
 from samplers import bincount2D_vectorized
-from data import Data, euclidean_to_psphere
+from data import Data, euclidean_to_psphere, euclidean_to_hypercube
 import matplotlib.pyplot as plt
 import silence_tensorflow.auto
 import tensorflow as tf
@@ -15,7 +15,8 @@ from collections import namedtuple, deque
 from tfprojgamma import ProjectedGamma
 from numpy.random import beta
 from projgamma import pt_logd_projgamma_my_mt_inplace_unstable
-from samplers import py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed
+from samplers import py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed,    \
+    pt_py_sample_cluster_bgsb_fixed
 
 def gradient_normal(x):
     """
@@ -177,6 +178,9 @@ class SurrogateModel(object):
             ))
         return
 
+    def sample(self, n):
+        return self.model.sample(n)
+
     def __init__(self, J, D, dtype = np.float64):
         self.J = J
         self.D = D
@@ -300,6 +304,19 @@ class VarPYPG(object):
         self.init_model()
         self.init_surrogate()
         return
+    
+    def generate_posterior_predictive_gamma(self, n = 5000):
+        samples = self.surrogate_model.sample(n)
+        alpha = samples['alpha'].numpy()
+        N, J, D = alpha.shape
+        nu = samples['nu'].numpy()
+        delta = py_sample_cluster_bgsb_fixed(nu, np.zeros(N, J))
+        shape = alpha[np.arange(N), delta]
+        return np.random.gamma(shape = shape, scale = 1, size = (N, D))
+    
+    def generate_posterior_predictive_hypercube(self, n = 5000):
+        gammas = self.generate_posterior_predictive_gamma(n)
+        return euclidean_to_hypercube(gammas)
     pass
 
 class ReducedSurrogateVars(SurrogateVars):
