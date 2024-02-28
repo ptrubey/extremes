@@ -121,7 +121,7 @@ if __name__ == '__main__':
     try:
         df = pd.read_sql('select * from energy;', conn)[['path','model']]
         done = list(map(tuple, df.drop_duplicates().values))
-        todo = list(set(args)).difference(set(done))
+        todo = list(set(args).difference(set(done)))
     except pd.io.sql.DatabaseError:
         todo = args
     todo_len = len(todo)

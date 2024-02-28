@@ -15,6 +15,7 @@ from collections import namedtuple, deque
 from tfprojgamma import ProjectedGamma
 from numpy.random import beta
 from projgamma import pt_logd_projgamma_my_mt_inplace_unstable
+from samplers import py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed
 
 def gradient_normal(x):
     """
@@ -98,12 +99,12 @@ def stickbreak(nu):
     S = nu.shape[0]; J = nu.shape[1] + 1
     out = np.zeros((S,J))
     out[:,:-1] + np.log(nu)
-    out[:, 1:] += np.cumsum(np.log(1 - nu))
+    out[:, 1:] += np.cumsum(np.log(1 - nu), axis = -1)
     return np.exp(out)
 
 def stickbreak_tf(nu):
     batch_ndims = len(nu.shape) - 1
-    cumprod_one_minus_nu = tf.math.cumprod(1 - nu, axis=-1)
+    cumprod_one_minus_nu = tf.math.cumprod(1 - nu, axis = -1)
     one_v = tf.pad(nu, [[0, 0]] * batch_ndims + [[0, 1]], "CONSTANT", constant_values=1)
     c_one = tf.pad(cumprod_one_minus_nu, [[0, 0]] * batch_ndims + [[1, 0]], "CONSTANT", constant_values=1)
     return one_v * c_one
@@ -251,7 +252,7 @@ class VarPYPG(object):
         return
     
     def fit_advi(self, min_steps = 2000, max_steps = 10000, 
-                 relative_tolerance = 1e-6, sample_size = 1, seed = 1):
+                 relative_tolerance = 1e-6, seed = 1):
         optimizer = tf.optimizers.Adam(learning_rate=1e-2)
         concrit = tfp.optimizer.convergence_criteria.LossNotDecreasing(
             rtol = relative_tolerance, min_num_steps = min_steps,
@@ -262,7 +263,7 @@ class VarPYPG(object):
             surrogate_posterior = self.surrogate.model,
             optimizer = optimizer,
             convergence_criterion = concrit,
-            sample_size = sample_size,
+            sample_size = self.S,
             seed = seed,
             num_steps = max_steps,
             )
@@ -283,12 +284,14 @@ class VarPYPG(object):
             max_clusters = 200,
             dtype = np.float64,
             p = 10,
+            advi_sample_size = 1,
             ):
         self.data = data
-        self.Yp = euclidean_to_psphere(self.data.V)
+        self.Yp = euclidean_to_psphere(self.data.V, p)
         self.J = max_clusters
         self.N = self.data.nDat
         self.D = self.data.nCol
+        self.S = advi_sample_size
         self.a, self.b = prior_xi
         self.c, self.d = prior_tau
         self.eta = eta
@@ -297,7 +300,6 @@ class VarPYPG(object):
         self.init_model()
         self.init_surrogate()
         return
-
     pass
 
 class ReducedSurrogateVars(SurrogateVars):
@@ -321,7 +323,6 @@ class ReducedSurrogateVars(SurrogateVars):
             tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
             )
         return
-    
     pass
 
 class ReducedSurrogateModel(SurrogateModel):
@@ -347,17 +348,31 @@ class ReducedSurrogateModel(SurrogateModel):
                 ),
             ))
         return
-
-    def __init__(self, J, D, dtype = np.float64):
-        self.J = J
-        self.D = D
-        self.dtype = dtype
-        pass
+    
+    def init_vars(self):
+        self.vars = ReducedSurrogateVars(self.J, self.D, self.dtype)
+        return 
+    pass
 
 class Samples(object):
+    ci = None
+
+    @property
+    def curr_nu(self):
+        return self.nu[self.ci % self.nMax]
+
+    def update_nu(self, nu):
+        self.ci += 1
+        self.nu[self.ci % self.nMax] = nu
+        return
+
     def __init__(self, nClust, nSamp, nKeep):
-        self.nu = deque(maxlen = nKeep)
-        self.nu.append(beta())
+        self.nMax = nKeep
+        # self.nu = np.zeros((nKeep, nSamp, nClust - 1))
+        self.nu = np.zeros((nKeep, nClust - 1))
+        self.ci = 0
+        # self.nu[self.ci] = beta(0.5, 0.5, size = ((nSamp, nClust - 1)))
+        self.nu[self.ci] = beta(0.5, 5, size = ((nClust - 1)))
         return
 
 class MVarPYPG(VarPYPG):
@@ -369,35 +384,36 @@ class MVarPYPG(VarPYPG):
     
     @property
     def curr_nu(self):
-        return self.samples.nu[-1]
+        return self.samples.curr_nu
 
     def sample_delta(self, alpha, nu):
-        scratch = np.zeros((self.nDat, self.nSamp, self.nClust))
+        scratch = np.zeros((self.D, self.J))
         pt_logd_projgamma_my_mt_inplace_unstable(scratch, self.Yp, alpha, self.rate_placeholder)
-        pass
-        
-
+        return py_sample_cluster_bgsb_fixed(nu, scratch)
+    
     def update_nu(self, alpha):
         """ Gibbs step update of nu given past nu, current alpha. """
-        delta = self.sample_delta(alpha, self.curr_nu)
-        nu    = self.sample_nu(delta)
-        self.curr_nu
+        delta = self.sample_delta(alpha[np.random.choice(self.S)], self.curr_nu)
+        nu = py_sample_chi_bgsb_fixed(delta, self.discount, self.eta, self.J)
+        # delta = self.sample_delta(alpha, self.curr_nu)
+        # nu = py_sample_chi_bgsb_fixed(delta, self.discount, self.eta, self.J)
+        self.samples.update_nu(nu)
         pass
 
     def init_model(self):
-        self.exactmodel = ProjectedGamma()
+        self.samples = Samples(self.J, self.S, self.nKeep)
+
         self.model = tfd.JointDistributionNamed(dict(
+            xi = tfd.Independent(
+                tfd.Gamma(
+                    concentration = np.full(self.D, self.a, self.dtype),
+                    rate = np.full(self.D, self.b, self.dtype),
+                    )
+                ),
             tau = tfd.Independent(
                 tfd.Gamma(
                     concentration = np.full(self.D, self.c, self.dtype),
                     rate = np.full(self.D, self.d, self.dtype),
-                    ),
-                reinterpreted_batch_ndims = 1,
-                ),
-            nu = tfd.Independent(
-                tfd.Beta(
-                    np.ones(self.J - 1, self.dtype) - self.discount, 
-                    self.eta + np.arange(1, self.J) * self.discount
                     ),
                 reinterpreted_batch_ndims = 1,
                 ),
@@ -411,11 +427,11 @@ class MVarPYPG(VarPYPG):
                         ) * tf.expand_dims(tau, -2),
                     ),
                 reinterpreted_batch_ndims = 2,
-                ),        
-            obs = lambda alpha, nu: tfd.Sample(
+                ),
+            obs = lambda alpha : tfd.Sample(
                 tfd.MixtureSameFamily(
                     mixture_distribution = tfd.Categorical(
-                        probs = stickbreak_tf(self.nu)
+                        probs = stickbreak_tf(self.curr_nu)
                         ),
                     components_distribution = ProjectedGamma(
                         alpha, np.ones((self.J, self.D), self.dtype)
@@ -427,10 +443,17 @@ class MVarPYPG(VarPYPG):
         _ = self.model.sample()
 
         def log_prob_fn(xi, tau, alpha):
-            return(self.model.log_prob(xi = xi, tau = tau, alpha = alpha, nu = self.nu))
+            self.update_nu(alpha.numpy())
+            return(self.model.log_prob(xi = xi, tau = tau, 
+                                       alpha = alpha, nu = self.curr_nu))
         
         self.log_prob_fn = log_prob_fn
         return
+
+    def init_surrogate(self):
+        self.surrogate = ReducedSurrogateModel(self.J, self.D, self.dtype)
+        return 
+
     def __init__(
             self, 
             data, 
@@ -440,49 +463,53 @@ class MVarPYPG(VarPYPG):
             prior_tau = (2., 2.), 
             max_clusters = 200,
             dtype = np.float64,
+            nkeep = 3000,
             p = 10,
+            advi_sample_size = 1,
             ):
+        self.nKeep = nkeep
         super().__init__(
-            data, eta, discount, prior_xi, prior_tau, max_clusters, dtype, p
+            data, eta, discount, prior_xi, prior_tau, 
+            max_clusters, dtype, p, advi_sample_size,
             )
         self.rate_placeholder = np.ones(
-            (self.nSamp, self.nClust, self.nCol), dtype = dtype,
+            (self.S, self.J, self.D), dtype = dtype,
             )
+        self.samples = Samples(self.J, self.S, self.nKeep)
         return
-
-        
-
     pass
-
 
 if __name__ == '__main__':
     np.random.seed(1)
     tf.random.set_seed(1)
 
-    slosh = pd.read_csv(
-        './datasets/slosh/filtered_data.csv.gz', 
-        compression = 'gzip',
-        )
-    slosh_ids = slosh.T[:8].T
-    slosh_obs = slosh.T[8:].T
+    raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
+    dat = Data(raw, real_vars = np.arange(raw.shape[1]), quantile = 0.95)
+    mod = MVarPYPG(dat)
+    mod.fit_advi()
+
+    # slosh = pd.read_csv(
+    #     './datasets/slosh/filtered_data.csv.gz', 
+    #     compression = 'gzip',
+    #     )
+    # slosh_ids = slosh.T[:8].T
+    # slosh_obs = slosh.T[8:].T
     
-    Result = namedtuple('Result','type ncol ndat time')
-    sloshes = []
+    # Result = namedtuple('Result','type ncol ndat time')
+    # sloshes = []
 
-    for category in slosh_ids.Category.unique():
-        idx = (slosh_ids.Category == category)
-        ids = slosh_ids[idx]
-        obs = slosh_obs[idx].values.T.astype(np.float64)
-        dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
-        mod = VarPYPG(dat)
-        mod.fit_advi()
+    # for category in slosh_ids.Category.unique():
+    #     idx = (slosh_ids.Category == category)
+    #     ids = slosh_ids[idx]
+    #     obs = slosh_obs[idx].values.T.astype(np.float64)
+    #     dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
+    #     mod = MVarPYPG(dat)
+    #     mod.fit_advi()
 
-        sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
-        print(sloshes[-1])
+    #     sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
+    #     print(sloshes[-1])
     
-    pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
-
-
+    # pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
 
 raise
 # EOF

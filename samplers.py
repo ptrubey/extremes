@@ -395,6 +395,17 @@ def pt_py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
     chi = beta(a = shape1[:,:-1], b = shape2[:,:-1])
     return chi
 
+def py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
+    clustcount = np.bincount(delta, minlength = trunc)
+    shape1 = 1 + clustcount - disc
+    shape2 = (
+        + conc
+        + clustcount[::-1].cumsum()[::-1] - clustcount
+        + (np.arange(trunc) + 1) * disc
+    )
+    chi = beta(a = shape1[:-1], b = shape2[:-1])
+    return chi
+
 def pt_py_sample_cluster_bgsb(chi, log_likelihood):
     return pt_dp_sample_cluster_bgsb(chi, log_likelihood)
 
