@@ -35,8 +35,10 @@ def run_model_from_path(path, modeltype):
         p = 10,
         max_clust_count = 150,
         )
-    
-    model.sample(20000)
+    try:
+        model.sample(20000)
+    except AssertionError:
+        return
     out = BytesIO()
     model.write_to_disk(out, 10000, 10)
     res = Results[modeltype](out)
