@@ -147,8 +147,15 @@ class Chain(ParallelTemperingStickBreakingSampler):
 
     def log_alpha_likelihood(self, alpha, r, delta):
         Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
-        dmat = sparse.COO.from_numpy(delta[:,:,None] == range(self.nClust))
-        slY = sparse.einsum('tnd,tnj->tjd', np.log(Y), dmat).todense()  # (t,j,d)
+        dmat = delta[:,:,None] == range(self.nClust)
+        try:
+            slY = sparse.einsum(
+                'tnd,tnj->tjd', 
+                np.log(Y), 
+                sparse.COO.from_numpy(dmat)
+                ).todense()                                         # (t,j,d)
+        except ValueError:
+            slY = np.einsum('tnd,tnj->tjd', np.log(Y), dmat)
         out = np.zeros(alpha.shape)
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             out -= self._curr_cluster_state[:,:,None] * gammaln(alpha)
