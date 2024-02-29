@@ -13,7 +13,7 @@ from data import Data_From_Sphere
 import varbayes as vb
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere2/result_240227.sql'
+out_sql     = './simulated/sphere2/result_240228.sql'
 out_table   = 'energy'
 
 def run_model_from_path_wrapper(args):
@@ -61,12 +61,6 @@ def run_model_from_path(path, *pargs):
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
-    
-    pool = mp.Pool(
-        processes = mp.cpu_count(), 
-        initializer = limit_cpu, 
-        maxtasksperchild = 1,
-        )
 
     conn = sql.connect(out_sql)
     args = [(file, 'VarPYPG') for file in files]
@@ -76,11 +70,10 @@ if __name__ == '__main__':
         todo = list(set(args).difference(set(done)))
     except pd.io.sql.DatabaseError:
         todo = args
+    conn.close()
     todo_len = len(todo)
-    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
-        sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    
-    pool.close()
-    pool.join()
+    for i, arg in enumerate(todo):
+        run_model_from_path_wrapper(arg)
+        sys.stderr.write('\rdone {0:.2%}'.format(i / todo_len))
 
 # EOF

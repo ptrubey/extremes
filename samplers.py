@@ -289,7 +289,7 @@ def py_sample_cluster_bgsb_fixed(chi, log_likelihood):
     scratch = np.zeros((N,J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
         scratch[:,:-1] += np.log(chi)
-        scratch[:,1: ] += np.cumsum(np.log(1 - chi))
+        scratch[:,1: ] += np.cumsum(np.log(1 - chi), axis = -1)
         scratch += log_likelihood # (N, J)
         scratch[np.isnan(scratch)] = -np.inf
         scratch -= scratch.max(axis = 1)[:,None]

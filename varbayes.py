@@ -306,11 +306,11 @@ class VarPYPG(object):
         return
     
     def generate_posterior_predictive_gamma(self, n = 5000):
-        samples = self.surrogate_model.sample(n)
+        samples = self.surrogate.sample(n)
         alpha = samples['alpha'].numpy()
         N, J, D = alpha.shape
         nu = samples['nu'].numpy()
-        delta = py_sample_cluster_bgsb_fixed(nu, np.zeros(N, J))
+        delta = py_sample_cluster_bgsb_fixed(nu, np.zeros((N, J)))
         shape = alpha[np.arange(N), delta]
         return np.random.gamma(shape = shape, scale = 1, size = (N, D))
     
@@ -528,5 +528,4 @@ if __name__ == '__main__':
     
     # pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
 
-raise
 # EOF
