@@ -147,19 +147,19 @@ class Chain(ParallelTemperingStickBreakingSampler):
 
     def log_alpha_likelihood(self, alpha, r, delta):
         Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
-        dmat = delta[:,:,None] == range(self.nClust)
+        self._scratch_dmat[:] = delta[:,:,None] == range(self.nClust)
         try:
             slY = sparse.einsum(
                 'tnd,tnj->tjd', 
                 np.log(Y), 
-                sparse.COO.from_numpy(dmat)
+                sparse.COO.from_numpy(self._scratch_dmat)
                 ).todense()                                         # (t,j,d)
         except ValueError:
-            slY = np.einsum('tnd,tnj->tjd', np.log(Y), dmat)
+            slY = np.einsum('tnd,tnj->tjd', np.log(Y), self._scratch_dmat)
         out = np.zeros(alpha.shape)
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            out -= self._curr_cluster_state[:,:,None] * gammaln(alpha)
             out += (alpha - 1) * slY
+            out -= self._curr_cluster_state[:,:,None] * gammaln(alpha)
         return out
 
     def log_logalpha_prior(self, logalpha, xi, tau):
@@ -185,15 +185,16 @@ class Chain(ParallelTemperingStickBreakingSampler):
             acurr = alpha.copy()
             lacurr = np.log(acurr)
             lacand = lacurr.copy()
-            lacand[idx] += normal(scale = 0.2, size = (idx[0].shape[0], self.nCol))
+            # lacand[idx] += normal(scale = 0.1, size = (idx[0].shape[0], self.nCol))
+            lacand += normal(scale = 0.1, size = lacand.shape)
             acand = np.exp(lacand)
         
         self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
         self._scratch_alpha -= self.log_alpha_likelihood(acurr, r, delta)
-        self._scratch_alpha += self.log_logalpha_prior(lacand, xi, tau)
-        self._scratch_alpha -= self.log_logalpha_prior(lacurr, xi, tau)
         with np.errstate(invalid = 'ignore'):
             self._scratch_alpha *= self.itl[:,None,None]
+        self._scratch_alpha += self.log_logalpha_prior(lacand, xi, tau)
+        self._scratch_alpha -= self.log_logalpha_prior(lacurr, xi, tau)
 
         keep = np.where(np.log(uniform(size = acurr.shape)) < self._scratch_alpha)
         acurr[keep] = acand[keep]
@@ -242,7 +243,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         return gamma(shape = shape, scale = 1 / rate)
 
     def sample_r(self, delta, alpha):
-        sa = alpha.sum(axis = 2)
+        sa = alpha.sum(axis = -1)
         shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
         rate  = self.data.Yp.sum(axis = 1)[None,:]
         return gamma(shape = shape, scale = 1 / rate)
@@ -253,7 +254,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self._placeholder_sigma_1 = np.ones((self.nTemp, self.nClust, self.nCol))
         self._placeholder_sigma_2 = np.ones((self.nTemp, self.nDat, self.nCol))
         # Initialize storage
-        self._scratch_dmat  = np.zeros((self.nDat, self.nTemp, self.nClust), dtype = bool)
+        self._scratch_dmat  = np.zeros((self.nTemp, self.nDat, self.nClust), dtype = bool)
         self._scratch_delta = np.zeros((self.nDat, self.nTemp, self.nClust))
         self._scratch_alpha = np.zeros((self.nTemp, self.nClust, self.nCol))
         # Initialize Samples
@@ -268,13 +269,13 @@ class Chain(ParallelTemperingStickBreakingSampler):
             shape = 2., scale = 2., size = (self.nTemp, self.nCol),
             )
         self.samples.delta[0] = choice(
-            self.nClust - 20, size = (self.nTemp, self.nDat),
+            self.nClust, size = (self.nTemp, self.nDat),
             )
         self.samples.r[0] = self.sample_r(
             self.samples.delta[0], self.samples.alpha[0],
             )
         self.samples.chi[0] = self.sample_chi(self.samples.delta[0])
-        # Adaptive Metropolis related
+        # Parallel Tempering related
         self.swap_attempts = np.zeros((self.nTemp, self.nTemp))
         self.swap_succeeds = np.zeros((self.nTemp, self.nTemp))
         # Initialize the iterator
@@ -350,6 +351,8 @@ class Chain(ParallelTemperingStickBreakingSampler):
             self.update_cluster_state()
 
         self.record_log_density()
+        if self.curr_iter > 1000:
+            raise 
         return
     
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -440,7 +443,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             prior_chi = (0.1, 0.1),
             p         = 10,
             max_clust = 200,
-            ntemps    = 5,
+            ntemps    = 3,
             stepping  = 1.15,
             **kwargs
             ):
@@ -517,14 +520,16 @@ class Result(object):
         return
 
 if __name__ == '__main__':
-    from data import Data_From_Raw
+    from data import Data_From_Raw, Data_From_Sphere
     from projgamma import GammaPrior
     from pandas import read_csv
     import os
 
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    model = Chain(data, ntemps = 10)
+    # raw = read_csv('./datasets/ivt_nov_mar.csv')
+    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
+    dat = Data_From_Sphere(raw)
+    model = Chain(dat, ntemps = 3, max_clust = 30)
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
