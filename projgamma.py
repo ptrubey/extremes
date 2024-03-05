@@ -182,15 +182,15 @@ def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
         out    : log-density    (n, t, j)
         aY     : array of Y     (n, d)    [Y in S_p^{d-1}]
         aAlpha : array of alpha (t, j, d)
-        aBeta  : array of beta  (t, j, d)        
+        aBeta  : array of beta  (t, j, d)
     """
     if aY.shape[1] == 0:
         return
-    out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
-    out -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
+    out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None]
+    out -= np.einsum('tjd->tj', loggamma(aAlpha))[None]
     out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
-    out += loggamma(np.einsum('tjd->tj', aAlpha))[None,:,:]
-    out -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
+    out += loggamma(np.einsum('tjd->tj', aAlpha))[None]
+    out -= np.einsum('tjd->tj', aAlpha)[None] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
     return
 
 def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):

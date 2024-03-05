@@ -124,7 +124,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
                 alpha, self._placeholder_sigma_1,
                 )
         np.nan_to_num(self._scratch_delta, False, -np.inf)
-        self._scratch_delta *= self.itl[None,:,None]
+        # self._scratch_delta *= self.itl[None,:,None]
         return
 
     def sample_delta(self, chi, alpha):

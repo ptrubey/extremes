@@ -16,7 +16,7 @@ import time
 import numpy as np
 np.seterr(divide = 'raise', invalid = 'raise')
 from numpy.random import beta, uniform, gamma
-from scipy.special import loggamma, betaln
+from scipy.special import loggamma, betaln, softmax
 from collections import namedtuple
 import math
 import warnings
@@ -339,16 +339,17 @@ def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
     N, T, J = log_likelihood.shape
     scratch = np.zeros((N, T, J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch[:,:,:-1] += np.log(chi)
-        scratch[:,:,1: ] += np.cumsum(np.log(1 - chi), axis = 1)
+        scratch[:,:,:-1] += np.log(chi)[None]
+        scratch[:,:,1: ] += np.cumsum(np.log(1 - chi), axis = -1)[None]
         scratch += log_likelihood # log likelihood
         scratch[np.isnan(scratch)] = -np.inf
-        scratch -= scratch.max(axis = 2)[:,:,None]
-        np.exp(scratch, out = scratch)
-        np.cumsum(scratch, axis = 2, out = scratch)
-        scratch /= scratch[:,:,-1][:,:,None]
+        probs = softmax(scratch, axis = -1)
+        # scratch -= scratch.max(axis = 2)[:,:,None]
+        # np.exp(scratch, out = scratch)
+        # np.cumsum(scratch, axis = 2, out = scratch)
+        # scratch /= scratch[:,:,-1][:,:,None]
     delta = (
-        (uniform(size = (N,T))[:,:,None] > scratch) @ np.ones(J, dtype = int)
+        (uniform(size = (N,T))[:,:,None] > probs) @ np.ones(J, dtype = int)
         ).T
     return delta
 
