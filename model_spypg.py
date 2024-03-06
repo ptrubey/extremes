@@ -124,7 +124,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
                 alpha, self._placeholder_sigma_1,
                 )
         np.nan_to_num(self._scratch_delta, False, -np.inf)
-        # self._scratch_delta *= self.itl[None,:,None]
+        self._scratch_delta *= self.itl[None,:,None]
         return
 
     def sample_delta(self, chi, alpha):
@@ -150,10 +150,10 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self._scratch_dmat[:] = delta[:,:,None] == range(self.nClust)
         try:
             slY = sparse.einsum(
-                'tnd,tnj->tjd', 
+                'tnj,tnd->tjd', 
+                sparse.COO.from_numpy(self._scratch_dmat),
                 np.log(Y), 
-                sparse.COO.from_numpy(self._scratch_dmat)
-                ).todense()                                         # (t,j,d)
+                ).todense() # (t,j,d)
         except ValueError:
             slY = np.einsum('tnd,tnj->tjd', np.log(Y), self._scratch_dmat)
         out = np.zeros(alpha.shape)
@@ -203,32 +203,40 @@ class Chain(ParallelTemperingStickBreakingSampler):
         assert (~(acurr[keep] == 0.).any())
         return(acurr)
 
-    def log_logxi_posterior(self, logxi, sum_alpha, sum_log_alpha, n):
+    def log_logxi_posterior(self, logxi, sum_alpha, sum_log_alpha):
         out = np.zeros(logxi.shape)
         xi = np.exp(logxi)
-        out += self.itl[:,None] * (xi - 1) * sum_log_alpha
-        out -= self.itl[:,None] * n[:,None] * gammaln(xi)
+        out += (xi - 1) * sum_log_alpha
+        out -= self.nClust * gammaln(xi)
         out += self.priors.xi.a * logxi
         out -= self.priors.xi.b * xi
-        out += gammaln((n * self.itl)[:,None] * xi + self.priors.tau.a)
-        out -= ((n * self.itl)[:,None] * xi + self.priors.tau.a) * \
-                    np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
+        out += gammaln(self.nClust * xi + self.priors.tau.a)
+        out -= (self.nClust * xi + self.priors.tau.a) * np.log(sum_alpha + self.priors.tau.b)
+        # out += self.itl[:,None] * (xi - 1) * sum_log_alpha
+        # out -= self.itl[:,None] * n[:,None] * gammaln(xi)
+        # out += self.priors.xi.a * logxi
+        # out -= self.priors.xi.b * xi
+        # out += gammaln((n * self.itl)[:,None] * xi + self.priors.tau.a)
+        # out -= ((n * self.itl)[:,None] * xi + self.priors.tau.a) * \
+        #             np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
         return out
     
     def sample_xi(self, xi, alpha):
-        n = self._extant_clust_state.sum(axis = 1)
+        # n = self._extant_clust_state.sum(axis = 1)
         xcurr = xi.copy()
         lxcurr = np.log(xcurr)
         lxcand = lxcurr.copy()
         lxcand += normal(scale = 0.2, size = lxcand.shape)
 
-        with np.errstate(divide = 'ignore'):
-            sa = np.einsum('tjd,tj->td', alpha, self._extant_clust_state)
-            sla = np.einsum('tjd,tj->td', np.log(alpha), self._extant_clust_state)
+        # with np.errstate(divide = 'ignore'):
+        #     sa = np.einsum('tjd,tj->td', alpha, self._extant_clust_state)
+        #     sla = np.einsum('tjd,tj->td', np.log(alpha), self._extant_clust_state)
+        sa = alpha.sum(axis = 1)
+        sla = np.log(alpha).sum(axis = 1)
 
         logp = np.zeros(xcurr.shape)
-        logp += self.log_logxi_posterior(lxcand, sa, sla, n)
-        logp -= self.log_logxi_posterior(lxcurr, sa, sla, n)
+        logp += self.log_logxi_posterior(lxcand, sa, sla)
+        logp -= self.log_logxi_posterior(lxcurr, sa, sla)
         # Tempering handled internally
         
         keep = np.where(np.log(uniform(size = logp.shape)) < logp)
@@ -351,8 +359,6 @@ class Chain(ParallelTemperingStickBreakingSampler):
             self.update_cluster_state()
 
         self.record_log_density()
-        if self.curr_iter > 1000:
-            raise 
         return
     
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -443,7 +449,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             prior_chi = (0.1, 0.1),
             p         = 10,
             max_clust = 200,
-            ntemps    = 3,
+            ntemps    = 5,
             stepping  = 1.15,
             **kwargs
             ):
@@ -529,7 +535,7 @@ if __name__ == '__main__':
     # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
     dat = Data_From_Sphere(raw)
-    model = Chain(dat, ntemps = 3, max_clust = 30)
+    model = Chain(dat, ntemps = 5, max_clust = 200)
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')

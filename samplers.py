@@ -344,6 +344,7 @@ def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
         scratch += log_likelihood # log likelihood
         scratch[np.isnan(scratch)] = -np.inf
         probs = softmax(scratch, axis = -1)
+        np.cumsum(probs, axis = -1, out = probs)
         # scratch -= scratch.max(axis = 2)[:,:,None]
         # np.exp(scratch, out = scratch)
         # np.cumsum(scratch, axis = 2, out = scratch)
