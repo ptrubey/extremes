@@ -208,19 +208,14 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def log_logxi_posterior(self, logxi, sum_alpha, sum_log_alpha):
         out = np.zeros(logxi.shape)
         xi = np.exp(logxi)
-        out += (xi - 1) * sum_log_alpha
-        out -= self.nClust * gammaln(xi)
+        out += self.itl[:,None] * (xi - 1) * sum_log_alpha
+        out -= self.itl[:,None] * self.nClust * gammaln(xi)
         out += self.priors.xi.a * logxi
         out -= self.priors.xi.b * xi
-        out += gammaln(self.nClust * xi + self.priors.tau.a)
-        out -= (self.nClust * xi + self.priors.tau.a) * np.log(sum_alpha + self.priors.tau.b)
-        # out += self.itl[:,None] * (xi - 1) * sum_log_alpha
-        # out -= self.itl[:,None] * n[:,None] * gammaln(xi)
-        # out += self.priors.xi.a * logxi
-        # out -= self.priors.xi.b * xi
-        # out += gammaln((n * self.itl)[:,None] * xi + self.priors.tau.a)
-        # out -= ((n * self.itl)[:,None] * xi + self.priors.tau.a) * \
-        #             np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
+        out += gammaln(self.nClust * self.itl[:,None] * xi + self.priors.tau.a)
+        out -= (self.nClust * self.itl[:,None] * xi + self.priors.tau.a) *      \
+                    np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
+        out[logxi < 0] = -np.inf # fixing the shape parameter above 1.
         return out
     
     def sample_xi(self, xi, alpha):
@@ -228,7 +223,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         xcurr = xi.copy()
         lxcurr = np.log(xcurr)
         lxcand = lxcurr.copy()
-        lxcand += normal(scale = 0.2, size = lxcand.shape)
+        lxcand += normal(scale = 0.1, size = lxcand.shape)
 
         # with np.errstate(divide = 'ignore'):
         #     sa = np.einsum('tjd,tj->td', alpha, self._extant_clust_state)
@@ -270,11 +265,11 @@ class Chain(ParallelTemperingStickBreakingSampler):
         # Initialize Samples
         self.samples = Samples(ns, self.nDat, self.nCol, self.nTemp, self.nClust)
         self.samples.alpha[0] = gamma(
-            shape = 1.0001, scale = 1, size = (self.nTemp, self.nClust, self.nCol),
+            shape = 2, scale = 2, size = (self.nTemp, self.nClust, self.nCol),
             )        
         self.samples.xi[0] = gamma(
             shape = 2., scale = 2., size = (self.nTemp, self.nCol),
-            )
+            ) + 1
         self.samples.tau[0] = gamma(
             shape = 2., scale = 2., size = (self.nTemp, self.nCol),
             )
