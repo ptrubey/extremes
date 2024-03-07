@@ -255,9 +255,9 @@ class VarPYPG(object):
         self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
         return
     
-    def fit_advi(self, min_steps = 2000, max_steps = 10000, 
+    def fit_advi(self, min_steps = 2000, max_steps = 20000, 
                  relative_tolerance = 1e-6, seed = 1):
-        optimizer = tf.optimizers.Adam(learning_rate=1e-2)
+        optimizer = tf.optimizers.Adam(learning_rate = self.advi_learning_rate)
         concrit = tfp.optimizer.convergence_criteria.LossNotDecreasing(
             rtol = relative_tolerance, min_num_steps = min_steps,
             )
@@ -288,8 +288,10 @@ class VarPYPG(object):
             max_clusters = 200,
             dtype = np.float64,
             p = 10,
-            advi_sample_size = 1,
+            advi_sample_size = 2,
+            advi_learning_rate = 0.001,
             ):
+        self.advi_learning_rate = advi_learning_rate
         self.data = data
         self.Yp = euclidean_to_psphere(self.data.V, p)
         self.J = max_clusters
@@ -483,11 +485,13 @@ class MVarPYPG(VarPYPG):
             nkeep = 3000,
             p = 10,
             advi_sample_size = 1,
+            advi_learning_rate = 0.001,
             ):
         self.nKeep = nkeep
         super().__init__(
             data, eta, discount, prior_xi, prior_tau, 
             max_clusters, dtype, p, advi_sample_size,
+            advi_learning_rate,
             )
         self.rate_placeholder = np.ones(
             (self.S, self.J, self.D), dtype = dtype,
