@@ -339,18 +339,14 @@ def pt_py_sample_cluster_bgsb_fixed(chi, log_likelihood):
     N, T, J = log_likelihood.shape
     scratch = np.zeros((N, T, J))
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        scratch[:,:,:-1] += np.log(chi)[None]
-        scratch[:,:,1: ] += np.cumsum(np.log(1 - chi), axis = -1)[None]
-        scratch += log_likelihood # log likelihood
-        scratch[np.isnan(scratch)] = -np.inf
-        probs = softmax(scratch, axis = -1)
-        np.cumsum(probs, axis = -1, out = probs)
-        # scratch -= scratch.max(axis = 2)[:,:,None]
-        # np.exp(scratch, out = scratch)
-        # np.cumsum(scratch, axis = 2, out = scratch)
-        # scratch /= scratch[:,:,-1][:,:,None]
+        scratch[..., :-1] += np.log(chi)[None]
+        scratch[..., 1: ] += np.cumsum(np.log(1 - chi), axis = -1)[None]
+        scratch += log_likelihood 
+    scratch[np.isnan(scratch)] = -np.inf
+    probs = softmax(scratch, axis = -1) # handles shifting internally to avoid overflows.
+    np.cumsum(probs, axis = -1, out = probs)
     delta = (
-        (uniform(size = (N,T))[:,:,None] > probs) @ np.ones(J, dtype = int)
+        (uniform(size = (N,T,1)) > probs) @ np.ones(J, dtype = int)
         ).T
     return delta
 
@@ -361,18 +357,18 @@ def pt_py_sample_chi_bgsb(delta, disc, conc, trunc):
     """
     Args:
         delta : (T x N)
-        disc  : (T)
-        conc  : (T)
+        disc  : scalar (Pitman Yor discount parameter)
+        conc  : scalar (Pitman Yor concentration parameter)
         trunc : Scalar (Blocked Gibbs Stick-Breaking Truncation Point)
     Out:
         chi   : (T, trunc)
     """
     clustcount = bincount2D_vectorized(delta, trunc)
-    shape1 = 1 + clustcount - disc
+    shape1 = 1 - disc + clustcount
     shape2 = (
         + conc
-        + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount
-        + (np.arange(trunc) + 1)[None,:] * disc
+        + (np.arange(trunc) + 1)[None] * disc
+        + np.flip(np.flip(clustcount, -1).cumsum(axis = -1), -1) - clustcount
         )
     chi = beta(a = shape1, b = shape2)
     return chi
@@ -381,18 +377,18 @@ def pt_py_sample_chi_bgsb_fixed(delta, disc, conc, trunc):
     """
     Args:
         delta : (T x N)
-        disc  : (T)
-        conc  : (T)
+        disc  : scalar (Pitman Yor discount parameter)
+        conc  : scalar (Pitman Yor concentration parameter)
         trunc : Scalar (Blocked Gibbs Stick-Breaking Truncation Point)
     Out:
-        chi   : (T, trunc)
+        chi   : (T, trunc - 1)
     """
     clustcount = bincount2D_vectorized(delta, trunc)
-    shape1 = 1 + clustcount - disc
+    shape1 = 1 - disc + clustcount
     shape2 = (
         + conc
-        + clustcount[:,::-1].cumsum(axis = 1)[:,::-1] - clustcount
         + (np.arange(trunc) + 1)[None,:] * disc
+        + np.flip(np.flip(clustcount, -1).cumsum(axis = -1), -1) - clustcount
         )
     chi = beta(a = shape1[:,:-1], b = shape2[:,:-1])
     return chi
