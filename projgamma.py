@@ -12,7 +12,8 @@ from math import acos, cos, exp, log, sin
 
 from numpy.linalg import inv, norm, slogdet
 from scipy.integrate import quad
-from scipy.special import gammainc, gammaln, multigammaln, loggamma
+from scipy.special import gammainc, gammaln, multigammaln, loggamma, softmax,   \
+    log_softmax
 from scipy.stats import gamma
 from scipy.stats import norm as normal
 from scipy.stats import uniform
@@ -243,27 +244,39 @@ def pt_stickbreak(nu):
     out = np.zeros((nu.shape[0], nu.shape[1] + 1))
     out[..., :-1] += np.log(nu)
     out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
-    np.exp(out, out = out)
-    return out
+    # np.exp(out, out = out)
+    return softmax(out, axis = -1)
 
-def pt_logd_mixprojresgamma(aY, aAlpha, nu):
+def pt_log_stickbreak(nu):
+    """ Parallel Tempered stick-breaking function (log) """
+    shape = list(nu.shape)
+    shape[-1] += 1
+    out = np.zeros(shape = shape)
+    out[..., :-1] += np.log(nu)
+    out[..., 1: ] += np.cumsum(np.log(1 - nu), axis = -1)
+    return log_softmax(out, axis = -1)
+
+def pt_logd_mixprojgamma(aY, aAlpha, aBeta, nu):
     """ 
     Parallel tempered mixture of projected gammas (omitting normalizing constant) 
     aY: (N x D)
     aAlpha : (T x J x D)
     nu : (T x J-1)    
     """
-    pi = pt_stickbreak(nu)
+    logpi = pt_log_stickbreak(nu)
     scratch = np.zeros((aY.shape[0], *aAlpha.shape[:-1])) # (N, ..., J)
-    asum = aAlpha.sum(axis = -1)
-    ysum = aY.sum(axis = -1)
-
-    scratch -= loggamma(aAlpha).sum(axis = -1)
-    scratch += np.einsum('n...d,...tjd->n...tj', np.log(aY), aAlpha - 1)
-    scratch += loggamma(aAlpha.sum(axis = -1))
-    scratch -= np.einsum('...tj,...n->n...tj', asum, np.log(ysum))
+    pt_logd_projgamma_my_mt_inplace_unstable(scratch, aY, aAlpha, aBeta)
+    scratch += logpi[None]
     np.exp(scratch, out = scratch)
-    return np.log(np.einsum('ntj,tj->nt', scratch, pi))
+    return np.log(scratch.sum(axis = -1))
+    # asum = aAlpha.sum(axis = -1)
+    # ysum = aY.sum(axis = -1)
+    # scratch -= loggamma(aAlpha).sum(axis = -1)
+    # scratch += np.einsum('n...d,...tjd->n...tj', np.log(aY), aAlpha - 1)
+    # scratch += loggamma(aAlpha.sum(axis = -1))
+    # scratch -= np.einsum('...tj,...n->n...tj', asum, np.log(ysum))
+    # np.exp(scratch, out = scratch)
+    # return np.log(np.einsum('ntj,tj->nt', scratch, pi))
 
 ## functions relating to gamma density
 

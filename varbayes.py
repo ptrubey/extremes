@@ -288,7 +288,7 @@ class VarPYPG(object):
             max_clusters = 200,
             dtype = np.float64,
             p = 10,
-            advi_sample_size = 2,
+            advi_sample_size = 1,
             advi_learning_rate = 0.001,
             ):
         self.advi_learning_rate = advi_learning_rate

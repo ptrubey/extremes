@@ -23,7 +23,7 @@ from samplers import ParallelTemperingStickBreakingSampler, GEMPrior,           
 from data import euclidean_to_psphere, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, logd_gamma_my, pt_logd_gamma_my,              \
     pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt,      \
-    pt_logd_prodgamma_my_st, pt_logd_mixprojresgamma
+    pt_logd_prodgamma_my_st, pt_logd_mixprojgamma
 
 Prior = namedtuple('Prior', 'xi tau chi')
 
@@ -210,12 +210,13 @@ class Chain(ParallelTemperingStickBreakingSampler):
         xi = np.exp(logxi)
         out += self.itl[:,None] * (xi - 1) * sum_log_alpha
         out -= self.itl[:,None] * self.nClust * gammaln(xi)
-        out += self.priors.xi.a * logxi
-        out -= self.priors.xi.b * xi
+        out -= 0.5 * ((logxi - self.priors.xi.a) / self.priors.xi.b)**2
+        # out += self.priors.xi.a * logxi
+        # out -= self.priors.xi.b * xi
         out += gammaln(self.nClust * self.itl[:,None] * xi + self.priors.tau.a)
         out -= (self.nClust * self.itl[:,None] * xi + self.priors.tau.a) *      \
                     np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
-        out[logxi < 0] = -np.inf # fixing the shape parameter above 1.
+        # out[logxi < 0] = -np.inf # fixing the shape parameter above 1.
         return out
     
     def sample_xi(self, xi, alpha):
@@ -306,14 +307,20 @@ class Chain(ParallelTemperingStickBreakingSampler):
         #     pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau),
         #     extant_clusters,
         #     )
-        ll += pt_logd_mixprojresgamma(self.data.Yp, self.curr_alpha, self.curr_chi).sum(axis = 0)
+        ll += pt_logd_mixprojgamma(
+            self.data.Yp, 
+            self.curr_alpha, 
+            self._placeholder_sigma_1, 
+            self.curr_chi,
+            ).sum(axis = 0)
         ll += pt_logd_gem_mx_st_fixed(self.curr_chi, *self.priors.chi)
         ll += pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau).sum(axis = 1)
         return ll
 
     def log_prior(self):
         lp = np.zeros(self.nTemp)
-        lp += logd_gamma_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
+        # lp += logd_gamma_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
+        lp -= 0.5 * (((self.curr_xi - self.priors.xi.a) / self.priors.xi.b)**2).sum(axis = -1)
         lp += logd_gamma_my(self.curr_tau, *self.priors.tau).sum(axis = 1)
         return lp
 
@@ -441,7 +448,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def __init__(
             self,
             data,
-            prior_xi  = (3., 3.),
+            prior_xi  = (0., 2.),
             prior_tau = (3., 3.),
             prior_chi = (0.1, 0.1),
             p         = 10,
@@ -528,11 +535,11 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    # raw = read_csv('./datasets/ivt_nov_mar.csv')
-    # dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
-    dat = Data_From_Sphere(raw)
-    model = Chain(dat, ntemps = 5, max_clust = 100)
+    raw = read_csv('./datasets/ivt_nov_mar.csv')
+    dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    # raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
+    # dat = Data_From_Sphere(raw)
+    model = Chain(dat, ntemps = 1, max_clust = 200)
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
@@ -543,5 +550,6 @@ if __name__ == '__main__':
     from matplotlib import pyplot as plt
     plt.plot(res.samples.ld)
     plt.show()
+    raise
 
 # EOF
