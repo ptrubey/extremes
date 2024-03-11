@@ -49,26 +49,32 @@ class Samples(object):
         self.r     = np.empty((nSamp + 1, nTemp, nDat))
         self.chi   = np.empty((nSamp + 1, nTemp, nClust - 1))
         self.delta = np.empty((nSamp + 1, nTemp, nDat), dtype = int)
-        self.ld    = np.empty((nSamp + 1))
+        self.ld    = np.zeros((nSamp + 1))
         return
-
+    
 class Samples1T(object):
-    alpha = None  # Cluster shape
-    xi    = None  # Centering Shape
-    tau   = None  # Centering Rate
-    nu    = None  # Stickbreaking unnormalized cluster weights
-    r     = None  # Radius
-    delta = None  # Cluster Assignment
-    ld    = None  # Log-density of cold chain
+    alpha = None # Cluster shape
+    beta  = None # Cluster Rate
+    delta = None # cluster identtifier
+    mu    = None # centering (alpha) log-mean 
+    sigma = None # centering (alpha) log-sd
+    xi    = None # centering (beta) shape
+    tau   = None # centering (beta) rate
+    chi   = None # Stick-breaking unnormalized weights
+    r     = None # latent radius (per obs)
+    ld    = None # log-density of cold chain
 
     def __init__(self, nSamp, nDat, nCol, nClust):
         self.alpha = np.empty((nSamp + 1, nClust, nCol))
-        self.xi    = np.empty((nSamp + 1, nCol))
-        self.tau   = np.empty((nSamp + 1, nCol))
+        self.beta  = np.empty((nSamp + 1, nClust, nCol))
+        self.mu    = np.empty((nSamp + 1, nCol))
+        self.sigma = np.empty((nSamp + 1, nCol))
+        self.xi    = np.empty((nSamp + 1, nCol - 1))
+        self.tau   = np.empty((nSamp + 1, nCol - 1))
         self.r     = np.empty((nSamp + 1, nDat))
         self.chi   = np.empty((nSamp + 1, nClust - 1))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
-        self.ld    = np.empty((nSamp + 1))
+        self.ld    = np.zeros((nSamp + 1))
         return
 
 class Chain(ParallelTemperingStickBreakingSampler):
@@ -84,6 +90,18 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def curr_alpha(self):
         return self.samples.alpha[self.curr_iter]
     @property
+    def curr_beta(self):
+        return self.samples.beta[self.curr_iter]
+    @property
+    def curr_delta(self):
+        return self.samples.delta[self.curr_iter]   
+    @property
+    def curr_mu(self):
+        return self.samples.mu[self.curr_iter]
+    @property
+    def curr_sigma(self):
+        return self.samples.sigma[self.curr_iter]    
+    @property
     def curr_xi(self):
         return self.samples.xi[self.curr_iter]
     @property
@@ -95,10 +113,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
     @property
     def curr_chi(self):
         return self.samples.chi[self.curr_iter]
-    @property
-    def curr_delta(self):
-        return self.samples.delta[self.curr_iter]
-    
+
     # Constants
     nClust  = None          # Stick-breaking truncation point
     nCol    = None          # Dimensionality
@@ -123,7 +138,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
     _cand_cluster_state = None  # bool (nTemp, nClust)
     _extant_clust_state = None  # bool (nTemp, nClust)
 
-    def log_delta_likelihood(self, alpha):
+    def log_delta_likelihood(self, alpha, beta):
         """
         inputs:
             alpha : (t, j, d)
@@ -133,17 +148,15 @@ class Chain(ParallelTemperingStickBreakingSampler):
         """
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             pt_logd_projgamma_my_mt_inplace_unstable(
-                self._scratch_delta, 
-                self.data.Yp, 
-                alpha, self._placeholder_sigma_1,
+                self._scratch_delta, self.data.Yp, alpha, beta,
                 )
         np.nan_to_num(self._scratch_delta, False, -np.inf)
         self._scratch_delta *= self.itl[None,:,None]
         return
 
-    def sample_delta(self, chi, alpha):
+    def sample_delta(self, chi, alpha, beta):
         self._scratch_delta[:] = 0.
-        self.log_delta_likelihood(alpha)
+        self.log_delta_likelihood(alpha, beta)
         return pt_py_sample_cluster_bgsb_fixed(chi, self._scratch_delta)
     
     def sample_chi(self, delta):
@@ -152,114 +165,129 @@ class Chain(ParallelTemperingStickBreakingSampler):
             )
         return chi
 
-    def sample_alpha_new(self, xi, tau):
-        out = gamma(
-            shape = xi, scale = 1 / tau, 
+    def sample_alpha_new(self, mu, sigma):
+        out = normal(
+            shape = mu, scale = sigma, 
             size = (self.nClust, self.nTemp, self.nCol),
-            ).swapaxes(0,1)
+            ).swapaxes(0, 1)
+        return np.exp(out)
+
+    def log_logalpha_posterior(self, logalpha, n, sy, sly, mu, sigma, xi, tau):
+        alpha = np.exp(logalpha)
+        out = np.zeros(logalpha.shape)
+
+        anew = n[:, None] * alpha[..., 1:] + xi[:, None]
+        bnew = sy[..., 1:] + tau[:, None]
+
+        out += (alpha - 1) * sly
+        out -= n[:,:,None] * gammaln(alpha)
+        out[..., 1:] += gammaln(anew)
+        out[..., 1:] -= anew * np.log(bnew)
+        out *= self.il[:,None,None]
+        out -= 0.5 * ((logalpha - mu[:,None]) / sigma[:,None])**2
         return out
 
-    def log_alpha_likelihood(self, alpha, r, delta):
-        Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
-        self._scratch_dmat[:] = delta[:,:,None] == range(self.nClust)
+    def sample_alpha(self, alpha, delta, r, mu, sigma, xi, tau):
+        Y    = r[:,:,None] * self.data.Yp[None] # t,n,d
+        dmat = delta[:,:,None] == range(self.nClust)
         try:
-            slY = sparse.einsum(
-                'tnj,tnd->tjd', 
-                sparse.COO.from_numpy(self._scratch_dmat),
-                np.log(Y), 
-                ).todense() # (t,j,d)
+            dmatS = sparse.COO.from_numpy(dmat)
+            slY   = sparse.einsum('tnj,tnd->tjd', dmatS, np.log(Y))
+            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y)
+            n     = sparse.einsum('tnj->tj', dmatS)
         except ValueError:
-            slY = np.einsum('tnd,tnj->tjd', np.log(Y), self._scratch_dmat)
-        out = np.zeros(alpha.shape)
-        with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            out += (alpha - 1) * slY
-            out -= self._curr_cluster_state[:,:,None] * gammaln(alpha)
-        return out
-
-    def log_logalpha_prior(self, logalpha, xi, tau):
-        logd = np.zeros(logalpha.shape)
-        with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            # logd += xi[:,None] * np.log(tau[:,None])
-            # logd -= gammaln(tau[:,None])
-            logd += xi[:,None] * logalpha
-            logd -= tau[:,None] * np.exp(logalpha)
-        np.nan_to_num(logd, False, -np.inf)
-        return logd
-
-    def sample_alpha(self, alpha, delta, r, xi, tau):
+            slY   = np.einsum('tnj,tnd->tjd', dmat, np.log(Y))
+            sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
+            n     = np.einsum('tnj->tj', dmat)
+        
+        with np.errstate(divide = 'ignore'):
+            acurr  = alpha.copy()
+            lacurr = np.log(acurr)
+            lacand = lacurr.copy()
+            lacand += normal(scale = 0.1, size = lacand.shape)
+            acand  = np.exp(lacand)
+        
         idx = np.where(self._extant_clust_state)
         ndx = np.where(self._cand_cluster_state)
-
+        
         self._scratch_alpha[:] = -np.inf
         self._scratch_alpha[idx] = 0.
         
-        assert(~(alpha[self._extant_clust_state] == 0).any())
-
-        with np.errstate(divide = 'ignore'):
-            acurr = alpha.copy()
-            lacurr = np.log(acurr)
-            lacand = lacurr.copy()
-            # lacand[idx] += normal(scale = 0.1, size = (idx[0].shape[0], self.nCol))
-            lacand += normal(scale = 0.1, size = lacand.shape)
-            acand = np.exp(lacand)
-        
-        assert (~np.any(acand == 0))
-
-        self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
-        self._scratch_alpha -= self.log_alpha_likelihood(acurr, r, delta)
-        with np.errstate(invalid = 'ignore'):
-            self._scratch_alpha *= self.itl[:,None,None]
-        self._scratch_alpha += self.log_logalpha_prior(lacand, xi, tau)
-        self._scratch_alpha -= self.log_logalpha_prior(lacurr, xi, tau)
+        self._scratch_alpha += self.log_logalpha_posterior(
+            lacand, n, sY, slY, mu, sigma, xi, tau,
+            )
+        self._scratch_alpha -= self.log_logalpha_posterior(
+            lacurr, n, sY, slY, mu, sigma, xi, tau,
+            )
 
         keep = np.where(np.log(uniform(size = acurr.shape)) < self._scratch_alpha)
         acurr[keep] = acand[keep]
-        acurr[ndx] = self.sample_alpha_new(xi, tau)[ndx]
-        
-        assert (~(acurr[keep] == 0.).any())
+        acurr[ndx] = self.sample_alpha_new(mu, sigma)[ndx]
         return(acurr)
 
-    def log_logxi_posterior(self, logxi, sum_alpha, sum_log_alpha):
+    def sample_beta(self, alpha, delta, r, xi, tau):
+        Y    = r[:,:,None] * self.data.Yp[None] # t,n,d
+        dmat = delta[:,:,None] == range(self.nClust)
+        try:
+            dmatS = sparse.COO.from_numpy(dmat)
+            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y)
+            n     = sparse.einsum('tnj->tj', dmatS)
+        except ValueError:
+            sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
+            n     = np.einsum('tnj->tj', dmat)
+        
+        anew = n[:, None] * alpha[..., 1:] + xi[:,None]
+        bnew = sY[..., 1:] + tau[:, None]
+
+        beta = np.ones(alpha.shape)
+        beta[..., 1:] = gamma(shape = anew, scale = 1 / bnew)
+        return beta
+
+    def sample_mu(self, alpha, sigma):
+        labar = np.log(alpha).mean(axis = 1)
+        snew  = np.sqrt(1 / (1 / self.priors.mu.sigma**2 + self.nClust / sigma**2))
+        mnew  = self.priors.mu.sigma**2 * labar + sigma**2 * self.priors.mu.mu
+        mnew /= sigma**2 / self.nClust + self.priors.mu.sigma**2
+        return normal(loc = mnew, scale = snew)
+    
+    def sample_sigma(self, alpha, mu):
+        anew = self.priors.sigma.a + self.nClust / 2
+        bnew = self.priors.sigma.b + 0.5 * (np.log(alpha) - mu).sum(axis = 1)
+        return 1 / gamma(anew, scale = 1 / bnew)
+
+    def log_logxi_posterior(self, logxi, sB, slB, xi):
+        xi  = np.exp(logxi)
         out = np.zeros(logxi.shape)
-        xi = np.exp(logxi)
-        out += self.itl[:,None] * (xi - 1) * sum_log_alpha
-        out -= self.itl[:,None] * self.nClust * gammaln(xi)
-        out -= 0.5 * ((logxi - self.priors.xi.a) / self.priors.xi.b)**2
-        # out += self.priors.xi.a * logxi
-        # out -= self.priors.xi.b * xi
-        out += gammaln(self.nClust * self.itl[:,None] * xi + self.priors.tau.a)
-        out -= (self.nClust * self.itl[:,None] * xi + self.priors.tau.a) *      \
-                    np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
-        # out[logxi < 0] = -np.inf # fixing the shape parameter above 1.
+        
+        out += (xi - 1) * slB
+        out -= self.nClust * gammaln(xi)
+        out += gammaln(self.nClust * xi + self.priors.tau.a)
+        out -= (self.nClust * xi + self.priors.tau.a) * np.log(sB + self.priors.tau.b)
+        out -= 0.5 * ((logxi - self.priors.xi.mu) / self.priors.xi.sigma)**2
         return out
     
-    def sample_xi(self, xi, alpha):
+    def sample_xi(self, xi, beta):
         # n = self._extant_clust_state.sum(axis = 1)
         xcurr = xi.copy()
         lxcurr = np.log(xcurr)
         lxcand = lxcurr.copy()
         lxcand += normal(scale = 0.1, size = lxcand.shape)
 
-        # with np.errstate(divide = 'ignore'):
-        #     sa = np.einsum('tjd,tj->td', alpha, self._extant_clust_state)
-        #     sla = np.einsum('tjd,tj->td', np.log(alpha), self._extant_clust_state)
-        sa = alpha.sum(axis = 1)
-        sla = np.log(alpha).sum(axis = 1)
+        sb = beta[..., 1:].sum(axis = 1)
+        slb = np.log(beta[..., 1:]).sum(axis = 1)
 
         logp = np.zeros(xcurr.shape)
-        logp += self.log_logxi_posterior(lxcand, sa, sla)
-        logp -= self.log_logxi_posterior(lxcurr, sa, sla)
-        # Tempering handled internally
+        logp += self.log_logxi_posterior(lxcand, sb, slb)
+        logp -= self.log_logxi_posterior(lxcurr, sb, slb)
         
         keep = np.where(np.log(uniform(size = logp.shape)) < logp)
         xcurr[keep] = np.exp(lxcand[keep])
         return xcurr
 
-    def sample_tau(self, xi, alpha):
-        n = self._extant_clust_state.sum(axis = 1)
-        sa = np.einsum('tjd,tj->td', alpha, self._extant_clust_state)
-        shape = (n * self.itl)[:,None] * xi + self.priors.tau.a
-        rate = sa * self.itl[:,None] + self.priors.tau.b
+    def sample_tau(self, xi, beta):
+        sb = beta[...,1:].sum(axis = 1)
+        shape = self.nClust * xi + self.priors.tau.a
+        rate = sb + self.priors.tau.b
         return gamma(shape = shape, scale = 1 / rate)
 
     def sample_r(self, delta, alpha):
@@ -271,22 +299,28 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def initialize_sampler(self, ns):
         """ Initialize the sampler """
         # Initialize Placeholders (for restricted gamma):
-        self._placeholder_sigma_1 = np.ones((self.nTemp, self.nClust, self.nCol))
-        self._placeholder_sigma_2 = np.ones((self.nTemp, self.nDat, self.nCol))
-        # Initialize storage
-        self._scratch_dmat  = np.zeros((self.nTemp, self.nDat, self.nClust), dtype = bool)
-        self._scratch_delta = np.zeros((self.nDat, self.nTemp, self.nClust))
-        self._scratch_alpha = np.zeros((self.nTemp, self.nClust, self.nCol))
+        # self._placeholder_sigma_1 = np.ones((self.nTemp, self.nClust, self.nCol))
+        # self._placeholder_sigma_2 = np.ones((self.nTemp, self.nDat, self.nCol))
+        # # Initialize storage
+        # self._scratch_dmat  = np.zeros((self.nTemp, self.nDat, self.nClust), dtype = bool)
+        # self._scratch_delta = np.zeros((self.nDat, self.nTemp, self.nClust))
+        # self._scratch_alpha = np.zeros((self.nTemp, self.nClust, self.nCol))
         # Initialize Samples
         self.samples = Samples(ns, self.nDat, self.nCol, self.nTemp, self.nClust)
         self.samples.alpha[0] = gamma(
             shape = 2, scale = 2, size = (self.nTemp, self.nClust, self.nCol),
-            )        
+            )
+        self.samples.beta[..., 0] = 1.
+        self.samples.beta[0][..., 1:] = gamma(
+            shape = 3, scale = 1 / 3, size = (self.nTemp, self.nClustt, self.nCol),
+            )
+        self.samples.mu[0] = normal(loc = 0, scale = 1, size = (self.nTemp, self.nCol))
+        self.samples.sigma[0] = 1 / gamma(shape = 2, scale = 1 / 2)
         self.samples.xi[0] = gamma(
-            shape = 2., scale = 2., size = (self.nTemp, self.nCol),
+            shape = 2., scale = 1 / 2., size = (self.nTemp, self.nCol - 1),
             ) + 1
         self.samples.tau[0] = gamma(
-            shape = 2., scale = 2., size = (self.nTemp, self.nCol),
+            shape = 2., scale = 1 / 2., size = (self.nTemp, self.nCol - 1),
             )
         self.samples.delta[0] = choice(
             self.nClust, size = (self.nTemp, self.nDat),
@@ -309,22 +343,10 @@ class Chain(ParallelTemperingStickBreakingSampler):
 
     def log_likelihood(self):
         ll = np.zeros(self.nTemp)
-        # ll += pt_logd_projgamma_paired_yt(
-        #     self.data.Yp, 
-        #     self.curr_alpha[
-        #         self.temp_unravel, self.curr_delta.ravel()
-        #         ].reshape(self.nTemp, self.nDat, self.nCol),
-        #     self._placeholder_sigma_2,
-        #     ).sum(axis = 1)
-        # ll += np.einsum(
-        #     'tj,tj->t',
-        #     pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau),
-        #     extant_clusters,
-        #     )
         ll += pt_logd_mixprojgamma(
             self.data.Yp, 
             self.curr_alpha, 
-            self._placeholder_sigma_1, 
+            self.curr_beta, 
             self.curr_chi,
             ).sum(axis = 0)
         ll += pt_logd_gem_mx_st_fixed(self.curr_chi, *self.priors.chi)
@@ -352,25 +374,35 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def iter_sample(self):
         # current cluster assignments; number of new candidate clusters
         alpha = self.curr_alpha
-        chi   = self.curr_chi
+        beta  = self.curr_beta
+        mu    = self.curr_mu
+        sigma = self.curr_sigma
         xi    = self.curr_xi
         tau   = self.curr_tau
         r     = self.curr_r
+        chi   = self.curr_chi
 
         # Advance the iterator
         self.curr_iter += 1
         ci = self.curr_iter
 
         # Update cluster assignments
-        self.samples.delta[ci] = self.sample_delta(chi, alpha)
+        self.samples.delta[ci] = self.sample_delta(chi, alpha, beta)
         self.samples.chi[ci] = self.sample_chi(self.curr_delta)
         self.update_cluster_state()
         self.samples.alpha[ci] = self.sample_alpha(
-            alpha, self.curr_delta, r, xi, tau
+            alpha, self.curr_delta, r, mu, sigma, xi, tau,
             )
-        self.samples.r[ci] = self.sample_r(self.curr_delta, self.curr_alpha)
-        self.samples.xi[ci] = self.sample_xi(xi, self.curr_alpha)
-        self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_alpha)
+        self.samples.beta[ci] = self.sample_beta(
+            alpha, self.curr_delta, r, xi, tau,
+            )
+        self.samples.r[ci] = self.sample_r(
+            self.curr_delta, self.curr_alpha, self.curr_beta,
+            )
+        self.samples.mu[ci] = self.sample_mu(self.curr_alpha, sigma)
+        self.samples.sigma[ci] = self.sample_sigma(self.curr_alpha, self.curr_mu)
+        self.samples.xi[ci] = self.sample_xi(xi, self.curr_beta)
+        self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_beta)
 
         if self.curr_iter > self.swap_start:
             self.try_tempering_swap()

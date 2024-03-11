@@ -26,6 +26,8 @@ from slice import skip_univariate_slice_sample, univariate_slice_sample
 GammaPrior     = namedtuple('GammaPrior', 'a b')
 DirichletPrior = namedtuple('DirichletPrior', 'a')
 BetaPrior      = namedtuple('BetaPrior', 'a b')
+UniNormalPrior = namedtuple('UniNormalPrior','mu sigma')
+InvGammaPrior  = namedtuple('InvGammaPrior', 'a b')
 # LogNormal Models
 NormalPrior     = namedtuple('NormalPrior', 'mu SCho SInv')
 InvWishartPrior = namedtuple('InvWishartPrior', 'nu psi')
@@ -658,7 +660,6 @@ def pt_logd_loggamma_mx_st(x, a, b):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-
 def pt_logpost_loggammagamma(logalpha, n, sy, sly, a, b, c, d):
     """
     logalpha    : (t, d), log-shape parameter (variable) in gamma-gamma model
@@ -675,6 +676,43 @@ def pt_logpost_loggammagamma(logalpha, n, sy, sly, a, b, c, d):
     ld += loggamma(n[:,None] * alpha + c)
     ld -= (n[:,None] * alpha + c) * np.log(sy + d)
     return ld
+
+def pt_logpost_lognormalgamma(logalpha, n, sy, sly, mu, sigma, xi, tau):
+    """
+    Log-posterior for shape parameter of gamma distribuion, wih rate
+    integrated out.
+    ---
+    logalpha : (t, j, d)
+    n        : (t, j)
+    sy       : (t, j, d) : sum of y
+    sly      : (t, j, d) : sum of log(y)
+    mu       : (t, d)    : mean of log-normal prior for shape
+    sig      : (t, d)    : scale of log-normal prior for shape
+    xi       : (t, d)    : shape of gamma prior for rate
+    tau      : (t, d)    : rate of gamma prior for rate
+    """
+    T, J, D = logalpha.shape
+    alpha = np.exp(logalpha)
+    out = np.zeros((T,J,D))
+    out += (alpha - 1) * sly
+    out -= n[:,:,None] * loggamma(alpha)
+    out -= 0.5 * ((logalpha - mu[:,None]) / sigma[:,None])**2
+    out += loggamma(n[:,:,None] * alpha + xi[:,None])
+    out -= (n[:,None] * alpha + xi[:,None]) * np.log(sy + tau[:,None])
+    return out
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Functions relating to Pareto Density
 
