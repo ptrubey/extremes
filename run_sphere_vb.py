@@ -13,7 +13,7 @@ from data import Data_From_Sphere
 import varbayes as vb
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere2/result_240306.sql'
+out_sql     = './simulated/sphere2/result_240308.sql'
 out_table   = 'energy'
 
 def run_model_from_path_wrapper(args):
@@ -60,6 +60,7 @@ def run_model_from_path(path, *pargs):
     return
 
 if __name__ == '__main__':
+    limit_cpu()
     files = glob.glob(source_path)
 
     conn = sql.connect(out_sql)

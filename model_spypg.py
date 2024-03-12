@@ -185,7 +185,6 @@ class Chain(ParallelTemperingStickBreakingSampler):
             acurr = alpha.copy()
             lacurr = np.log(acurr)
             lacand = lacurr.copy()
-            # lacand[idx] += normal(scale = 0.1, size = (idx[0].shape[0], self.nCol))
             lacand += normal(scale = 0.1, size = lacand.shape)
             acand = np.exp(lacand)
         

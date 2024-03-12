@@ -195,11 +195,11 @@ class Chain(ParallelTemperingStickBreakingSampler):
             dmatS = sparse.COO.from_numpy(dmat)
             slY   = sparse.einsum('tnj,tnd->tjd', dmatS, np.log(Y)).todense()
             sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y).todense()
-            n     = sparse.einsum('tnj->tj', dmatS).todense()
+            n     = sparse.einsum('tnj->tj', dmatS.astype(int)).todense()
         except ValueError:
             slY   = np.einsum('tnj,tnd->tjd', dmat, np.log(Y))
             sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
-            n     = np.einsum('tnj->tj', dmat)
+            n     = np.einsum('tnj->tj', dmat.astype(int))
         
         with np.errstate(divide = 'ignore'):
             acurr  = alpha.copy()
@@ -231,14 +231,14 @@ class Chain(ParallelTemperingStickBreakingSampler):
         dmat = delta[:,:,None] == range(self.nClust)
         try:
             dmatS = sparse.COO.from_numpy(dmat)
-            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y).todense()
-            n     = sparse.einsum('tnj->tj', dmatS).todense()
+            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y[..., 1:]).todense()
+            n     = sparse.einsum('tnj->tj', dmatS.astype(int)).todense()
         except ValueError:
-            sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
-            n     = np.einsum('tnj->tj', dmat)
+            sY    = np.einsum('tnj,tnd->tjd', dmat, Y[..., 1:])
+            n     = np.einsum('tnj->tj', dmat.astype(int))
         
         anew = n[..., None] * alpha[..., 1:] + xi[:,None]
-        bnew = sY[..., 1:] + tau[:, None]
+        bnew = sY + tau[:, None]
 
         beta = np.ones(alpha.shape)
         beta[..., 1:] = gamma(shape = anew, scale = 1 / bnew)
@@ -404,17 +404,19 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self.samples.alpha[ci] = self.sample_alpha(
             alpha, self.curr_delta, r, mu, sigma, xi, tau,
             )
+        # self.samples.alpha[ci] = alpha
         self.samples.beta[ci] = self.sample_beta(
             alpha, self.curr_delta, r, xi, tau,
             )
         self.samples.r[ci] = self.sample_r(
             self.curr_delta, self.curr_alpha, self.curr_beta,
             )
-        # self.samples.mu[ci] = self.sample_mu(self.curr_alpha, sigma)
-        self.samples.mu[ci] = 0.
+        self.samples.mu[ci] = self.sample_mu(self.curr_alpha, sigma)
         self.samples.sigma[ci] = self.sample_sigma(self.curr_alpha, self.curr_mu)
-        self.samples.xi[ci] = self.sample_xi(xi, self.curr_beta)
-        self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_beta)
+        # self.samples.xi[ci] = self.sample_xi(xi, self.curr_beta)
+        self.samples.xi[ci] = 1.
+        self.samples.tau[ci] = 1.
+        # self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_beta)
 
         if self.curr_iter > self.swap_start:
             self.try_tempering_swap()
