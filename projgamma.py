@@ -265,6 +265,9 @@ def pt_logd_mixprojgamma(aY, aAlpha, aBeta, nu):
     aAlpha : (T x J x D)
     nu : (T x J-1)    
     """
+    N = aY.shape[0]
+    T, J, D = aAlpha.shape
+    
     logpi = pt_log_stickbreak(nu)
     scratch = np.zeros((aY.shape[0], *aAlpha.shape[:-1])) # (N, ..., J)
     pt_logd_projgamma_my_mt_inplace_unstable(scratch, aY, aAlpha, aBeta)
@@ -321,6 +324,68 @@ def pt_logd_gamma_my(aY, aAlpha, aBeta):
         ld -= aBeta[:, None] * aY
     np.nan_to_num(ld, False, -np.inf)
     return ld.sum(axis = 2)
+
+## functions relating to log-normal density
+def pt_logd_lognormal_my(aY, aMu, aSigma):
+    """
+    log-density of Log-normal distribution
+    ---
+    Args:
+        aY     : (t, j, d)
+        aMu    : (t, d)
+        aSigma : (t, d)
+    Returns:
+        ld     : (t, j)
+    """
+    logY = np.log(aY)
+    diff = (np.log(aY) - aMu[:,None]) / aSigma[:,None]
+
+    out = np.zeros(aY.shape)
+    out -= logY
+    out -= np.sqrt(2 * np.pi)
+    out -= np.log(aSigma)[:,None]
+    out -= 0.5 * diff * diff
+    return out
+
+def logd_lognormal_my(aY, mu, sigma):
+    """
+    log-density of log-normal distribution
+    ---
+    Args:
+        aY     : (t, d)
+        aMu    : scalar
+        sigma  : scalar
+    Returns: 
+        ld     : (t, d)    
+    """
+    logY = np.log(aY)
+    diff = (logY - mu) / sigma
+
+    out = np.zeros(aY.shape)
+    out -= logY
+    out -= np.sqrt(2 * np.pi)
+    out -= np.log(sigma)
+    out -= 0.5 * diff * diff
+    return out
+
+def logd_normal_my(aY, mu, sigma):
+    """
+    log-density of log-normal distribution
+    ---
+    Args:
+        aY     : (t, d)
+        aMu    : scalar
+        sigma  : scalar
+    Returns: 
+        ld     : (t, d)    
+    """
+    diff = (aY - mu) / sigma
+
+    out = np.zeros(aY.shape)
+    out -= np.sqrt(2 * np.pi)
+    out -= np.log(sigma)
+    out -= 0.5 * diff * diff
+    return out
 
 ## Functions relating to MVnormal density
 
@@ -701,18 +766,24 @@ def pt_logpost_lognormalgamma(logalpha, n, sy, sly, mu, sigma, xi, tau):
     out -= (n[:,None] * alpha + xi[:,None]) * np.log(sy + tau[:,None])
     return out
 
-
-
-
-
-
-
-
-
-
-
-
-
+## functions relating to inverse gamma density
+def logd_invgamma_my(aY, alpha, beta):
+    """
+    log-density of inverse gamma distribution
+    ---
+    Args:
+        aY : (t,d)
+        aAlpha : scalar
+        aBeta  : scalar
+    Returns:
+        out : (t,d)
+    """
+    out = np.zeros(aY.shape)
+    out += alpha * np.log(beta)
+    out -= gammaln(alpha)
+    out -= (alpha + 1) * np.log(aY)
+    out -= aY * beta
+    return out
 
 ## Functions relating to Pareto Density
 

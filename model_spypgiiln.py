@@ -23,7 +23,8 @@ from samplers import ParallelTemperingStickBreakingSampler, GEMPrior,           
 from data import euclidean_to_psphere, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, UniNormalPrior, logd_gamma_my,                \
     pt_logd_gamma_my, pt_logd_projgamma_my_mt_inplace_unstable,                 \
-    pt_logd_projgamma_paired_yt,pt_logd_prodgamma_my_st, pt_logd_mixprojgamma
+    pt_logd_projgamma_paired_yt,pt_logd_prodgamma_my_st, pt_logd_mixprojgamma,  \
+    pt_logd_lognormal_my, logd_lognormal_my, logd_invgamma_my, logd_normal_my
 
 Prior = namedtuple('Prior', 'mu sigma xi tau chi')
 
@@ -167,7 +168,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
 
     def sample_alpha_new(self, mu, sigma):
         out = normal(
-            shape = mu, scale = sigma, 
+            loc = mu, scale = sigma, 
             size = (self.nClust, self.nTemp, self.nCol),
             ).swapaxes(0, 1)
         return np.exp(out)
@@ -176,14 +177,14 @@ class Chain(ParallelTemperingStickBreakingSampler):
         alpha = np.exp(logalpha)
         out = np.zeros(logalpha.shape)
 
-        anew = n[:, None] * alpha[..., 1:] + xi[:, None]
+        anew = n[..., None] * alpha[..., 1:] + xi[:, None]
         bnew = sy[..., 1:] + tau[:, None]
 
         out += (alpha - 1) * sly
         out -= n[:,:,None] * gammaln(alpha)
         out[..., 1:] += gammaln(anew)
         out[..., 1:] -= anew * np.log(bnew)
-        out *= self.il[:,None,None]
+        out *= self.itl[:,None,None]
         out -= 0.5 * ((logalpha - mu[:,None]) / sigma[:,None])**2
         return out
 
@@ -192,9 +193,9 @@ class Chain(ParallelTemperingStickBreakingSampler):
         dmat = delta[:,:,None] == range(self.nClust)
         try:
             dmatS = sparse.COO.from_numpy(dmat)
-            slY   = sparse.einsum('tnj,tnd->tjd', dmatS, np.log(Y))
-            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y)
-            n     = sparse.einsum('tnj->tj', dmatS)
+            slY   = sparse.einsum('tnj,tnd->tjd', dmatS, np.log(Y)).todense()
+            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y).todense()
+            n     = sparse.einsum('tnj->tj', dmatS).todense()
         except ValueError:
             slY   = np.einsum('tnj,tnd->tjd', dmat, np.log(Y))
             sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
@@ -230,13 +231,13 @@ class Chain(ParallelTemperingStickBreakingSampler):
         dmat = delta[:,:,None] == range(self.nClust)
         try:
             dmatS = sparse.COO.from_numpy(dmat)
-            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y)
-            n     = sparse.einsum('tnj->tj', dmatS)
+            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y).todense()
+            n     = sparse.einsum('tnj->tj', dmatS).todense()
         except ValueError:
             sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
             n     = np.einsum('tnj->tj', dmat)
         
-        anew = n[:, None] * alpha[..., 1:] + xi[:,None]
+        anew = n[..., None] * alpha[..., 1:] + xi[:,None]
         bnew = sY[..., 1:] + tau[:, None]
 
         beta = np.ones(alpha.shape)
@@ -252,10 +253,10 @@ class Chain(ParallelTemperingStickBreakingSampler):
     
     def sample_sigma(self, alpha, mu):
         anew = self.priors.sigma.a + self.nClust / 2
-        bnew = self.priors.sigma.b + 0.5 * (np.log(alpha) - mu).sum(axis = 1)
-        return 1 / gamma(anew, scale = 1 / bnew)
+        bnew = self.priors.sigma.b + 0.5 * ((np.log(alpha) - mu[:,None])**2).sum(axis = 1)
+        return np.sqrt(1 / gamma(anew, scale = 1 / bnew))
 
-    def log_logxi_posterior(self, logxi, sB, slB, xi):
+    def log_logxi_posterior(self, logxi, sB, slB):
         xi  = np.exp(logxi)
         out = np.zeros(logxi.shape)
         
@@ -290,10 +291,17 @@ class Chain(ParallelTemperingStickBreakingSampler):
         rate = sb + self.priors.tau.b
         return gamma(shape = shape, scale = 1 / rate)
 
-    def sample_r(self, delta, alpha):
-        sa = alpha.sum(axis = -1)
-        shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
-        rate  = self.data.Yp.sum(axis = 1)[None,:]
+    def sample_r(self, delta, alpha, beta):
+        shape = alpha[self.temp_unravel, delta.ravel()].reshape(
+                    self.nTemp, self.nDat, self.nCol,
+                    ).sum(axis = -1)
+        rate  = np.einsum(
+            'tnd,nd->tn',
+            beta[self.temp_unravel, delta.ravel()].reshape(
+                        self.nTemp, self.nDat, self.nCol,
+                        ),
+            self.data.Yp,
+            )
         return gamma(shape = shape, scale = 1 / rate)
     
     def initialize_sampler(self, ns):
@@ -303,8 +311,8 @@ class Chain(ParallelTemperingStickBreakingSampler):
         # self._placeholder_sigma_2 = np.ones((self.nTemp, self.nDat, self.nCol))
         # # Initialize storage
         # self._scratch_dmat  = np.zeros((self.nTemp, self.nDat, self.nClust), dtype = bool)
-        # self._scratch_delta = np.zeros((self.nDat, self.nTemp, self.nClust))
-        # self._scratch_alpha = np.zeros((self.nTemp, self.nClust, self.nCol))
+        self._scratch_delta = np.zeros((self.nDat, self.nTemp, self.nClust))
+        self._scratch_alpha = np.zeros((self.nTemp, self.nClust, self.nCol))
         # Initialize Samples
         self.samples = Samples(ns, self.nDat, self.nCol, self.nTemp, self.nClust)
         self.samples.alpha[0] = gamma(
@@ -312,10 +320,10 @@ class Chain(ParallelTemperingStickBreakingSampler):
             )
         self.samples.beta[..., 0] = 1.
         self.samples.beta[0][..., 1:] = gamma(
-            shape = 3, scale = 1 / 3, size = (self.nTemp, self.nClustt, self.nCol),
+            shape = 3, scale = 1 / 3, size = (self.nTemp, self.nClust, self.nCol - 1),
             )
         self.samples.mu[0] = normal(loc = 0, scale = 1, size = (self.nTemp, self.nCol))
-        self.samples.sigma[0] = 1 / gamma(shape = 2, scale = 1 / 2)
+        self.samples.sigma[0] = np.sqrt(1 / gamma(shape = 2, scale = 1 / 2))
         self.samples.xi[0] = gamma(
             shape = 2., scale = 1 / 2., size = (self.nTemp, self.nCol - 1),
             ) + 1
@@ -326,7 +334,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             self.nClust, size = (self.nTemp, self.nDat),
             )
         self.samples.r[0] = self.sample_r(
-            self.samples.delta[0], self.samples.alpha[0],
+            self.samples.delta[0], self.samples.alpha[0], self.samples.beta[0],
             )
         self.samples.chi[0] = self.sample_chi(self.samples.delta[0])
         # Parallel Tempering related
@@ -350,14 +358,17 @@ class Chain(ParallelTemperingStickBreakingSampler):
             self.curr_chi,
             ).sum(axis = 0)
         ll += pt_logd_gem_mx_st_fixed(self.curr_chi, *self.priors.chi)
-        ll += pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau).sum(axis = 1)
+        # ll += pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau).sum(axis = 1)
         return ll
 
     def log_prior(self):
         lp = np.zeros(self.nTemp)
-        # lp += logd_gamma_my(self.curr_xi, *self.priors.xi).sum(axis = 1)
-        lp -= 0.5 * (((self.curr_xi - self.priors.xi.a) / self.priors.xi.b)**2).sum(axis = -1)
-        lp += logd_gamma_my(self.curr_tau, *self.priors.tau).sum(axis = 1)
+        lp += pt_logd_lognormal_my(self.curr_alpha, self.curr_mu, self.curr_sigma).sum(axis = (1,2))
+        lp += pt_logd_gamma_my(self.curr_beta[..., 1:], self.curr_xi, self.curr_tau).sum(axis = -1)
+        lp += logd_lognormal_my(self.curr_xi, *self.priors.xi).sum(axis = -1)
+        lp += logd_gamma_my(self.curr_tau, *self.priors.tau).sum(axis = -1)
+        lp += logd_normal_my(self.curr_mu, *self.priors.mu).sum(axis = -1)
+        lp += logd_invgamma_my(self.curr_sigma, *self.priors.sigma).sum(axis = -1)        
         return lp
 
     def record_log_density(self):
@@ -399,7 +410,8 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self.samples.r[ci] = self.sample_r(
             self.curr_delta, self.curr_alpha, self.curr_beta,
             )
-        self.samples.mu[ci] = self.sample_mu(self.curr_alpha, sigma)
+        # self.samples.mu[ci] = self.sample_mu(self.curr_alpha, sigma)
+        self.samples.mu[ci] = 0.
         self.samples.sigma[ci] = self.sample_sigma(self.curr_alpha, self.curr_mu)
         self.samples.xi[ci] = self.sample_xi(xi, self.curr_beta)
         self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_beta)
@@ -420,6 +432,9 @@ class Chain(ParallelTemperingStickBreakingSampler):
                 os.remove(path)
         
         alphas = self.samples.alpha[nBurn :: nThin, 0]
+        betas  = self.samples.beta[nBurn :: nThin, 0]
+        mus    = self.samples.mu[nBurn :: nThin, 0]
+        sigmas = self.samples.sigma[nBurn :: nThin, 0]
         xis    = self.samples.xi[nBurn :: nThin, 0]
         taus   = self.samples.tau[nBurn :: nThin, 0]
         deltas = self.samples.delta[nBurn :: nThin, 0]
@@ -428,6 +443,9 @@ class Chain(ParallelTemperingStickBreakingSampler):
         
         out = {
             'alphas' : alphas,
+            'betas'  : betas,
+            'mus'    : mus,
+            'sigmas' : sigmas,
             'xis'    : xis,
             'taus'   : taus,
             'rs'     : rs,
@@ -479,6 +497,12 @@ class Chain(ParallelTemperingStickBreakingSampler):
             self.swap_succeeds[tt[1],tt[0]] += 1
             self.samples.alpha[ci][tt[0]], self.samples.alpha[ci][tt[1]] =      \
                 self.samples.alpha[ci][tt[1]].copy(), self.samples.alpha[ci][tt[0]].copy()
+            self.samples.beta[ci][tt[0]], self.samples.beta[ci][tt[1]] =        \
+                self.samples.beta[ci][tt[1]].copy(), self.samples.beta[ci][tt[0]].copy()
+            self.samples.mu[ci][tt[0]], self.samples.mu[ci][tt[1]] =            \
+                self.samples.mu[ci][tt[1]].copy(), self.samples.mu[ci][tt[0]].copy()
+            self.samples.sigma[ci][tt[0]], self.samples.sigma[ci][tt[1]] =      \
+                self.samples.sigma[ci][tt[1]].copy(), self.samples.sigma[ci][tt[0]].copy()
             self.samples.xi[ci][tt[0]], self.samples.xi[ci][tt[1]] =            \
                 self.samples.xi[ci][tt[1]].copy(), self.samples.xi[ci][tt[0]].copy()
             self.samples.tau[ci][tt[0]], self.samples.tau[ci][tt[1]] =          \
@@ -494,6 +518,8 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def __init__(
             self,
             data,
+            prior_mu  = (0., 2.),
+            prior_sigma = (2., 2.),
             prior_xi  = (0., 2.),
             prior_tau = (3., 3.),
             prior_chi = (0.1, 0.1),
@@ -508,10 +534,12 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self.p = p
         self.nCol = self.data.nCol
         self.nDat = self.data.nDat
+        _prior_mu  = UniNormalPrior(*prior_mu)
+        _prior_sigma = GammaPrior(*prior_sigma)
         _prior_chi = GEMPrior(*prior_chi)
-        _prior_xi  = GammaPrior(*prior_xi)
+        _prior_xi  = UniNormalPrior(*prior_xi)
         _prior_tau = GammaPrior(*prior_tau)
-        self.priors = Prior(_prior_xi, _prior_tau, _prior_chi,)
+        self.priors = Prior(_prior_mu, _prior_sigma, _prior_xi, _prior_tau, _prior_chi,)
         self.set_projection(p)
         self.itl = 1 / stepping**np.arange(ntemps)
         self.nTemp = ntemps
@@ -527,7 +555,8 @@ class Result(object):
         for s in range(self.nSamp):
             deltas = py_sample_cluster_bgsb_fixed(self.samples.chi[s], placeholder)
             shapes = self.samples.alpha[s][deltas]
-            new_gammas.append(gamma(shape = shapes))
+            rates  = self.samples.beta[s][deltas]
+            new_gammas.append(gamma(shape = shapes, scale = 1 / rates))
         return np.vstack(new_gammas)
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 1):
@@ -544,6 +573,9 @@ class Result(object):
         deltas = out['deltas']
         chis   = out['chis']
         alphas = out['alphas']
+        betas  = out['betas']
+        mus    = out['mus']
+        sigmas = out['sigmas']
         xis    = out['xis']
         taus   = out['taus']
         rs     = out['rs']
@@ -563,6 +595,9 @@ class Result(object):
         self.samples.chi   = chis
         self.samples.delta = deltas
         self.samples.alpha = alphas
+        self.samples.beta  = betas
+        self.samples.mu    = mus
+        self.samples.sigma = sigmas
         self.samples.xi    = xis
         self.samples.tau   = taus
         self.samples.r     = rs
