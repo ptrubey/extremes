@@ -179,26 +179,27 @@ class Chain(ParallelTemperingStickBreakingSampler):
 
         anew = n[..., None] * alpha[..., 1:] + xi[:, None]
         bnew = sy[..., 1:] + tau[:, None]
+        diff = (logalpha - mu[:,None]) / sigma[:,None]
 
         out += (alpha - 1) * sly
         out -= n[:,:,None] * gammaln(alpha)
         out[..., 1:] += gammaln(anew)
         out[..., 1:] -= anew * np.log(bnew)
+        out -= 0.5 * diff * diff
         out *= self.itl[:,None,None]
-        out -= 0.5 * ((logalpha - mu[:,None]) / sigma[:,None])**2
         return out
 
     def sample_alpha(self, alpha, delta, r, mu, sigma, xi, tau):
         Y    = r[:,:,None] * self.data.Yp[None] # t,n,d
-        dmat = delta[:,:,None] == range(self.nClust)
+        dmat = (delta[:,:,None] == range(self.nClust)).astype(int)
         try:
             dmatS = sparse.COO.from_numpy(dmat)
-            slY   = sparse.einsum('tnj,tnd->tjd', dmatS, np.log(Y)).todense()
-            sY    = sparse.einsum('tnj,tnd->tjd', dmatS, Y).todense()
-            n     = sparse.einsum('tnj->tj', dmatS.astype(int)).todense()
+            slY   = sparse.einsum('tnj,tnd->tjd', dmatS.astype(float), np.log(Y)).todense()
+            sY    = sparse.einsum('tnj,tnd->tjd', dmatS.astype(float), Y).todense()
+            n     = sparse.einsum('tnj->tj', dmatS).todense()
         except ValueError:
-            slY   = np.einsum('tnj,tnd->tjd', dmat, np.log(Y))
-            sY    = np.einsum('tnj,tnd->tjd', dmat, Y)
+            slY   = np.einsum('tnj,tnd->tjd', dmat.astype(float), np.log(Y))
+            sY    = np.einsum('tnj,tnd->tjd', dmat.astype(float), Y)
             n     = np.einsum('tnj->tj', dmat.astype(int))
         
         with np.errstate(divide = 'ignore'):
@@ -213,6 +214,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         
         self._scratch_alpha[:] = -np.inf
         self._scratch_alpha[idx] = 0.
+        self._scratch_alpha[np.abs(lacand) > 10] = -np.inf
         
         self._scratch_alpha += self.log_logalpha_posterior(
             lacand, n, sY, slY, mu, sigma, xi, tau,
@@ -220,7 +222,6 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self._scratch_alpha -= self.log_logalpha_posterior(
             lacurr, n, sY, slY, mu, sigma, xi, tau,
             )
-
         keep = np.where(np.log(uniform(size = acurr.shape)) < self._scratch_alpha)
         acurr[keep] = acand[keep]
         acurr[ndx] = self.sample_alpha_new(mu, sigma)[ndx]
@@ -400,23 +401,18 @@ class Chain(ParallelTemperingStickBreakingSampler):
         # Update cluster assignments
         self.samples.delta[ci] = self.sample_delta(chi, alpha, beta)
         self.samples.chi[ci] = self.sample_chi(self.curr_delta)
+        self.samples.r[ci] = self.sample_r(self.curr_delta, alpha, beta)
         self.update_cluster_state()
         self.samples.alpha[ci] = self.sample_alpha(
-            alpha, self.curr_delta, r, mu, sigma, xi, tau,
+            alpha, self.curr_delta, self.curr_r, mu, sigma, xi, tau,
             )
-        # self.samples.alpha[ci] = alpha
         self.samples.beta[ci] = self.sample_beta(
-            alpha, self.curr_delta, r, xi, tau,
+            self.curr_alpha, self.curr_delta, self.curr_r, xi, tau,
             )
-        self.samples.r[ci] = self.sample_r(
-            self.curr_delta, self.curr_alpha, self.curr_beta,
-            )
-        self.samples.mu[ci] = self.sample_mu(self.curr_alpha, sigma)
-        self.samples.sigma[ci] = self.sample_sigma(self.curr_alpha, self.curr_mu)
-        # self.samples.xi[ci] = self.sample_xi(xi, self.curr_beta)
-        self.samples.xi[ci] = 1.
-        self.samples.tau[ci] = 1.
-        # self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_beta)
+        self.samples.mu[ci] = 0. # self.sample_mu(self.curr_alpha, sigma)
+        self.samples.sigma[ci] = 1. # self.sample_sigma(self.curr_alpha, self.curr_mu)
+        self.samples.xi[ci] = self.sample_xi(xi, self.curr_beta)
+        self.samples.tau[ci] = self.sample_tau(self.curr_xi, self.curr_beta)
 
         if self.curr_iter > self.swap_start:
             self.try_tempering_swap()
@@ -520,12 +516,12 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def __init__(
             self,
             data,
-            prior_mu  = (0., 2.),
+            prior_mu  = (0., 0.5),
             prior_sigma = (2., 2.),
-            prior_xi  = (0., 2.),
+            prior_xi  = (0., 0.5),
             prior_tau = (3., 3.),
             prior_chi = (0.1, 0.1),
-            p         = 10,
+            p         = 1.,
             max_clust = 200,
             ntemps    = 5,
             stepping  = 1.15,

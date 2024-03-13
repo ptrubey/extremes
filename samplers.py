@@ -427,13 +427,13 @@ def pt_logd_gem_mx_st(chi, conc, disc):
         ld -= betaln(a,b).sum(axis = 1)
     return ld
 
-def pt_logd_gem_mx_st_fixed(chi, conc, disc):
+def pt_logd_gem_mx_st_fixed(chi, disc, conc):
     """ 
     Log-density for Griffith, Engen, & McCloskey distribution.
     Args:
         chi  : (T, J-1)
-        conc : scalar
         disc : scalar
+        conc : scalar
     """
     if type(conc) is not np.ndarray:
         conc = np.array([conc])

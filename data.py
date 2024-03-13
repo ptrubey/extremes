@@ -16,6 +16,8 @@ def category_matrix(cats):
     """ Forms a Boolean Category Matrix
         dims = [(# categorical vars), sum(# categories per var)]
     (c, sum(p_i)) """
+    if len(cats) == 0:
+        return np.array([])
     catvec = np.hstack(list(np.ones(ncat) * i for i, ncat in enumerate(cats)))
     CatMat = (catvec[:, None] == np.arange(len(cats))).T
     return CatMat
@@ -299,6 +301,11 @@ class Multinomial(DataBase):
             index = np.arange(raw.shape[0])
         self.I = index
         self.W = raw[index]
+        if raw.shape[1] == 0:
+            self.Cats = np.array([])
+            self.nCat = 0
+            self.spheres = []
+            return
         self.Cats = cats
         self.nCat = self.Cats.sum()
         arr = np.hstack([np.ones(cat, dtype = int) * i for i, cat in enumerate(self.Cats)])
@@ -335,6 +342,12 @@ class Categorical(Multinomial):
     def fill_categorical(self, raw, values, index):
         # If values are supplied, verify that all values in data
         # are represented in supplied.
+        if raw.shape[1] == 0:
+            self.W = np.zeros((index.shape[0], 0))
+            self.nCat = 0
+            self.Cats = np.array([])
+            return
+
         if values is not None:
             assert len(values) == raw.shape[1]
             for i in range(raw.shape[1]):
