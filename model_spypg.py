@@ -182,40 +182,34 @@ class Chain(ParallelTemperingStickBreakingSampler):
             logd += xi[:,None] * logalpha
             logd -= tau[:,None] * np.exp(logalpha)
         np.nan_to_num(logd, False, -np.inf)
-        logd[np.abs(logalpha) > 10] = -np.inf
+        logd[np.abs(logalpha) > 6] = -np.inf
         return logd
 
     def sample_alpha(self, alpha, delta, r, xi, tau):
         idx = np.where(self._extant_clust_state)
         ndx = np.where(self._cand_cluster_state)
-
-        self._scratch_alpha[:] = -np.inf
-        self._scratch_alpha[idx] = 0.
         
-        assert(~(alpha[self._extant_clust_state] == 0).any())
-
         with np.errstate(divide = 'ignore'):
             acurr = alpha.copy()
             lacurr = np.log(acurr)
             lacand = lacurr.copy()
             lacand += normal(scale = 0.1, size = lacand.shape)
             acand = np.exp(lacand)
-        
-        assert (~np.any(acand == 0))
 
-        self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
-        self._scratch_alpha -= self.log_alpha_likelihood(acurr, r, delta)
+        self._scratch_alpha[:] = -np.inf
+        self._scratch_alpha[idx] = 0.
         with np.errstate(invalid = 'ignore'):
+            self._scratch_alpha += self.log_alpha_likelihood(acand, r, delta)
+            self._scratch_alpha -= self.log_alpha_likelihood(acurr, r, delta)
             self._scratch_alpha *= self.itl[:,None,None]
-        self._scratch_alpha += self.log_logalpha_prior(lacand, xi, tau)
-        self._scratch_alpha -= self.log_logalpha_prior(lacurr, xi, tau)
+            self._scratch_alpha += self.log_logalpha_prior(lacand, xi, tau)
+            self._scratch_alpha -= self.log_logalpha_prior(lacurr, xi, tau)
+        np.nan_to_num(self._scratch_alpha, copy = False, nan = -np.inf)
 
         keep = np.where(np.log(uniform(size = acurr.shape)) < self._scratch_alpha)
         acurr[keep] = acand[keep]
         acurr[ndx] = self.sample_alpha_new(xi, tau)[ndx]
-        
-        assert (~(acurr[keep] == 0.).any())
-        return(acurr)
+        return acurr
 
     def log_logxi_posterior(self, logxi, sum_alpha, sum_log_alpha):
         out = np.zeros(logxi.shape)
@@ -227,7 +221,6 @@ class Chain(ParallelTemperingStickBreakingSampler):
         out += gammaln(self.nClust * self.itl[:,None] * xi + self.priors.tau.a)
         out -= (self.nClust * self.itl[:,None] * xi + self.priors.tau.a) *      \
                     np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
-        # out[logxi < 0] = -np.inf # fixing the shape parameter above 1.
         out[np.abs(logxi) > 5] = -np.inf
         return out
     
@@ -264,7 +257,13 @@ class Chain(ParallelTemperingStickBreakingSampler):
         sa = alpha.sum(axis = -1)
         shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
         rate  = self.data.Yp.sum(axis = 1)[None,:]
-        return gamma(shape = shape, scale = 1 / rate)
+        out = gamma(shape = shape, scale = 1 / rate)
+        outofbounds = np.any(out == 0)
+        while np.any(outofbounds):
+            out2 = gamma(shape = shape, scale = 1 / rate)
+            out[outofbounds] = out2[outofbounds]
+            outofbounds[:] = np.any(out == 0)
+        return out
     
     def initialize_sampler(self, ns):
         """ Initialize the sampler """
