@@ -143,6 +143,18 @@ class Chain(ParallelTemperingStickBreakingSampler):
             shape = xi, scale = 1 / tau, 
             size = (self.nClust, self.nTemp, self.nCol),
             ).swapaxes(0,1)
+        tries = 0
+        outofbounds = np.abs(np.log(out)) > 10
+        while np.any(outofbounds):
+            if tries > self.ntries:
+                raise ValueError("Something's wrong.")
+            out2 = gamma(
+                shape = xi, scale = 1 / tau, 
+                size = (self.nClust, self.nTemp, self.nCol),
+                ).swapaxes(0,1)
+            out[outofbounds] = out2[outofbounds]
+            outofbounds = np.abs(np.log(out)) > 10
+            tries += 1
         return out
 
     def log_alpha_likelihood(self, alpha, r, delta):
@@ -170,6 +182,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             logd += xi[:,None] * logalpha
             logd -= tau[:,None] * np.exp(logalpha)
         np.nan_to_num(logd, False, -np.inf)
+        logd[np.abs(logalpha) > 10] = -np.inf
         return logd
 
     def sample_alpha(self, alpha, delta, r, xi, tau):
@@ -215,6 +228,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         out -= (self.nClust * self.itl[:,None] * xi + self.priors.tau.a) *      \
                     np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
         # out[logxi < 0] = -np.inf # fixing the shape parameter above 1.
+        out[np.abs(logxi) > 5] = -np.inf
         return out
     
     def sample_xi(self, xi, alpha):
@@ -452,6 +466,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             max_clust = 200,
             ntemps    = 5,
             stepping  = 1.15,
+            ntries    = 5,
             **kwargs
             ):
         self.data = data
@@ -469,6 +484,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         self.nSwap_per = self.nTemp // 2
         self.swap_start = 100
         self.temp_unravel = np.repeat(np.arange(self.nTemp), self.nDat)
+        self.ntries = ntries
         return
 
 class Result(object):
