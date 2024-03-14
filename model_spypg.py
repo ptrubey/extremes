@@ -548,10 +548,10 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    # raw = read_csv('./datasets/ivt_nov_mar.csv')
-    # dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
-    dat = Data_From_Sphere(raw)
+    raw = read_csv('./datasets/ivt_nov_mar.csv')
+    dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    # raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
+    # dat = Data_From_Sphere(raw)
     model = Chain(dat, ntemps = 6, max_clust = 200)
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
