@@ -258,11 +258,11 @@ class Chain(ParallelTemperingStickBreakingSampler):
         shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
         rate  = self.data.Yp.sum(axis = 1)[None,:]
         out = gamma(shape = shape, scale = 1 / rate)
-        outofbounds = np.any(out == 0)
+        outofbounds = (out == 0)
         while np.any(outofbounds):
             out2 = gamma(shape = shape, scale = 1 / rate)
             out[outofbounds] = out2[outofbounds]
-            outofbounds[:] = np.any(out == 0)
+            outofbounds[:] = (out == 0)
         return out
     
     def initialize_sampler(self, ns):
