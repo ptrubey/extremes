@@ -23,7 +23,7 @@ from samplers import ParallelTemperingStickBreakingSampler, GEMPrior,           
 from data import euclidean_to_psphere, euclidean_to_hypercube, Data_From_Sphere
 from projgamma import GammaPrior, logd_gamma_my, pt_logd_gamma_my,              \
     pt_logd_projgamma_my_mt_inplace_unstable, pt_logd_projgamma_paired_yt,      \
-    pt_logd_prodgamma_my_st, pt_logd_mixprojgamma
+    pt_logd_prodgamma_my_st, pt_logd_mixprojgamma, pt_logd_prodgamma_my_mt
 
 Prior = namedtuple('Prior', 'xi tau chi')
 
@@ -109,7 +109,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
     _cand_cluster_state = None  # bool (nTemp, nClust)
     _extant_clust_state = None  # bool (nTemp, nClust)
 
-    def log_delta_likelihood(self, alpha):
+    def log_delta_likelihood(self, alpha, r):
         """
         inputs:
             alpha : (t, j, d)
@@ -117,19 +117,25 @@ class Chain(ParallelTemperingStickBreakingSampler):
         outputs:
             out   : (n, t, j)
         """
+        # with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        #     pt_logd_projgamma_my_mt_inplace_unstable(
+        #         self._scratch_delta, 
+        #         self.data.Yp, 
+        #         alpha, self._placeholder_sigma_1,
+        #         )
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
-            pt_logd_projgamma_my_mt_inplace_unstable(
-                self._scratch_delta, 
-                self.data.Yp, 
-                alpha, self._placeholder_sigma_1,
+            self._scratch_delta[:] = pt_logd_prodgamma_my_mt(
+                r[:,:,None] * self.data.Yp[None], 
+                alpha, 
+                self._placeholder_sigma_1,
                 )
         np.nan_to_num(self._scratch_delta, False, -np.inf)
         self._scratch_delta *= self.itl[None,:,None]
         return
 
-    def sample_delta(self, chi, alpha):
+    def sample_delta(self, chi, alpha, r):
         self._scratch_delta[:] = 0.
-        self.log_delta_likelihood(alpha)
+        self.log_delta_likelihood(alpha, r)
         return pt_py_sample_cluster_bgsb_fixed(chi, self._scratch_delta)
     
     def sample_chi(self, delta):
@@ -258,11 +264,17 @@ class Chain(ParallelTemperingStickBreakingSampler):
         shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
         rate  = self.data.Yp.sum(axis = 1)[None,:]
         out = gamma(shape = shape, scale = 1 / rate)
-        outofbounds = (out == 0)
+        with np.errstate(divide='ignore'):
+            outofbounds = np.isinf(np.log(out))
+        tries = 0
         while np.any(outofbounds):
+            if tries > self.ntries:
+                raise ValueError('Problem.')
             out2 = gamma(shape = shape, scale = 1 / rate)
             out[outofbounds] = out2[outofbounds]
-            outofbounds[:] = (out == 0)
+            with np.errstate(divide='ignore'):
+                outofbounds = np.isinf(np.log(out))
+            tries += 1
         return out
     
     def initialize_sampler(self, ns):
@@ -358,7 +370,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         ci = self.curr_iter
 
         # Update cluster assignments
-        self.samples.delta[ci] = self.sample_delta(chi, alpha)
+        self.samples.delta[ci] = self.sample_delta(chi, alpha, r)
         self.samples.chi[ci] = self.sample_chi(self.curr_delta)
         self.samples.r[ci] = self.sample_r(self.curr_delta, alpha)
         self.update_cluster_state()
