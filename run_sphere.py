@@ -37,7 +37,7 @@ def run_model_from_path(path, modeltype):
         )
     try:
         model.sample(20000)
-    except (AssertionError, FloatingPointError):
+    except (AssertionError, FloatingPointError, ValueError):
         return 
     out = BytesIO()
     model.write_to_disk(out, 10000, 10)
