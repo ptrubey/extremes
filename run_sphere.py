@@ -10,7 +10,7 @@ from numpy.random import uniform
 
 from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
 from data import Data_From_Sphere
-from models import RealChains as Chains, RealResults as Results
+from models import Chains as Chains, Results as Results
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
 models      = ['pypprgln'] # ['spypg'] # , 'sdpppg', 'sdppprg']
