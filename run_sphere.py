@@ -13,7 +13,7 @@ from data import Data_From_Sphere
 from models import RealChains as Chains, RealResults as Results
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-models      = 'pypprgln' # ['spypg'] # , 'sdpppg', 'sdppprg']
+models      = ['pypprgln'] # ['spypg'] # , 'sdpppg', 'sdppprg']
 out_sql     = './simulated/sphere2/result_240315.sql'
 out_table   = 'energy'
 
