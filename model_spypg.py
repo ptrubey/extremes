@@ -146,21 +146,21 @@ class Chain(ParallelTemperingStickBreakingSampler):
 
     def sample_alpha_new(self, xi, tau):
         out = gamma(
-            shape = xi, scale = 1 / tau, 
-            size = (self.nClust, self.nTemp, self.nCol),
-            ).swapaxes(0,1)
-        # tries = 0
-        # outofbounds = np.abs(np.log(out)) > 10
-        # while np.any(outofbounds):
-        #     if tries > self.ntries:
-        #         raise ValueError("Something's wrong.")
-        #     out2 = gamma(
-        #         shape = xi, scale = 1 / tau, 
-        #         size = (self.nClust, self.nTemp, self.nCol),
-        #         ).swapaxes(0,1)
-        #     out[outofbounds] = out2[outofbounds]
-        #     outofbounds = np.abs(np.log(out)) > 10
-        #     tries += 1
+            shape = xi[:,None], scale = 1 / tau[:,None], 
+            size = (self.nTemp, self.nClust, self.nCol),
+            )
+        tries = 0
+        outofbounds = np.abs(np.log(out)) > 10
+        while np.any(outofbounds):
+            if tries > self.ntries:
+                raise ValueError("Something's wrong.")
+            out2 = gamma(
+                shape = xi[:,None], scale = 1 / tau[:,None], 
+                size = (self.nTemp, self.nClust, self.nCol),
+                )
+            out[outofbounds] = out2[outofbounds]
+            outofbounds = np.abs(np.log(out)) > 10
+            tries += 1
         return out
 
     def log_alpha_likelihood(self, alpha, r, delta):
@@ -189,7 +189,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
             logd += xi[:,None] * logalpha
             logd -= tau[:,None] * np.exp(logalpha)
         np.nan_to_num(logd, False, -np.inf)
-        # logd[np.abs(logalpha) > 6] = -np.inf
+        logd[np.abs(logalpha) > 6] = -np.inf
         return logd
 
     def sample_alpha(self, alpha, delta, r, xi, tau):
@@ -263,19 +263,19 @@ class Chain(ParallelTemperingStickBreakingSampler):
     def sample_r(self, delta, alpha):
         sa = alpha.sum(axis = -1)
         shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
-        rate  = self.data.Yp.sum(axis = 1)[None,:]
+        rate  = self.data.Yp.sum(axis = -1)[None]
         out = gamma(shape = shape, scale = 1 / rate)
-        # with np.errstate(divide='ignore'):
-        #     outofbounds = np.isinf(np.log(out))
-        # tries = 0
-        # while np.any(outofbounds):
-        #     if tries > self.ntries:
-        #         raise ValueError('Problem.')
-        #     out2 = gamma(shape = shape, scale = 1 / rate)
-        #     out[outofbounds] = out2[outofbounds]
-        #     with np.errstate(divide='ignore'):
-        #         outofbounds = np.isinf(np.log(out))
-        #     tries += 1
+        with np.errstate(divide='ignore'):
+            outofbounds = np.isinf(np.log(out))
+        tries = 0
+        while np.any(outofbounds):
+            if tries > self.ntries:
+                raise ValueError('Problem.')
+            out2 = gamma(shape = shape, scale = 1 / rate)
+            out[outofbounds] = out2[outofbounds]
+            with np.errstate(divide='ignore'):
+                outofbounds = np.isinf(np.log(out))
+            tries += 1
         return out
     
     def initialize_sampler(self, ns):
@@ -563,7 +563,8 @@ if __name__ == '__main__':
 
     # raw = read_csv('./datasets/ivt_nov_mar.csv')
     # dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
+    # raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
+    raw = read_csv('./simulated/sphere2/data_m4_r2_i5.csv').values
     dat = Data_From_Sphere(raw)
     model = Chain(dat, ntemps = 4, max_clust = 200)
     model.sample(15000, verbose = True)
