@@ -564,11 +564,11 @@ if __name__ == '__main__':
     # raw = read_csv('./datasets/ivt_nov_mar.csv')
     # dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
     # raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
-    raw = read_csv('./simulated/sphere2/data_m4_r2_i5.csv').values
+    raw = read_csv('./simulated/sphere2/data_m1_r2_i5.csv').values
     dat = Data_From_Sphere(raw)
-    model = Chain(dat, ntemps = 4, max_clust = 200)
-    model.sample(15000, verbose = True)
-    model.write_to_disk('./test/results.pkl', 5000, 10)
+    model = Chain(dat, ntemps = 3, p = 5, max_clust = 200)
+    model.sample(20000, verbose = True)
+    model.write_to_disk('./test/results.pkl', 10000, 10)
     res = Result('./test/results.pkl')
     postpred = res.generate_posterior_predictive_hypercube(n_per_sample = 10)
 
