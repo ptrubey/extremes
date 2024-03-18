@@ -13,7 +13,7 @@ from data import Data_From_Sphere
 from models import Chains as Chains, Results as Results
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-models      = ['pypprgln'] # ['spypg'] # , 'sdpppg', 'sdppprg']
+models      = ['spypg'] # ['pypprgln'] 'sdpppg', 'sdppprg']
 out_sql     = './simulated/sphere2/result_240315.sql'
 out_table   = 'energy'
 
@@ -37,11 +37,11 @@ def run_model_from_path(path, modeltype):
         max_clust_count = 200,
         )
     try:
-        model.sample(40000)
+        model.sample(20000)
     except (AssertionError, FloatingPointError, ValueError):
         return 
     out = BytesIO()
-    model.write_to_disk(out, 30000, 10)
+    model.write_to_disk(out, 10000, 10)
     res = Results[modeltype](out)
     pp = res.generate_posterior_predictive_hypercube(10)
     

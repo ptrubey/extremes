@@ -149,31 +149,32 @@ class Chain(ParallelTemperingStickBreakingSampler):
             shape = xi, scale = 1 / tau, 
             size = (self.nClust, self.nTemp, self.nCol),
             ).swapaxes(0,1)
-        tries = 0
-        outofbounds = np.abs(np.log(out)) > 10
-        while np.any(outofbounds):
-            if tries > self.ntries:
-                raise ValueError("Something's wrong.")
-            out2 = gamma(
-                shape = xi, scale = 1 / tau, 
-                size = (self.nClust, self.nTemp, self.nCol),
-                ).swapaxes(0,1)
-            out[outofbounds] = out2[outofbounds]
-            outofbounds = np.abs(np.log(out)) > 10
-            tries += 1
+        # tries = 0
+        # outofbounds = np.abs(np.log(out)) > 10
+        # while np.any(outofbounds):
+        #     if tries > self.ntries:
+        #         raise ValueError("Something's wrong.")
+        #     out2 = gamma(
+        #         shape = xi, scale = 1 / tau, 
+        #         size = (self.nClust, self.nTemp, self.nCol),
+        #         ).swapaxes(0,1)
+        #     out[outofbounds] = out2[outofbounds]
+        #     outofbounds = np.abs(np.log(out)) > 10
+        #     tries += 1
         return out
 
     def log_alpha_likelihood(self, alpha, r, delta):
-        Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
-        self._scratch_dmat[:] = delta[:,:,None] == range(self.nClust)
+        # Y = r[:,:, None] * self.data.Yp[None, :, :]  # (t,n,1)*(1,n,d) = t,n,d
+        logY = np.log(r)[:,:,None] + np.log(self.data.Yp[None])
+        self._scratch_dmat[:] = (delta[:,:,None] == range(self.nClust))
         try:
             slY = sparse.einsum(
                 'tnj,tnd->tjd', 
                 sparse.COO.from_numpy(self._scratch_dmat),
-                np.log(Y), 
+                logY, 
                 ).todense() # (t,j,d)
         except ValueError:
-            slY = np.einsum('tnd,tnj->tjd', np.log(Y), self._scratch_dmat)
+            slY = np.einsum('tnd,tnj->tjd', logY, self._scratch_dmat)
         out = np.zeros(alpha.shape)
         with np.errstate(divide = 'ignore', invalid = 'ignore'):
             out += (alpha - 1) * slY
@@ -188,19 +189,19 @@ class Chain(ParallelTemperingStickBreakingSampler):
             logd += xi[:,None] * logalpha
             logd -= tau[:,None] * np.exp(logalpha)
         np.nan_to_num(logd, False, -np.inf)
-        logd[np.abs(logalpha) > 6] = -np.inf
+        # logd[np.abs(logalpha) > 6] = -np.inf
         return logd
 
     def sample_alpha(self, alpha, delta, r, xi, tau):
         idx = np.where(self._extant_clust_state)
         ndx = np.where(self._cand_cluster_state)
         
-        with np.errstate(divide = 'ignore'):
-            acurr = alpha.copy()
-            lacurr = np.log(acurr)
-            lacand = lacurr.copy()
-            lacand += normal(scale = 0.1, size = lacand.shape)
-            acand = np.exp(lacand)
+        # with np.errstate(divide = 'ignore'):
+        acurr  = alpha.copy()
+        lacurr = np.log(acurr)
+        lacand = lacurr.copy()
+        lacand += normal(scale = 0.1, size = lacand.shape)
+        acand  = np.exp(lacand)
 
         self._scratch_alpha[:] = -np.inf
         self._scratch_alpha[idx] = 0.
@@ -227,7 +228,7 @@ class Chain(ParallelTemperingStickBreakingSampler):
         out += gammaln(self.nClust * self.itl[:,None] * xi + self.priors.tau.a)
         out -= (self.nClust * self.itl[:,None] * xi + self.priors.tau.a) *      \
                     np.log(self.itl[:,None] * sum_alpha + self.priors.tau.b)
-        out[np.abs(logxi) > 5] = -np.inf
+        # out[np.abs(logxi) > 5] = -np.inf
         return out
     
     def sample_xi(self, xi, alpha):
@@ -264,17 +265,17 @@ class Chain(ParallelTemperingStickBreakingSampler):
         shape = sa[self.temp_unravel, delta.ravel()].reshape(self.nTemp, self.nDat)
         rate  = self.data.Yp.sum(axis = 1)[None,:]
         out = gamma(shape = shape, scale = 1 / rate)
-        with np.errstate(divide='ignore'):
-            outofbounds = np.isinf(np.log(out))
-        tries = 0
-        while np.any(outofbounds):
-            if tries > self.ntries:
-                raise ValueError('Problem.')
-            out2 = gamma(shape = shape, scale = 1 / rate)
-            out[outofbounds] = out2[outofbounds]
-            with np.errstate(divide='ignore'):
-                outofbounds = np.isinf(np.log(out))
-            tries += 1
+        # with np.errstate(divide='ignore'):
+        #     outofbounds = np.isinf(np.log(out))
+        # tries = 0
+        # while np.any(outofbounds):
+        #     if tries > self.ntries:
+        #         raise ValueError('Problem.')
+        #     out2 = gamma(shape = shape, scale = 1 / rate)
+        #     out[outofbounds] = out2[outofbounds]
+        #     with np.errstate(divide='ignore'):
+        #         outofbounds = np.isinf(np.log(out))
+        #     tries += 1
         return out
     
     def initialize_sampler(self, ns):
@@ -317,22 +318,23 @@ class Chain(ParallelTemperingStickBreakingSampler):
         return
 
     def log_likelihood(self):
+        extant_clusters = (bincount2D_vectorized(self.curr_delta, self.nClust) > 0)
         ll = np.zeros(self.nTemp)
-        # ll += pt_logd_projgamma_paired_yt(
-        #     self.data.Yp, 
-        #     self.curr_alpha[
-        #         self.temp_unravel, self.curr_delta.ravel()
-        #         ].reshape(self.nTemp, self.nDat, self.nCol),
-        #     self._placeholder_sigma_2,
-        #     ).sum(axis = 1)
-        # ll += np.einsum(
-        #     'tj,tj->t',
-        #     pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau),
-        #     extant_clusters,
-        #     )
-        ll += pt_logd_mixprojgamma(
-            self.data.Yp, self.curr_alpha, self._placeholder_sigma_1, self.curr_chi,
-            ).sum(axis = 0)
+        ll += pt_logd_projgamma_paired_yt(
+            self.data.Yp, 
+            self.curr_alpha[
+                self.temp_unravel, self.curr_delta.ravel()
+                ].reshape(self.nTemp, self.nDat, self.nCol),
+            self._placeholder_sigma_2,
+            ).sum(axis = 1)
+        ll += np.einsum(
+            'tj,tj->t',
+            pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau),
+            self._extant_clust_state,
+            )
+        # ll += pt_logd_mixprojgamma(
+        #     self.data.Yp, self.curr_alpha, self._placeholder_sigma_1, self.curr_chi,
+        #     ).sum(axis = 0)
         ll += pt_logd_gem_mx_st_fixed(self.curr_chi, *self.priors.chi)
         ll += pt_logd_gamma_my(self.curr_alpha, self.curr_xi, self.curr_tau).sum(axis = 1)
         return ll
@@ -559,11 +561,11 @@ if __name__ == '__main__':
     from pandas import read_csv
     import os
 
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    # raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
-    # dat = Data_From_Sphere(raw)
-    model = Chain(dat, ntemps = 6, max_clust = 200)
+    # raw = read_csv('./datasets/ivt_nov_mar.csv')
+    # dat = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    raw = read_csv('./simulated/sphere2/data_m1_r16_i5.csv').values
+    dat = Data_From_Sphere(raw)
+    model = Chain(dat, ntemps = 4, max_clust = 200)
     model.sample(15000, verbose = True)
     model.write_to_disk('./test/results.pkl', 5000, 10)
     res = Result('./test/results.pkl')
@@ -574,6 +576,5 @@ if __name__ == '__main__':
     from matplotlib import pyplot as plt
     plt.plot(res.samples.ld)
     plt.show()
-    # raise
 
 # EOF

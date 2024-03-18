@@ -167,12 +167,13 @@ def pt_logd_projgamma_my_mt(aY, aAlpha, aBeta):
     """
     n = aY.shape[0]; t,j,d = aAlpha.shape # set dimensions
     ld = np.zeros((n,t,j))
+    aSum = aAlpha.sum(axis = -1)
     with np.errstate(divide = 'ignore', invalid = 'ignore'):
-        ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None,:,:]
-        ld -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
+        ld += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None]
+        ld -= np.einsum('tjd->tj', loggamma(aAlpha))[None]
         ld += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
-        ld += loggamma(np.einsum('tjd->tj', aAlpha))[None,:,:]
-        ld -= np.einsum('tjd->tj', aAlpha)[None,:,:] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
+        ld += loggamma(aSum)[None]
+        ld -= aSum[None] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
     np.nan_to_num(ld, False, -np.inf)
     return ld
 
@@ -189,11 +190,14 @@ def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
     """
     if aY.shape[1] == 0:
         return
-    out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None]
-    out -= np.einsum('tjd->tj', loggamma(aAlpha))[None]
-    out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
-    out += loggamma(np.einsum('tjd->tj', aAlpha))[None]
-    out -= np.einsum('tjd->tj', aAlpha)[None] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
+    Asum = aAlpha.sum(axis = -1)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += np.einsum('tjd,tjd->tj', aAlpha, np.log(aBeta))[None]
+        out -= np.einsum('tjd->tj', loggamma(aAlpha))[None]
+        out += np.einsum('nd,tjd->ntj', np.log(aY), aAlpha - 1)
+        out += loggamma(Asum)[None]
+        out -= Asum[None] * np.log(np.einsum('nd,tjd->ntj', aY, aBeta))
+    np.nan_to_num(out, False, -np.inf)
     return
 
 def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
