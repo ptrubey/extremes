@@ -155,6 +155,60 @@ cpdef np.ndarray[dtype = np.int_t, ndim = 1] diriproc_cluster_sampler(
             cand_cluster_state[delta[i]] = 0
     return delta
 
+cpdef np.ndarray[dtype = np.int_t, ndim = 1] pityor_cluster_sampler(
+            np.ndarray[dtype = np.int_t, ndim = 1] delta,            # (n)
+            np.ndarray[dtype = np.float_t, ndim = 2] log_likelihood, # (n x J)
+            np.ndarray[dtype = np.float_t, ndim = 1] prob,           # (n)
+            double eta,                                              # (1)
+            double discount,
+            ):
+    cdef:
+        np.ndarray[dtype = np.int_t, ndim = 1] curr_cluster_state # (J) <- current cluster count
+        np.ndarray[dtype = np.int_t, ndim = 1] cand_cluster_state # (J) <- whether avail as cand cluster
+        np.ndarray[dtype = np.float_t, ndim = 1] scratch          # (J) <- working vector
+        int i, n, J, ncandcluster, ncurrcluster
+    n = delta.shape[0]
+    J = log_likelihood.shape[1]
+    curr_cluster_state = np.bincount(delta, minlength = J)
+    cand_cluster_state = (curr_cluster_state == 0) * 1
+    scratch = np.empty(J)
+    ncandcluster = sum(cand_cluster_state)
+    ncurrcluster = sum(curr_cluster_state)
+    for i in range(n):
+        # re-zero scratch
+        scratch[:] = 0.
+        # Adjust cluster weighting
+        curr_cluster_state[delta[i]] -= 1
+        scratch += curr_cluster_state
+        scratch -= (curr_cluster_state > 0) * discount
+        scratch += (
+            (cand_cluster_state * eta + ncurrcluster * discount) / 
+            (ncandcluster + 1e-9)
+            )
+        # transform cluster weights to log-scale
+        with np.errstate(divide = 'ignore'):
+            np.log(scratch, out = scratch)
+        # multiply (add in log-scale) cluster log-likelihoods
+        scratch += log_likelihood[i]
+        # normalize unscale-log-cluster-prob's
+        scratch -= scratch.max()
+        # transform back to real scale
+        with np.errstate(under = 'ignore'):
+            np.exp(scratch, out = scratch)
+        # transform into un-scaled cumulative probability vector
+        np.cumsum(scratch, out = scratch)
+        # pick a cluster
+        delta[i] = np.searchsorted(scratch, prob[i] * scratch[-1])
+        # re-weight clusters given current assignment
+        curr_cluster_state[delta[i]] += 1
+        # if current cluster was a candidate cluster, make it not one.
+        if cand_cluster_state[delta[i]]:
+            ncandcluster -= 1
+            ncurrcluster += 1
+            cand_cluster_state[delta[i]] = 0
+    return delta
+
+
 cpdef np.ndarray[dtype = np.int_t, ndim = 2] pt_diriproc_cluster_sampler(
         np.ndarray[dtype = np.int_t, ndim = 2] delta,    # (t x n)
         np.ndarray[dtype = np.float_t, ndim = 3] log_likelihood, # (t x n x J)
