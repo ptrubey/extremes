@@ -134,10 +134,6 @@ if __name__ == '__main__':
     
     pool.close()
     pool.join()
-    
-    # path = './simulated/sphere/data_m5_r3_i8.csv'
-    # model = 'sdppprg'
-    # run_model_from_path(path, model)
 
     # raise
 

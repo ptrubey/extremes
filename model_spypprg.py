@@ -279,7 +279,7 @@ class Result(object):
             ljs = (
                 + njs - (njs > 0) * self.discount 
                 + (njs == 0) * (
-                    self.self.concentration 
+                    self.concentration 
                     + (njs > 0).sum() * self.discount
                     ) / m
                 )
