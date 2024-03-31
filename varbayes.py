@@ -118,11 +118,17 @@ class SurrogateVars(object):
         self.nu_sd    = tf.Variable(
             tf.random.normal([J-1], dtype = dtype), name = 'nu_sd',
             )
-        self.alpha_mu = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+        # self.alpha_mu = tf.Variable(
+        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+        #     )
+        # self.alpha_sd = tf.Variable(
+        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
+        #     )
+        self.alpha_shape = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_shape',
             )
-        self.alpha_sd = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
+        self.alpha_rate = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_rate',
             )
         self.xi_mu    = tf.Variable(
             tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
@@ -170,8 +176,9 @@ class SurrogateModel(object):
                 reinterpreted_batch_ndims = 1,
                 ),
             alpha = tfd.Independent(
-                tfd.LogNormal(
-                    self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd),
+                tfd.Gamma(
+                    tf.nn.softplus(self.vars.alpha_shape),
+                    tf.nn.softplus(self.vars.alpha_rate),
                     ), 
                 reinterpreted_batch_ndims = 2,
                 ),
@@ -255,7 +262,7 @@ class VarPYPG(object):
         self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
         return
     
-    def fit_advi(self, min_steps = 2000, max_steps = 20000, 
+    def fit_advi(self, min_steps = 10000, max_steps = 100000,
                  relative_tolerance = 1e-6, seed = 1):
         optimizer = tf.optimizers.Adam(learning_rate = self.advi_learning_rate)
         concrit = tfp.optimizer.convergence_criteria.LossNotDecreasing(
@@ -506,7 +513,7 @@ if __name__ == '__main__':
 
     raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
     dat = Data(raw, real_vars = np.arange(raw.shape[1]), quantile = 0.95)
-    mod = MVarPYPG(dat)
+    mod = VarPYPG(dat)
     mod.fit_advi()
 
     # slosh = pd.read_csv(
