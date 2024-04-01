@@ -130,18 +130,30 @@ class SurrogateVars(object):
         self.alpha_rate = tf.Variable(
             tf.random.normal([J,D], dtype = dtype), name = 'alpha_rate',
             )
-        self.xi_mu    = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
+        self.xi_shape = tf.Variable(
+            tf.random.normal([D], dtype = dtype), name = 'xi_shape',
             )
-        self.xi_sd    = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
+        self.xi_rate = tf.Variable(
+            tf.random.normal([D], dtype = dtype), name = 'xi_rate',
             )
-        self.tau_mu   = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+        # self.xi_mu    = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
+        #     )
+        # self.xi_sd    = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
+        #     )
+        self.tau_shape = tf.Variable(
+            tf.random.normal([D], dtype = dtype), name = 'tau_shape',
             )
-        self.tau_sd   = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+        self.tau_rate = tf.Variable(
+            tf.random.normal([D], dtype = dtype), name = 'tau_rate',
             )
+        # self.tau_mu   = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+        #     )
+        # self.tau_sd   = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+        #     )
         return
         
     def __init__(self, J, D, dtype = np.float64):
@@ -158,15 +170,23 @@ class SurrogateModel(object):
     def init_model(self):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
-                tfd.LogNormal(
-                    self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
-                    ), 
+                tfd.Gamma(
+                    tf.nn.softplus(self.vars.xi_shape),
+                    tf.nn.softplus(self.vars.xi_rate),
+                    ),
+                # tfd.LogNormal(
+                #     self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
+                    # ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             tau = tfd.Independent(
-                tfd.LogNormal(
-                    self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
-                    ), 
+                tfd.Gamma(
+                    tf.nn.softplus(self.vars.tau_shape),
+                    tf.nn.softplus(self.vars.tau_rate),
+                    ),
+                # tfd.LogNormal(
+                #     self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
+                #     ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             nu = tfd.Independent(
@@ -262,7 +282,7 @@ class VarPYPG(object):
         self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
         return
     
-    def fit_advi(self, min_steps = 10000, max_steps = 100000,
+    def fit_advi(self, min_steps = 5000, max_steps = 100000,
                  relative_tolerance = 1e-6, seed = 1):
         optimizer = tf.optimizers.Adam(learning_rate = self.advi_learning_rate)
         concrit = tfp.optimizer.convergence_criteria.LossNotDecreasing(

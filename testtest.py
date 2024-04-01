@@ -11,7 +11,7 @@ sql_paths = [
     # './simulated/sphere2/result_240315.sql',
     # './simulated/sphere2/result_240317.sql',
     './simulated/sphere2/result_240324.sql',
-    './simulated/sphere2/result_240329.sql',
+    './simulated/sphere2/result_240330.sql',
     ]
 
 def get_table(path, table):
