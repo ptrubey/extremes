@@ -113,47 +113,47 @@ def stickbreak_tf(nu):
 class SurrogateVars(object):
     def init_vars(self, J, D, dtype):
         self.nu_mu    = tf.Variable(
-            tf.random.normal([J-1], dtype = dtype), name = 'nu_mu',
+            tf.random.normal([J-1], mean = -2, dtype = dtype), name = 'nu_mu',
             )
         self.nu_sd    = tf.Variable(
-            tf.random.normal([J-1], dtype = dtype), name = 'nu_sd',
+            tf.random.normal([J-1], mean = -2, dtype = dtype), name = 'nu_sd',
             )
-        # self.alpha_mu = tf.Variable(
-        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+        self.alpha_mu = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+            )
+        self.alpha_sd = tf.Variable(
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
+            )
+        # self.alpha_shape = tf.Variable(
+        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_shape',
         #     )
-        # self.alpha_sd = tf.Variable(
-        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
+        # self.alpha_rate = tf.Variable(
+        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_rate',
         #     )
-        self.alpha_shape = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'alpha_shape',
-            )
-        self.alpha_rate = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'alpha_rate',
-            )
-        self.xi_shape = tf.Variable(
-            tf.random.normal([D], dtype = dtype), name = 'xi_shape',
-            )
-        self.xi_rate = tf.Variable(
-            tf.random.normal([D], dtype = dtype), name = 'xi_rate',
-            )
-        # self.xi_mu    = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
+        # self.xi_shape = tf.Variable(
+        #     tf.random.normal([D], dtype = dtype), name = 'xi_shape',
         #     )
-        # self.xi_sd    = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
+        # self.xi_rate = tf.Variable(
+        #     tf.random.normal([D], dtype = dtype), name = 'xi_rate',
         #     )
-        self.tau_shape = tf.Variable(
-            tf.random.normal([D], dtype = dtype), name = 'tau_shape',
+        self.xi_mu    = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
             )
-        self.tau_rate = tf.Variable(
-            tf.random.normal([D], dtype = dtype), name = 'tau_rate',
+        self.xi_sd    = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
             )
-        # self.tau_mu   = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+        # self.tau_shape = tf.Variable(
+        #     tf.random.normal([D], dtype = dtype), name = 'tau_shape',
         #     )
-        # self.tau_sd   = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+        # self.tau_rate = tf.Variable(
+        #     tf.random.normal([D], dtype = dtype), name = 'tau_rate',
         #     )
+        self.tau_mu   = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+            )
+        self.tau_sd   = tf.Variable(
+            tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+            )
         return
         
     def __init__(self, J, D, dtype = np.float64):
@@ -170,23 +170,23 @@ class SurrogateModel(object):
     def init_model(self):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
-                tfd.Gamma(
-                    tf.nn.softplus(self.vars.xi_shape),
-                    tf.nn.softplus(self.vars.xi_rate),
-                    ),
-                # tfd.LogNormal(
-                #     self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
-                    # ), 
+                # tfd.Gamma(
+                #     tf.nn.softplus(self.vars.xi_shape),
+                #     tf.nn.softplus(self.vars.xi_rate),
+                #     ),
+                tfd.LogNormal(
+                    self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
+                    ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             tau = tfd.Independent(
-                tfd.Gamma(
-                    tf.nn.softplus(self.vars.tau_shape),
-                    tf.nn.softplus(self.vars.tau_rate),
-                    ),
-                # tfd.LogNormal(
-                #     self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
-                #     ), 
+                # tfd.Gamma(
+                #     tf.nn.softplus(self.vars.tau_shape),
+                #     tf.nn.softplus(self.vars.tau_rate),
+                #     ),
+                tfd.LogNormal(
+                    self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
+                    ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             nu = tfd.Independent(
@@ -196,10 +196,13 @@ class SurrogateModel(object):
                 reinterpreted_batch_ndims = 1,
                 ),
             alpha = tfd.Independent(
-                tfd.Gamma(
-                    tf.nn.softplus(self.vars.alpha_shape),
-                    tf.nn.softplus(self.vars.alpha_rate),
-                    ), 
+                tfd.LogNormal(
+                    self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd)
+                    ),
+                # tfd.Gamma(
+                #     tf.nn.softplus(self.vars.alpha_shape),
+                #     tf.nn.softplus(self.vars.alpha_rate),
+                #     ), 
                 reinterpreted_batch_ndims = 2,
                 ),
             ))
@@ -312,7 +315,7 @@ class VarPYPG(object):
             discount = 0.05, 
             prior_xi = (0.5, 0.5), 
             prior_tau = (2., 2.), 
-            max_clusters = 200,
+            max_clusters = 100, # 200,
             dtype = np.float64,
             p = 10,
             advi_sample_size = 1,

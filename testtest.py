@@ -11,7 +11,9 @@ sql_paths = [
     # './simulated/sphere2/result_240315.sql',
     # './simulated/sphere2/result_240317.sql',
     './simulated/sphere2/result_240324.sql',
-    './simulated/sphere2/result_240330.sql',
+    # './simulated/sphere2/result_240330.sql',
+    # './simulated/sphere2/result_240331.sql',
+    './simulated/sphere2/result_240401.sql',
     ]
 
 def get_table(path, table):
@@ -21,6 +23,6 @@ def get_table(path, table):
     return df
 
 dfs = [get_table(path, 'energy') for path in sql_paths]
-# dfs[0] = dfs[0][dfs[0].model != 'spypg']
+dfs[0] = dfs[0][dfs[0].model != 'spypg']
 df = pd.concat(dfs)
 df.to_csv('~/Desktop/performance.csv', index = False)
