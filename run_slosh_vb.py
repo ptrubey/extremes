@@ -83,13 +83,28 @@ if __name__ == '__main__':
     model.fit_advi()
     postalphas = model.generate_conditional_posterior_alphas()
 
+    inputs = pd.read_csv('~/git/surge/data/inputs.csv')
+    finputs = inputs.iloc[model.data.I]
+
     # write to disk
     d = {
         'ids'    : sloshltd_ids,
         'obs'    : sloshltd_obs,
         'alphas' : postalphas,
+        'inputs' : finputs,
         }
     with open('./datasets/slosh/sloshltd.pkl', 'wb') as file:
         pkl.dump(d, file)
+
+    finputs_expanded = np.empty(
+        (finputs.shape[0], postalphas.shape[1], finputs.shape[1]),
+        )
+    finputs_expanded[:] = finputs.values[:,None]
+    out_inputs = finputs_expanded.reshape((-1, finputs.shape[-1]))
+    out_alphas = postalphas.reshape((-1, postalphas.shape[-1]))
+
+    pd.DataFrame(out_inputs).to_csv('~/git/surge/data/temp_inputs.csv.gz', index = False, compression = 'gzip')
+    pd.DataFrame(out_alphas).to_csv('~/git/surge/data/temp_alphas.csv.gz', index = False, compression = 'gzip')
+
 
 # EOF
