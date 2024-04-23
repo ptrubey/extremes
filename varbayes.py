@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import projgamma as pg
-from scipy.special import digamma
+from scipy.special import digamma, softmax
 from samplers import bincount2D_vectorized
 from data import Data, euclidean_to_psphere, euclidean_to_hypercube
 import matplotlib.pyplot as plt
@@ -113,7 +113,7 @@ def stickbreak_tf(nu):
 class SurrogateVars(object):
     def init_vars(self, J, D, dtype):
         self.nu_mu    = tf.Variable(
-            tf.random.normal([J-1], mean = -2, dtype = dtype), name = 'nu_mu',
+            tf.random.normal([J-1], mean = -4, dtype = dtype), name = 'nu_mu',
             )
         self.nu_sd    = tf.Variable(
             tf.random.normal([J-1], mean = -2, dtype = dtype), name = 'nu_sd',
@@ -124,30 +124,12 @@ class SurrogateVars(object):
         self.alpha_sd = tf.Variable(
             tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
             )
-        # self.alpha_shape = tf.Variable(
-        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_shape',
-        #     )
-        # self.alpha_rate = tf.Variable(
-        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_rate',
-        #     )
-        # self.xi_shape = tf.Variable(
-        #     tf.random.normal([D], dtype = dtype), name = 'xi_shape',
-        #     )
-        # self.xi_rate = tf.Variable(
-        #     tf.random.normal([D], dtype = dtype), name = 'xi_rate',
-        #     )
         self.xi_mu    = tf.Variable(
             tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
             )
         self.xi_sd    = tf.Variable(
             tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
             )
-        # self.tau_shape = tf.Variable(
-        #     tf.random.normal([D], dtype = dtype), name = 'tau_shape',
-        #     )
-        # self.tau_rate = tf.Variable(
-        #     tf.random.normal([D], dtype = dtype), name = 'tau_rate',
-        #     )
         self.tau_mu   = tf.Variable(
             tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
             )
@@ -349,6 +331,38 @@ class VarPYPG(object):
     def generate_posterior_predictive_hypercube(self, n = 5000):
         gammas = self.generate_posterior_predictive_gamma(n)
         return euclidean_to_hypercube(gammas)
+    
+    def generate_conditional_posterior_alphas(self, n = 500):
+        """ \alpha | y_i """
+        samples = self.surrogate.sample(n)
+        alpha   = samples['alpha'].numpy()
+        nu      = samples['nu'].numpy()
+        ll      = np.zeros((self.Yp.shape[0], n, alpha.shape[1]))
+        pt_logd_projgamma_my_mt_inplace_unstable(
+            ll, self.Yp, alpha, np.ones(alpha.shape),
+            )
+        logpi = np.zeros((n, nu.shape[1] + 1))
+        logpi[:,:-1] += np.log(nu)
+        logpi[:,1:]  += np.cumsum(np.log(1 - nu), axis = -1)
+        lp    = ll + logpi[None] # log-posterior delta (unnormalized)
+        po    = softmax(lp, axis = -1)
+        po    = np.cumsum(po, axis = -1)
+        t     = np.random.uniform(size = (po.shape[:-1]))
+        delta = (po < t[...,None]).sum(axis = -1)
+        
+        out_alphas = np.empty((self.Yp.shape[0], n, alpha.shape[-1]))
+        for s in range(n):
+            out_alphas[:,s] = alpha[s][delta[:,s]]
+        return out_alphas
+    
+    def generate_conditional_posterior_predictive_gammas(self, n = 500):
+        alphas = self.generate_conditional_posterior_alphas(n)
+        return np.random.gamma(alphas)
+    
+    def generate_conditional_posterior_predictive_hypercube(self, n = 500):
+        gammas = self.generate_conditional_posterior_predictive_gammas(n)
+        return euclidean_to_hypercube(gammas)
+
     pass
 
 class ReducedSurrogateVars(SurrogateVars):

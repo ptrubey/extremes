@@ -7,17 +7,24 @@ import sqlite3 as sql
 from io import BytesIO
 from time import sleep
 from numpy.random import uniform
+import pickle as pkl
 
 from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
-from data import Data_From_Sphere
+from data import Data_From_Sphere, Data_From_Raw
 import varbayes as vb
 
-source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere2/result_240419.sql'
-out_table   = 'energy'
+raw_path  = './datasets/slosh/filtered_data.csv.gz'
+out_sql   = './datasets/slosh/results.sql'
+out_table = 'energy'
 
-def run_model_from_path_wrapper(args):
-    return run_model_from_path(*args)
+def run_model_from_index(df, col_index, quantile = 0.95):
+    raw = df[:,col_index]
+    data = Data_From_Raw(raw, False, quantile = 0.95)
+    model = vb.VarPYPG(data)
+    model.fit_advi()
+    pp = model.generate_posterior_predictive_hypercube()
+    
+
 
 def run_model_from_path(path, *pargs):
     basepath, fname = os.path.split(path)
@@ -60,23 +67,29 @@ def run_model_from_path(path, *pargs):
     return
 
 if __name__ == '__main__':
-    limit_cpu()
-    files = glob.glob(source_path)
+    slosh = pd.read_csv(
+        './datasets/slosh/filtered_data.csv.gz', 
+        compression = 'gzip',
+        )
+    slosh_ids = slosh.T[:8].T
+    slosh_obs = slosh.T[8:].T
+    sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
 
-    conn = sql.connect(out_sql)
-    args = [(file, 'VarPYPG') for file in files]
-    try:
-        df = pd.read_sql('select * from energy;', conn)[['path','model']]
-        done = list(map(tuple, df.drop_duplicates().values))
-        todo = list(set(args).difference(set(done)))
-    except pd.io.sql.DatabaseError:
-        todo = args
-    conn.close()
-    todo_len = len(todo)
-    for i, arg in enumerate(todo):
-        sys.stderr.write('\rdone {0:.2%}'.format((i+1) / todo_len))
-        run_model_from_path_wrapper(arg)
-    print('\nDone!')
-        
+    sloshltd_ids = slosh_ids[sloshltd]
+    sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
+
+    data = Data_From_Raw(sloshltd_obs, decluster = False, quantile = 0.95)
+    model = vb.VarPYPG(data)
+    model.fit_advi()
+    postalphas = model.generate_conditional_posterior_alphas()
+
+    # write to disk
+    d = {
+        'ids'    : sloshltd_ids,
+        'obs'    : sloshltd_obs,
+        'alphas' : postalphas,
+        }
+    with open('./datasets/slosh/sloshltd.pkl', 'wb') as file:
+        pkl.dump(d, file)
 
 # EOF
