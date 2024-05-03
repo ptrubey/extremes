@@ -78,33 +78,44 @@ if __name__ == '__main__':
     sloshltd_ids = slosh_ids[sloshltd]
     sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
 
-    data = Data_From_Raw(sloshltd_obs, decluster = False, quantile = 0.95)
+    data = Data_From_Raw(sloshltd_obs, decluster = False, quantile = 0.98)
     model = vb.VarPYPG(data)
     model.fit_advi()
-    postalphas = model.generate_conditional_posterior_alphas()
+    # postalphas = model.generate_conditional_posterior_alphas()
 
     inputs = pd.read_csv('~/git/surge/data/inputs.csv')
     finputs = inputs.iloc[model.data.I]
 
+    deltas = model.generate_conditional_posterior_deltas()
+    import posterior as post
+    smat   = post.similarity_matrix(deltas)
+    graph  = post.minimum_spanning_trees(smat)
+    g      = pd.DataFrame(graph.graph)
+    g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
     # write to disk
+
     d = {
         'ids'    : sloshltd_ids,
         'obs'    : sloshltd_obs,
-        'alphas' : postalphas,
+        # 'alphas' : postalphas,
         'inputs' : finputs,
+        'deltas' : deltas,
+        'smat'   : smat,
+        'graph'  : g,
         }
     with open('./datasets/slosh/sloshltd.pkl', 'wb') as file:
         pkl.dump(d, file)
+    g.to_csv('./datasets/slosh/sloshltd_mst.csv', index = False)
 
-    finputs_expanded = np.empty(
-        (finputs.shape[0], postalphas.shape[1], finputs.shape[1]),
-        )
-    finputs_expanded[:] = finputs.values[:,None]
-    out_inputs = finputs_expanded.reshape((-1, finputs.shape[-1]))
-    out_alphas = postalphas.reshape((-1, postalphas.shape[-1]))
+    # finputs_expanded = np.empty(
+    #     (finputs.shape[0], postalphas.shape[1], finputs.shape[1]),
+    #     )
+    # finputs_expanded[:] = finputs.values[:,None]
+    # out_inputs = finputs_expanded.reshape((-1, finputs.shape[-1]))
+    # out_alphas = postalphas.reshape((-1, postalphas.shape[-1]))
 
-    pd.DataFrame(out_inputs).to_csv('~/git/surge/data/temp_inputs.csv.gz', index = False, compression = 'gzip')
-    pd.DataFrame(out_alphas).to_csv('~/git/surge/data/temp_alphas.csv.gz', index = False, compression = 'gzip')
+    # pd.DataFrame(out_inputs).to_csv('~/git/surge/data/temp_inputs.csv.gz', index = False, compression = 'gzip')
+    # pd.DataFrame(out_alphas).to_csv('~/git/surge/data/temp_alphas.csv.gz', index = False, compression = 'gzip')
 
 
 # EOF

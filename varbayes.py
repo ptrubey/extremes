@@ -332,8 +332,8 @@ class VarPYPG(object):
         gammas = self.generate_posterior_predictive_gamma(n)
         return euclidean_to_hypercube(gammas)
     
-    def generate_conditional_posterior_alphas(self, n = 500):
-        """ \alpha | y_i """
+    def generate_conditional_posterior_deltas_alphas(self, n = 1000):
+        " \delta | y_i "
         samples = self.surrogate.sample(n)
         alpha   = samples['alpha'].numpy()
         nu      = samples['nu'].numpy()
@@ -349,6 +349,30 @@ class VarPYPG(object):
         po    = np.cumsum(po, axis = -1)
         t     = np.random.uniform(size = (po.shape[:-1]))
         delta = (po < t[...,None]).sum(axis = -1)
+        return delta, alpha
+
+    def generate_conditional_posterior_deltas(self, n = 1000):
+        delta, alpha = self.generate_conditional_posterior_deltas_alphas(n = n)
+        return delta
+
+    def generate_conditional_posterior_alphas(self, n = 1000):
+        """ \alpha | y_i """
+        # samples = self.surrogate.sample(n)
+        # alpha   = samples['alpha'].numpy()
+        # nu      = samples['nu'].numpy()
+        # ll      = np.zeros((self.Yp.shape[0], n, alpha.shape[1]))
+        # pt_logd_projgamma_my_mt_inplace_unstable(
+        #     ll, self.Yp, alpha, np.ones(alpha.shape),
+        #     )
+        # logpi = np.zeros((n, nu.shape[1] + 1))
+        # logpi[:,:-1] += np.log(nu)
+        # logpi[:,1:]  += np.cumsum(np.log(1 - nu), axis = -1)
+        # lp    = ll + logpi[None] # log-posterior delta (unnormalized)
+        # po    = softmax(lp, axis = -1)
+        # po    = np.cumsum(po, axis = -1)
+        # t     = np.random.uniform(size = (po.shape[:-1]))
+        # delta = (po < t[...,None]).sum(axis = -1)
+        delta, alpha = self.generate_conditional_posterior_deltas_alphas(n = n)
         
         out_alphas = np.empty((self.Yp.shape[0], n, alpha.shape[-1]))
         for s in range(n):
@@ -548,32 +572,34 @@ if __name__ == '__main__':
     np.random.seed(1)
     tf.random.set_seed(1)
 
+    if False:
+        # slosh = pd.read_csv(
+        #     './datasets/slosh/filtered_data.csv.gz', 
+        #     compression = 'gzip',
+        #     )
+        # slosh_ids = slosh.T[:8].T
+        # slosh_obs = slosh.T[8:].T
+        
+        # Result = namedtuple('Result','type ncol ndat time')
+        # sloshes = []
+
+        # for category in slosh_ids.Category.unique():
+        #     idx = (slosh_ids.Category == category)
+        #     ids = slosh_ids[idx]
+        #     obs = slosh_obs[idx].values.T.astype(np.float64)
+        #     dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
+        #     mod = MVarPYPG(dat)
+        #     mod.fit_advi()
+
+        #     sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
+        #     print(sloshes[-1])
+        
+        # pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
+        pass
+
     raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
     dat = Data(raw, real_vars = np.arange(raw.shape[1]), quantile = 0.95)
     mod = VarPYPG(dat)
     mod.fit_advi()
-
-    # slosh = pd.read_csv(
-    #     './datasets/slosh/filtered_data.csv.gz', 
-    #     compression = 'gzip',
-    #     )
-    # slosh_ids = slosh.T[:8].T
-    # slosh_obs = slosh.T[8:].T
-    
-    # Result = namedtuple('Result','type ncol ndat time')
-    # sloshes = []
-
-    # for category in slosh_ids.Category.unique():
-    #     idx = (slosh_ids.Category == category)
-    #     ids = slosh_ids[idx]
-    #     obs = slosh_obs[idx].values.T.astype(np.float64)
-    #     dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
-    #     mod = MVarPYPG(dat)
-    #     mod.fit_advi()
-
-    #     sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
-    #     print(sloshes[-1])
-    
-    # pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
 
 # EOF

@@ -19,22 +19,22 @@ def similarity_matrix(dmat):
     outputs:
         smat (n x n)    
     """
-    smat = np.zeros((dmat.shape[1], dmat.shape[1]))
-    for s in range(dmat.shape[0]):
-        smat[:] += (dmat[s] == dmat[s].T)
-    return (smat / dmat.shape[0])
+    dmatI = dmat.T
+    smat = np.zeros((dmat.shape[0], dmat.shape[0]))
+    for s in range(dmat.shape[1]):
+        smat[:] += (dmatI[s][None] == dmatI[s][:,None])
+    return (smat / dmat.shape[1])
 
 def minimum_spanning_trees(smat):
-    graph = trees.Graph()
+    graph = trees.Graph(smat.shape[0])
     edges = []
     for i in range(smat.shape[0]):
-        for j in range(1,smat.shape[0]):
+        for j in range(i + 1,smat.shape[0]):
             edges.append((i,j,smat[i,j]))
     for edge in edges:
         graph.addEdge(*edge)
     graph.KruskalMST()
-    
-    pass
+    return graph
 
 
 def emergent_clusters(smat):
