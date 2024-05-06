@@ -7,6 +7,8 @@ Algorithms for posterior analysis of results
 import numpy as np
 import trees
 
+EPS = 1e-16
+
 def similarity_matrix(dmat):
     """
     Similarity Matrix
@@ -30,12 +32,12 @@ def minimum_spanning_trees(smat):
     edges = []
     for i in range(smat.shape[0]):
         for j in range(i + 1,smat.shape[0]):
-            edges.append((i,j,smat[i,j]))
+            # edge weight is reciprocal of posterior co-clustering prob.
+            edges.append((i,j, 1 / (smat[i,j] + EPS)))
     for edge in edges:
         graph.addEdge(*edge)
     graph.KruskalMST()
     return graph
-
 
 def emergent_clusters(smat):
     """

@@ -106,6 +106,8 @@ if __name__ == '__main__':
     with open('./datasets/slosh/sloshltd.pkl', 'wb') as file:
         pkl.dump(d, file)
     g.to_csv('./datasets/slosh/sloshltd_mst.csv', index = False)
+    finputs.to_csv('./datasets/slosh/sloshltd_in.csv', index = False)
+    pd.DataFrame(deltas).to_csv('./datasets/slosh/sloshltd_delta.csv', index = False)
 
     # finputs_expanded = np.empty(
     #     (finputs.shape[0], postalphas.shape[1], finputs.shape[1]),
