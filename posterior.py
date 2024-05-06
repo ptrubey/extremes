@@ -31,13 +31,12 @@ def minimum_spanning_trees(smat):
     graph = trees.Graph(smat.shape[0])
     edges = []
     for i in range(smat.shape[0]):
-        for j in range(i + 1,smat.shape[0]):
+        for j in range(i + 1, smat.shape[0]):
             # edge weight is reciprocal of posterior co-clustering prob.
             edges.append((i,j, 1 / (smat[i,j] + EPS)))
     for edge in edges:
         graph.addEdge(*edge)
-    graph.KruskalMST()
-    return graph
+    return graph.KruskalMST()
 
 def emergent_clusters(smat):
     """
