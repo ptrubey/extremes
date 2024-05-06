@@ -38,6 +38,7 @@ def minimum_spanning_trees(smat):
         graph.addEdge(*edge)
     return graph.KruskalMST()
 
+
 def emergent_clusters(smat):
     """
     Emergent Clusters

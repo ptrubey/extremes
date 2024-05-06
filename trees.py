@@ -94,7 +94,8 @@ class Graph:
         for u, v, weight in result: 
             minimumCost += weight 
             print("%d -- %d == %d" % (u, v, weight)) 
-        print("Minimum Spanning Tree", minimumCost) 
+        print("Minimum Spanning Tree", minimumCost)
+        return result
   
   
 # Driver code 
