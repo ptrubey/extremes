@@ -67,6 +67,8 @@ def run_model_from_path(path, *pargs):
     return
 
 if __name__ == '__main__':
+    limit_cpu()
+
     slosh = pd.read_csv(
         './datasets/slosh/filtered_data.csv.gz', 
         compression = 'gzip',
@@ -90,7 +92,7 @@ if __name__ == '__main__':
     import posterior as post
     smat   = post.similarity_matrix(deltas)
     graph  = post.minimum_spanning_trees(smat)
-    g      = pd.DataFrame(graph.graph)
+    g      = pd.DataFrame(graph)
     g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
     # write to disk
 
