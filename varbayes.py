@@ -113,16 +113,16 @@ def stickbreak_tf(nu):
 class SurrogateVars(object):
     def init_vars(self, J, D, dtype):
         self.nu_mu    = tf.Variable(
-            tf.random.normal([J-1], mean = -4, dtype = dtype), name = 'nu_mu',
+            tf.random.normal([J-1], mean = -3, dtype = dtype), name = 'nu_mu',
             )
         self.nu_sd    = tf.Variable(
-            tf.random.normal([J-1], mean = -2, dtype = dtype), name = 'nu_sd',
+            tf.random.normal([J-1], mean = -3, dtype = dtype), name = 'nu_sd',
             )
         self.alpha_mu = tf.Variable(
             tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
             )
         self.alpha_sd = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'alpha_sd',
+            tf.random.normal([J,D], mean = -2, dtype = dtype), name = 'alpha_sd',
             )
         self.xi_mu    = tf.Variable(
             tf.random.normal([D],   dtype = dtype), name = 'xi_mu',

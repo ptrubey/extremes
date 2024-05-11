@@ -1,4 +1,3 @@
-
 # Python program for Kruskal's algorithm to find 
 # Minimum Spanning Tree of a given connected, 
 # undirected and weighted graph 
@@ -96,7 +95,6 @@ class Graph:
             print("%d -- %d == %d" % (u, v, weight)) 
         print("Minimum Spanning Tree", minimumCost)
         return result
-  
   
 # Driver code 
 if __name__ == '__main__': 

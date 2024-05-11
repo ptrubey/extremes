@@ -3,9 +3,13 @@ posterior.py
 
 Algorithms for posterior analysis of results
 """
-
+import varbayes as vb
+import pandas as pd
 import numpy as np
 import trees
+from projgamma import pt_logd_projgamma_my_mt_inplace_unstable
+from collections import defaultdict
+from scipy.special import softmax
 
 EPS = 1e-16
 
@@ -37,6 +41,40 @@ def minimum_spanning_trees(smat):
     for edge in edges:
         graph.addEdge(*edge)
     return graph.KruskalMST()
+
+def emergent_clusters_nl(graph, k):
+    components = []
+    seen = set()
+
+    def neighbor_list(graph: pd.DataFrame):
+        neighbors = defaultdict(set)
+        # an edge is a 3-element tuple
+        for node1, node2 in graph.iloc[:-k][['node1','node2']].values.tolist(): 
+            neighbors[node1].add(node2)
+            neighbors[node2].add(node1)
+        return neighbors # dictionary of sets listing neighbors for each element
+    
+    neighbors = neighbor_list(graph)
+
+    def find_component(start):
+        stack = [start]
+        component = []
+        while stack:
+            cur = stack.pop()
+            if cur in seen:
+                continue
+            seen.add(cur)
+            component.append(cur)
+            for neigh in neighbors[cur]:
+                stack.append(neigh)
+        return component    
+
+    for v in neighbors:
+        if v in seen:
+            continue
+        components.append(find_component(v))
+    
+    return components
 
 def emergent_clusters(graph, k):
     """
@@ -89,11 +127,49 @@ def emergent_clusters(graph, k):
         labels[s] = i
     return labels
 
+def emergent_clusters_pre(model : vb.VarPYPG):
+    """
+    Assumes that label-switching has been corrected.
+    Computes posterior cluster assignment
+        1:  \alpha_{jl}^* = mean(\alpha_{jl}^{(s)} for s = 1,...,S)
+        2:  \nu_{j} = mean(\nu_{js} for s = 1,...,S)
+        3:  \delta_i^* = \argmax(cluster prob given alpha^*, nu^*)
+    """
+    samples = model.surrogate.sample(10000)
+    alpha = samples['alpha'].numpy().mean(axis = 0)
+    nu    = samples['nu'].numpy().mean(axis = 0)
+    # pi = vb.stickbreak(nu)
+    ll = np.zeros((model.Yp.shape[0], 1, alpha.shape[0]))
+    pt_logd_projgamma_my_mt_inplace_unstable(
+        ll, model.Yp, alpha[None], np.ones(alpha[None].shape),
+        )
+    logpi = np.zeros((1, nu.shape[0] + 1))
+    logpi[:,:-1] += np.log(nu)
+    logpi[:,1:]  += np.cumsum(np.log(1 - nu))
+    lp = ll.sum(axis = 1) + logpi # log-posterior delta (unnormalized)
+    po = softmax(lp, axis = -1)
+    return np.argmax(po, axis = 1)
+
+def emergent_clusters_post(model : vb.VarPYPG):
+    """
+    Assumes that label-switching has been corrected.
+    Computes posterior cluster assignment
+        1: \delta_{is} ~ P(cluster_prob | alpha_s, nu_s)
+        2: \delta_i^* = \argmax delta_i / S
+    """
+    deltas = model.generate_conditional_posterior_deltas()
+    assert deltas.shape[1] == 1000
+    d_arr = np.zeros((*deltas.shape, model.J), dtype = int)
+    for i in range(model.J):
+        d_arr[:,:,i] = (deltas == i) * 1
+    return(np.argmax(d_arr.mean(axis = 1), axis = 1))
+    
 if __name__ == '__main__':
     import pandas as pd
     # knock off 5 edges    
     graph = pd.read_csv('./datasets/slosh/sloshltd_mst.csv')
-    labels = emergent_clusters(graph, 7)
+    # labels = emergent_clusters(graph, 7)
+    labels = emergent_clusters_nl(graph, 100)
     raise
     
     
