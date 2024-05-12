@@ -135,19 +135,26 @@ def emergent_clusters_pre(model : vb.VarPYPG):
         2:  \nu_{j} = mean(\nu_{js} for s = 1,...,S)
         3:  \delta_i^* = \argmax(cluster prob given alpha^*, nu^*)
     """
-    samples = model.surrogate.sample(10000)
-    alpha = samples['alpha'].numpy().mean(axis = 0)
-    nu    = samples['nu'].numpy().mean(axis = 0)
+    albar = np.zeros((model.J, model.D))
+    nubar = np.zeros((model.J - 1))
+    for _ in range(100):
+        samples = model.surrogate.sample(100)
+        alpha   = samples['alpha'].numpy().mean(axis = 0)
+        nu      = samples['nu'].numpy().mean(axis = 0)
+        albar += alpha
+        nubar += nu
+    albar /= 100
+    nubar /= 100
     # pi = vb.stickbreak(nu)
-    ll = np.zeros((model.Yp.shape[0], 1, alpha.shape[0]))
+    ll = np.zeros((model.N, 1, model.J))
     pt_logd_projgamma_my_mt_inplace_unstable(
-        ll, model.Yp, alpha[None], np.ones(alpha[None].shape),
+        ll, model.Yp, albar[None], np.ones(albar[None].shape),
         )
-    logpi = np.zeros((1, nu.shape[0] + 1))
-    logpi[:,:-1] += np.log(nu)
-    logpi[:,1:]  += np.cumsum(np.log(1 - nu))
-    lp = ll.sum(axis = 1) + logpi # log-posterior delta (unnormalized)
-    po = softmax(lp, axis = -1)
+    logpi = np.zeros((1, model.J))
+    logpi[:,:-1] += np.log(nubar)
+    logpi[:,1:]  += np.cumsum(np.log(1 - nubar))
+    lp = ll.sum(axis = 1) + logpi # log-posterior of delta (unnormalized)
+    po = softmax(lp, axis = -1)   # posterior of delta (normalized)
     return np.argmax(po, axis = 1)
 
 def emergent_clusters_post(model : vb.VarPYPG):
