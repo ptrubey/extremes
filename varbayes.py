@@ -294,7 +294,7 @@ class VarPYPG(object):
             self, 
             data, 
             eta = 0.2, 
-            discount = 0.05, 
+            discount = 0.2, 
             prior_xi = (0.5, 0.5), 
             prior_tau = (2., 2.), 
             max_clusters = 100, # 200,
