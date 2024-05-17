@@ -74,7 +74,7 @@ if __name__ == '__main__':
     slosh_ids = slosh.T[:8].T
     slosh_obs = slosh.T[8:].T
 
-    if True: # sloshltd
+    if False: # sloshltd
         sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
         sloshltd_ids = slosh_ids[sloshltd]
         sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
@@ -119,7 +119,7 @@ if __name__ == '__main__':
             './datasets/slosh/sloshltd_clusters_post.csv', index = False, 
             )
 
-    if True: # Full model
+    if False: # Full model
         data = Data_From_Raw(
             slosh_obs.values.T.astype(np.float64), 
             decluster = False, 
@@ -161,5 +161,54 @@ if __name__ == '__main__':
         pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar_}).to_csv(
             './datasets/slosh/slosh_clusters_post.csv', index = False, 
             )
+
+    if True: # filtered to 0.9 threshold
+        slosh9_obs = pd.read_csv(
+            './datasets/slosh/slosh_thr.90.csv.gz', 
+            compression = 'gzip',
+            )
+        data = Data_From_Raw(
+            slosh9_obs.values.T.astype(np.float64), 
+            decluster = False, 
+            quantile = 0.90,
+            )
+        model = vb.VarPYPG(data)
+        model.fit_advi()
+
+        inputs = pd.read_csv('~/git/surge/data/inputs.csv')
+        finputs = inputs.iloc[model.data.I]
+
+        deltas = model.generate_conditional_posterior_deltas()
+        import posterior as post
+        smat   = post.similarity_matrix(deltas)
+        graph  = post.minimum_spanning_trees(smat)
+        g      = pd.DataFrame(graph)
+        g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
+        # write to disk
+
+        d = {
+            'ids'    : slosh_ids,
+            'obs'    : slosh9_obs,
+            'inputs' : finputs,
+            'deltas' : deltas,
+            'smat'   : smat,
+            'graph'  : g,
+            }
+        with open('./datasets/slosh/slosht90.pkl', 'wb') as file:
+            pkl.dump(d, file)
+        g.to_csv('./datasets/slosh/slosht90_mst.csv', index = False)
+        finputs.to_csv('./datasets/slosh/slosht90_in.csv', index = False)
+        pd.DataFrame(deltas).to_csv('./datasets/slosh/slosht90_delta.csv', index = False)
+        
+        deltastar = post.emergent_clusters_pre(model)
+        pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar}).to_csv(
+            './datasets/slosh/slosht90_cluster_pre.csv', index = False,
+            )
+        deltastar_ = post.emergent_clusters_post(model)
+        pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar_}).to_csv(
+            './datasets/slosh/slosht90_clusters_post.csv', index = False, 
+            )
+
+
 
 # EOF
