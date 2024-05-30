@@ -66,7 +66,62 @@ class TemperedOnlineCovariance(OnlineCovariance):
         self.xbar = np.zeros((nTemp, nCol))
         self.n = 0
         return
+
+class PerObsOnlineCovariance(OnlineCovariance):
+    c_Sigma = None
+    c_xbar  = None
+    c_n     = None
+    c_A     = None
+    c_b     = None
+    c_xbar  = None
+
+    def cluster_covariance(self, delta):
+        if self.n <= 300:
+            return self.c_Sigma
+        
+        self.c_Sigma[:] = 0.
+        self.c_xbar[:] = 0.
+        self.c_A[:] = 0.
+        self.c_b[:] = 0.
+        self.c_n[:] = 0.
+        for n in range(self.nDat):
+            self.c_n[delta.T[n]] += self.n
+            self.c_A[delta.T[n]] += self.A[n]
+            self.c_b[delta.T[n]] += self.b[n]
+        self.c_xbar = self.c_b / (self.c_n[:,None] + EPS)
+        self.c_Sigma += self.c_A
+        self.c_Sigma -= self.c_xbar[:,None] * self.c_b[:,:,None]
+        self.c_Sigma -= self.c_b[:,None] * self.c_xbar[:,:,None]
+        self.c_Sigma += self.c_n[:,None, None] * (
+            self.c_xbar[:,None] * self.c_xbar[:,:,None]
+            )
+        self.c_Sigma /= (self.c_n[:,None,None] + EPS)
+        self.c_Sigma += np.eye(self.nCol)[None,:] * 1e-9
+        return self.c_Sigma
     
+    def update(self, x):
+        """ x : (n, d) """
+        self.A += x[:,:,None] * x[:,None,:] 
+        self.b += x
+        self.n += 1
+        return
+    
+    def __init__(self, nDat, nCol, nClust, init_diag = 1e-5):
+        self.nDat, self.nCol, self.nClust = nDat, nCol, nClust
+        self.A = np.zeros((self.nDat, self.nCol, self.nCol))
+        self.b = np.zeros((self.nDat, self.nCol))
+        self.n = 0
+        # clustering
+        self.c_Sigma = np.zeros((self.nClust, self.nCol, self.nCol))
+        self.c_Sigma += np.eye(self.nCol)[None] * init_diag
+        self.c_xbar  = np.zeros((self.nClust, self.nCol))
+        self.c_n     = np.zeros((self.nClust))
+        self.c_A     = np.zeros((self.nClust, self.nCol, self.nCol))
+        self.c_b     = np.zeros((self.nClust, self.nCol))
+        return
+
+
+
 class PerObsTemperedOnlineCovariance(OnlineCovariance):
     c_Sigma = None
     c_xbar  = None

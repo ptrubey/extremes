@@ -297,7 +297,7 @@ class VarPYPG(object):
             discount = 0.2, 
             prior_xi = (0.5, 0.5), 
             prior_tau = (2., 2.), 
-            max_clusters = 100, # 200,
+            max_clusters = 200, # 200,
             dtype = np.float64,
             p = 10,
             advi_sample_size = 1,

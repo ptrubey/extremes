@@ -200,30 +200,23 @@ class VarPYRPG(object):
                     scale = np.ones((self.D, self.K, self.dtype)),
                     ),
                 reinterpreted_batch_ndims = 1,
-                ),  
-            alpha = lambda xi, tau: tfd.Independent(
-                tfd.LogNormal(
-                    loc = 
-                    concentration = np.ones(
-                        (self.J, self.D), self.dtype,
-                        ) * tf.expand_dims(xi, -2),
-                    rate = np.ones(
-                        (self.J, self.D), self.dtype,
-                        ) * tf.expand_dims(tau, -2),
-                    ),
-                reinterpreted_batch_ndims = 2,
                 ),
-             
-            obs = lambda alpha, nu: tfd.Sample(
+            gamma = tfd.Independent(
+                tfd.Normal(
+                    loc = np.zeros((self.D, self.K), self.dtype),
+                    scale = np.ones((self.D, self.K), self.dtype),
+                    ),
+                reinterpreted_batch_ndims = 1,
+                ),
+            obs = lambda beta, gamma, nu: tfd.Sample(
                 tfd.MixtureSameFamily(
                     mixture_distribution = tfd.Categorical(probs = stickbreak_tf(nu)),
                     components_distribution = ProjectedGamma(
-                        alpha, np.ones((self.J, self.D), self.dtype)
+                        beta, np.ones((self.J, self.D), self.dtype)
                         ),
                     ),
                 sample_shape = (self.N),
                 ),
-            
             ))
         _ = self.model.sample()
         
