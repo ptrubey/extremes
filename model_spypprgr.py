@@ -35,9 +35,7 @@ Prior = namedtuple('Prior', 'mu Sigma')
 Dimensions = namedtuple('Dimensions','beta gamma zeta')
 
 class Samples(object):
-    beta  = None
-    gamma = None
-    zeta  = None
+    theta = None
     epsilon = None
     Sigma = None
     mu    = None
@@ -46,10 +44,8 @@ class Samples(object):
     ld    = None
     
     def __init__(self, nSamp, nDat, nCol):
-        self.beta  = [None] * (nSamp + 1)
-        self.gamma = [None] * (nSamp + 1)
-        self.zeta  = [None] * (nSamp + 1)
-        self.epsilon = np.empty((nSamp + 1, ))
+        self.theta = [None] * (nSamp + 1)
+        self.epsilon = np.empty((nSamp + 1, nCol))
         self.Sigma = np.empty((nSamp + 1, nCol, nCol))
         self.mu    = np.empty((nSamp + 1, nCol))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
@@ -62,14 +58,8 @@ class Chain(DirichletProcessSampler):
     discount      = None
 
     @property
-    def curr_beta(self):
-        return self.samples.beta[self.curr_iter]
-    @property
-    def curr_gamma(self):
-        return self.samples.gamma[self.curr_iter]
-    @property
-    def curr_zeta(self):
-        return self.samples.phi[self.curr_iter]
+    def curr_theta(self):
+        return self.samples.theta[self.curr_iter]
     @property
     def curr_Sigma(self):
         return self.samples.Sigma[self.curr_iter]
@@ -106,12 +96,15 @@ class Chain(DirichletProcessSampler):
 
     def compute_shape(
             self, 
-            delta   : np.ndarray, 
-            beta    : np.ndarray,
-            gamma   : np.ndarray, 
-            zeta    : np.ndarray,
+            delta   : np.ndarray,
+            theta   : np.ndarray,
             epsilon : np.ndarray,
             ):
+        # Parsing the theta vector
+        beta  = theta[:,self.bounds.beta[0]:self.bounds.beta[1]]
+        gamma = theta[:,self.bounds.gamma[0]:self.bounds.gamma[1]]
+        zeta  = theta[:,self.bounds.zeta[0]:self.bounds.zeta[1]]
+        # Computing shape parameters
         Ase = np.zeros((self.N, self.S))
         Ase += np.einsum('nd,nd->n', self.data.theta, beta[delta])[:,None] # [n,d1]->[n]
         Ase += np.einsum('sd,sd->s', self.data.chi, gamma[delta])[None]    # [s,d2]->[s]
@@ -122,9 +115,7 @@ class Chain(DirichletProcessSampler):
     def sample_r(
             self, 
             delta   : np.ndarray, # cluster identifiers 
-            beta    : np.ndarray, # storm effects            [cardinality d1]
-            gamma   : np.ndarray, # location effects         [cardinality d2]
-            zeta    : np.ndarray, # interaction (latitude)   [cardinality d3]
+            theta   : np.ndarray, # Regression Coef's
             epsilon : np.ndarray, # location specific effect [s]
             ):
         """
@@ -134,7 +125,7 @@ class Chain(DirichletProcessSampler):
         ---
         storm-matrix is [n,s]
         """
-        Ase = self.compute_shape(delta, beta, gamma, zeta, epsilon)
+        Ase = self.compute_shape(delta, theta, epsilon)
         As = self.linkfn(Ase).sum(axis = -1) # sum over last dimension
         Bs = self.data.Yp.sum(axis = -1)     # Sum over last dimension
         return gamma(shape = As, scale = 1 / Bs)
