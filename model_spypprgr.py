@@ -37,12 +37,14 @@ Dimensions = namedtuple('Dimensions','beta gamma zeta')
 class Samples(object):
     beta  = None
     gamma = None
+    zeta  = None
+    epsilon = None
     Sigma = None
     mu    = None
+    delta = None
     r     = None
     ld    = None
-    delta = None
-
+    
     def __init__(self, nSamp, nDat, nCol):
         self.beta  = [None] * (nSamp + 1)
         self.gamma = [None] * (nSamp + 1)
@@ -120,10 +122,10 @@ class Chain(DirichletProcessSampler):
     def sample_r(
             self, 
             delta   : np.ndarray, # cluster identifiers 
-            beta    : np.ndarray, # storm effects               [cardinality d1]
-            gamma   : np.ndarray, # location effects            [cardinality d2]
-            zeta    : np.ndarray, # interaction (latitude)      [cardinality d3]
-            epsilon : np.ndarray, # location specific effect    [s]
+            beta    : np.ndarray, # storm effects            [cardinality d1]
+            gamma   : np.ndarray, # location effects         [cardinality d2]
+            zeta    : np.ndarray, # interaction (latitude)   [cardinality d3]
+            epsilon : np.ndarray, # location specific effect [s]
             ):
         """
         n : iterator over storms; 1,...,N
@@ -139,29 +141,23 @@ class Chain(DirichletProcessSampler):
         
     def sample_beta_gamma_zeta(
             self, 
-            delta   : np.ndarray, 
-            beta    : np.ndarray, 
-            gamma   : np.ndarray, 
-            zeta    : np.ndarray, 
-            epsilon : np.ndarray, 
-            mu      : np.ndarray, 
-            Sigma   : np.ndarray,
+            delta   : np.ndarray, # cluster ID 
+            beta    : np.ndarray, # storm effects
+            gamma   : np.ndarray, # location effects
+            zeta    : np.ndarray, # interaction (latitude)
+            epsilon : np.ndarray, # location specific effect 
+            mu      : np.ndarray, # mean of centering distribution
+            Sigma   : np.ndarray, # cov of centering distribution
             ):
         Ase_curr = self.compute_shape(delta, beta, gamma, zeta, epsilon)
     
-    def sample_mu(
+    def sample_mu_Sigma(
             self, 
             delta : np.ndarray, 
             beta  : np.ndarray, 
             gamma : np.ndarray, 
             zeta  : np.ndarray, 
             Sigma : np.ndarray,
-            ):
-        pass
-
-    def sample_Sigma(
-            self, 
-            mu : np.ndarray,
             ):
         pass
 
@@ -212,9 +208,13 @@ class Chain(DirichletProcessSampler):
         r       = self.curr_r
 
         self.curr_iter += 1
+        ci = self.curr_iter
+        # augment beta, gamma, zeta with new draws
+
         # Sample Delta
-        beta, gamma, zeta
-        log_likelihood = logd_prodgamma_my_mt(r[:,None] * self.data.Yp, zeta, self.sigma_ph1)
+        log_likelihood = logd_prodgamma_my_mt(
+            r[:,None] * self.data.Yp, zeta, self.sigma_ph1,
+            )
         unifs = uniform(size = self.nDat)
         delta = pityor_cluster_sampler(
             delta, log_likelihood, unifs, self.concentration, self.discount,
@@ -223,23 +223,24 @@ class Chain(DirichletProcessSampler):
         delta, beta, gamma, zeta = self.clean_delta_beta_gamma_zeta(
             delta, beta, gamma, zeta,
             )
-        self.samples.delta[self.curr_iter] = delta
-        self.samples.r[self.curr_iter]     = self.sample_r(self.curr_delta, zeta)
-        beta, gamma, zeta = self.sample_beta_gamma_zeta(
-            self.curr_delta, 
-            beta, gamma, zeta, 
-            epsilon, 
-            mu, Sigma,
+        self.samples.delta[ci] = delta
+        self.samples.r[ci]     = self.sample_r(self.curr_delta, zeta)
+        self.samples.beta[ci], self.samples.gamma[ci], self.samples.zeta[ci] =  \
+            self.sample_beta_gamma_zeta(
+                self.curr_delta, 
+                beta, gamma, zeta, 
+                epsilon, 
+                mu, Sigma,
+                )
+        self.samples.mu[ci], self.samples.Sigma[ci] = self.sample_mu_Sigma(
+            self.curr_beta, self.curr_gamma, self.curr_zeta,
             )
-        self.samples.beta[self.curr_iter]  = beta
-        self.samples.gamma[self.curr_iter] = gamma
-        self.samples.zeta[self.curr_iter]  = zeta
-        self.samples.mu[self.curr_iter]    = self.sample_mu(
+        self.samples.mu[ci]    = self.sample_mu(
             self.curr_delta, 
             self.curr_beta, self.curr_gamma, self.curr_zeta, 
             self.curr_Sigma,
             )
-        self.samples.Sigma[self.curr_iter] = self.sample_Sigma(self.curr_mu)
+        self.samples.Sigma[ci] = self.sample_Sigma(self.curr_mu)
         self.record_log_density()
         return
     
