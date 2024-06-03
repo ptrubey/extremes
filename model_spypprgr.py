@@ -27,12 +27,18 @@ from projgamma import NormalPrior, InvWishartPrior,                             
     logd_prodgamma_my_mt, logd_prodgamma_paired, logd_prodgamma_my_st
 from cov import OnlineCovariance
 
-def softplus(X : np.ndarray):
+def softplus(X : np.ndarray, inplace = False):
     """ 
     softplus function -- less agressive than log-transformation for 
         unbounding X to the real number line.
     """
-    return np.log(1. + np.exp(X))
+    if not inplace:
+        return np.log(1. + np.exp(X))
+    else:
+        np.exp(X, out = X)
+        X += 1
+        np.log(X, out = X)
+    return
 
 NIWPrior = namedtuple('NIWPrior','mu kappa nu lambda')
 Prior = namedtuple('Prior', 'muSig')
@@ -113,6 +119,7 @@ class Chain(DirichletProcessSampler):
         Ase += np.einsum('sd,sd->s', self.data.X.loc, gamma[delta])[None]  # [s,d2]->[s]
         Ase += np.einsum('nsd,sd->ns', self.data.X.int, zeta[delta])   # [n,s,d3]->[n,s]
         Ase += epsilon[None]
+        self.linkfn(Ase, inplace = True)
         return Ase
     
     def compute_shape_delta(
@@ -130,6 +137,7 @@ class Chain(DirichletProcessSampler):
         self.shape_delta += np.einsum('sd,jd->js', self.data.X.loc, gamma)[None]
         self.shape_delta += np.einsum('nsd,jd->njs', self.data.X.int, zeta)
         self.shape_delta += epsilon[None, None]
+        self.linkfn(self.shape_delta, inplace = True)
         return
     
     def sample_r(
@@ -173,9 +181,16 @@ class Chain(DirichletProcessSampler):
             mu      : np.ndarray, # mean of centering distribution
             Sigma   : np.ndarray, # cov of centering distribution
             ):
-        Ase_curr = self.compute_shape_theta(delta, theta, epsilon)
-        Ase_cand = None # current stopping point
-        return
+        tcand    = normal(loc = theta, scale = 1e-3)
+        lp_curr  = self.log_posterior_theta(delta, r, theta, epsilon)
+        lp_cand  = self.log_posterior_theta(delta, r, tcand, epsilon)
+        logalpha = np.zeros(lp_curr.shape)
+        logalpha += lp_cand
+        logalpha -= lp_curr
+        keep = np.log(uniform(size = lp_curr.shape)) < logalpha
+        out  = theta.copy()
+        out[keep] = tcand[keep]
+        return out
 
     def sample_theta_new(
             self, 
@@ -219,7 +234,7 @@ class Chain(DirichletProcessSampler):
             ):
         eps_curr = epsilon.copy()
         Ase_curr = self.compute_shape_theta(delta, theta, eps_curr)
-        eps_cand = normal(loc = eps_curr, scale = 1e-2)
+        eps_cand = normal(loc = eps_curr, scale = 1e-3)
         Ase_cand = self.compute_shape_theta(delta, theta, eps_cand)
         llk_curr = log
         pass
@@ -251,21 +266,32 @@ class Chain(DirichletProcessSampler):
         self.rate_placeholder_2 = np.ones((self.N, self.D))
         return
     
-    def log_likelihood_theta(self, delta, theta, epsilon):
-        pass
-
-    def log_likelihood_delta(
+    def log_posterior_theta(
             self, 
             delta   : np.ndarray, 
             r       : np.ndarray, 
             theta   : np.ndarray, 
+            epsilon : np.ndarray, 
+            mu      : np.ndarray, 
+            Sigma   : np.ndarray,
+            ):
+        Ase = self.compute_shape_theta(delta, theta, epsilon)
+        loglik = np.zeros((self.J, self.D))
+        pass
+
+    def log_likelihood_delta(
+            self, 
+            r       : np.ndarray, 
+            theta   : np.ndarray, 
             epsilon : np.ndarray,
             ):
-        loglik = logd_prodgamma_my_mt(
-            r[:, None] * self.data.Yp,
-            self.compute_shape_delta(theta, epsilon),
-            self.rate_placeholder_1,
-            )
+        # setup
+        Ase = self.compute_shape_delta(theta, epsilon) # N,J,S
+        Y   = r[:, None] * self.data.Yp
+        # calculation
+        loglik = np.zeros((self.N, self.J))
+        loglik += np.einsum('njs,ns->nj', Ase - 1, np.log(Y))
+        loglik -= gammaln(Ase).sum(-1)
         return loglik
 
     def record_log_density(self):
