@@ -454,7 +454,6 @@ class Chain(DirichletProcessSampler):
         mus      = self.samples.mu[nBurn :: nThin]
         Sigmas   = self.samples.Sigma[nBurn :: nThin]
 
-
         out = {
             'thetas'   : thetas,
             'epsilons' : epsilons,
@@ -636,19 +635,9 @@ class Result(object):
         self.N = out['nDat']
         self.S = out['nLoc']
         self.time_elapsed_numeric = out['time']
-        #     'nDat'     : self.N,
-        #     'nLoc'     : self.S,
-
-
-
-
-
         self.concentration = conc
         self.discount      = disc
-        self.nSamp = deltas.shape[0]
-        self.nDat  = deltas.shape[1]
-        self.nCol  = alphas.shape[1]
-
+        
         self.data = Data_From_Sphere(out['V'])
         try:
             self.data.fill_outcome(out['Y'])
@@ -658,11 +647,10 @@ class Result(object):
         self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
         self.samples.delta = deltas
         self.samples.theta = thetas
-        self.samples.alpha = alphas
-        self.samples.beta  = betas
-        self.samples.zeta  = [
-            zetas[np.where(zetas.T[0] == i)[0], 1:] for i in range(self.nSamp)
-            ]
+        self.samples.mu    = mus
+        self.samples.Sigma = Sigmas
+        self.samples.epsilon = epsilons
+        self.samples.theta = [thetas[np.where(thetas.T[0] == i)[0],1:] for i in range(self.nSamp)]
         self.samples.r     = rs
         self.samples.ld    = out['logd']
         return
@@ -672,82 +660,70 @@ class Result(object):
         return
 
 if __name__ == '__main__':
-    pass
-    slosh = pd.read_csv(
-            './datasets/slosh/filtered_data.csv.gz', 
-            compression = 'gzip',
-            )
-    slosh_ids = slosh.iloc[:,:8]
-    slosh_obs = slosh.iloc[:,8:]
-        
-    Result = namedtuple('Result','type ncol ndat time')
-    sloshes = []
-
-    for category in slosh_ids.Category.unique():
-        idx = (slosh_ids.Category == category)
-        ids = slosh_ids[idx]
-        obs = slosh_obs[idx].values.T.astype(np.float64)
-        dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
-        
-        mod = MVarPYPG(dat)
-        mod.fit_advi()
-        
-        sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
-        print(sloshes[-1])
-        
-        pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
-
-    slosh = pd.read_csv(
+    slosh  = pd.read_csv(
         './datasets/slosh/filtered_data.csv.gz', 
         compression = 'gzip',
         )
-    slosh_ids = slosh.T[:8].T
-    slosh_obs = slosh.T[8:].T
+    sloshx = pd.read_csv('./datasets/slosh/slosh_tinputs.csv')
 
-    if False: # sloshltd
+    if True: # sloshltd    
         sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
-        sloshltd_ids = slosh_ids[sloshltd]
-        sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
+        sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
+        sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
 
-        data = Data_From_Raw(sloshltd_obs, decluster = False, quantile = 0.95)
-        model = vb.VarPYPG(data)
-        model.fit_advi()
+        x_observation = sloshx.values
+        x_location    = sloshltd_ids[['x','y']].values
+        x_interaction = (sloshx.lat.values[:,None] * x_location[:,1])[:,:,None]
+
+        data = RegressionData(
+            sloshltd_obs, 
+            decluster = True, 
+            quantile = 0.95,
+            observation = x_observation,
+            location = x_location,
+            interaction = x_interaction,
+            )
+        model = Chain(data, p = 10)
+        model.sample(5000, verbose = True)
+        model.write_to_disk('./test/results.pkl', 1000, 2)
+        # res = Result('./test/results.pkl')
+
         # postalphas = model.generate_conditional_posterior_alphas()
 
-        inputs = pd.read_csv('~/git/surge/data/inputs.csv')
-        finputs = inputs.iloc[model.data.I]
+        # inputs = pd.read_csv('~/git/surge/data/inputs.csv')
+        # finputs = inputs.iloc[model.data.I]
 
-        deltas = model.generate_conditional_posterior_deltas()
-        import posterior as post
-        smat   = post.similarity_matrix(deltas)
-        graph  = post.minimum_spanning_trees(smat)
-        g      = pd.DataFrame(graph)
-        g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
-        # write to disk
+        # deltas = model.generate_conditional_posterior_deltas()
+        # import posterior as post
+        # smat   = post.similarity_matrix(deltas)
+        # graph  = post.minimum_spanning_trees(smat)
+        # g      = pd.DataFrame(graph)
+        # g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
+        # # write to disk
 
-        d = {
-            'ids'    : sloshltd_ids,
-            'obs'    : sloshltd_obs,
-            # 'alphas' : postalphas,
-            'inputs' : finputs,
-            'deltas' : deltas,
-            'smat'   : smat,
-            'graph'  : g,
-            }
-        with open('./datasets/slosh/sloshltd.pkl', 'wb') as file:
-            pkl.dump(d, file)
-        g.to_csv('./datasets/slosh/sloshltd_mst.csv', index = False)
-        finputs.to_csv('./datasets/slosh/sloshltd_in.csv', index = False)
-        pd.DataFrame(deltas).to_csv('./datasets/slosh/sloshltd_delta.csv', index = False)
-        
-        deltastar = post.emergent_clusters_pre(model)
-        pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar}).to_csv(
-            './datasets/slosh/sloshltd_cluster_pre.csv', index = False,
-            )
-        deltastar_ = post.emergent_clusters_post(model)
-        pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar_}).to_csv(
-            './datasets/slosh/sloshltd_clusters_post.csv', index = False, 
-            )
+        # d = {
+        #         'ids'    : sloshltd_ids,
+        #         'obs'    : sloshltd_obs,
+        #         # 'alphas' : postalphas,
+        #         'inputs' : finputs,
+        #         'deltas' : deltas,
+        #         'smat'   : smat,
+        #         'graph'  : g,
+        #         }
+        #     with open('./datasets/slosh/sloshltd.pkl', 'wb') as file:
+        #         pkl.dump(d, file)
+        #     g.to_csv('./datasets/slosh/sloshltd_mst.csv', index = False)
+        #     finputs.to_csv('./datasets/slosh/sloshltd_in.csv', index = False)
+        #     pd.DataFrame(deltas).to_csv('./datasets/slosh/sloshltd_delta.csv', index = False)
+            
+        #     deltastar = post.emergent_clusters_pre(model)
+        #     pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar}).to_csv(
+        #         './datasets/slosh/sloshltd_cluster_pre.csv', index = False,
+        #         )
+        #     deltastar_ = post.emergent_clusters_post(model)
+        #     pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar_}).to_csv(
+        #         './datasets/slosh/sloshltd_clusters_post.csv', index = False, 
+        #         )
 
     if False: # Full model
         data = Data_From_Raw(
@@ -839,25 +815,5 @@ if __name__ == '__main__':
             './datasets/slosh/slosht90_clusters_post.csv', index = False, 
             )
 
-    from data import Data_From_Raw
-    from projgamma import GammaPrior
-    from pandas import read_csv
-    import os
-
-    raw = read_csv('./datasets/ivt_nov_mar.csv')
-    x_observation = read_csv('')
-    x_location    = read_csv('')
-    x_interaction = x_observation.lat.values[:,None] * x_location.lat.values[None]
-
-    data = RegressionData(
-        raw, decluster = True, quantile = 0.95,
-        observation = x_observation.values,
-        location = x_location.values,
-        interaction = x_interaction,
-        )
-    model = Chain(data, p = 10)
-    model.sample(10000, verbose = True)
-    model.write_to_disk('./test/results.pkl', 5000, 2)
-    res = Result('./test/results.pkl')
 
 # EOF
