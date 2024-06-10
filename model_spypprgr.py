@@ -39,10 +39,12 @@ def softplus(X : np.ndarray, inplace = False):
         X += 1
         np.log(X, out = X)
     return
+
 NormalPrior = namedtuple('NormalPrior','mu sigma')
-NIWPrior = namedtuple('NIWPrior','mu kappa nu psi')
-Prior = namedtuple('Prior', 'mu_Sigma epsilon')
-Dimensions = namedtuple('Dimensions','beta gamma zeta')
+NIWPrior    = namedtuple('NIWPrior','mu kappa nu psi')
+Prior       = namedtuple('Prior', 'mu_Sigma epsilon')
+Dimensions  = namedtuple('Dimensions','beta gamma zeta')
+Bounds      = namedtuple('Bounds', 'beta gamma zeta')
 
 class Regressors(object):
     obs = None
@@ -82,7 +84,7 @@ class RegressionData(Data_From_Raw):
         return
     
     def __init__(self, observation, location, interaction, *args, **kwargs):
-        super().__init___(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self.load_regressors(observation, location, interaction)
         return
 
@@ -95,9 +97,9 @@ class Samples(object):
     r     = None
     ld    = None
     
-    def __init__(self, nSamp, nDat, nCol):
+    def __init__(self, nSamp, nDat, nDim, nCol):
         self.theta = [None] * (nSamp + 1)
-        self.epsilon = np.empty((nSamp + 1, nCol))
+        self.epsilon = np.empty((nSamp + 1, nDim))
         self.Sigma = np.empty((nSamp + 1, nCol, nCol))
         self.mu    = np.empty((nSamp + 1, nCol))
         self.delta = np.empty((nSamp + 1, nDat), dtype = int)
@@ -166,8 +168,8 @@ class Chain(DirichletProcessSampler):
         # Computing shape parameters
         Ase = np.zeros((self.N, self.S))
         Ase += np.einsum('nd,nd->n', self.data.X.obs, beta[delta])[:,None] # [n,d1]->[n]
-        Ase += np.einsum('sd,sd->s', self.data.X.loc, gamma[delta])[None]  # [s,d2]->[s]
-        Ase += np.einsum('nsd,sd->ns', self.data.X.int, zeta[delta])   # [n,s,d3]->[n,s]
+        Ase += np.einsum('sd,nd->ns', self.data.X.loc, gamma[delta])       # [s,d2]->[s]
+        Ase += np.einsum('nsd,nd->ns', self.data.X.int, zeta[delta])   # [n,s,d3]->[n,s]
         Ase += epsilon[None]
         self.linkfn(Ase, inplace = True)
         return Ase
@@ -222,7 +224,7 @@ class Chain(DirichletProcessSampler):
             theta   : np.ndarray, 
             epsilon : np.ndarray,
             ):
-        loglik = self.log_likelihood_delta(delta, r, theta, epsilon)
+        loglik = self.log_likelihood_delta(r, theta, epsilon)
         unifs = uniform(size = self.N)
         delta = pityor_cluster_sampler(
             delta, loglik, unifs, self.concentration, self.discount,
@@ -256,7 +258,7 @@ class Chain(DirichletProcessSampler):
             m     : int,
             ):
         out = np.zeros((m, self.D))
-        out += (cholesky(Sigma) @ normal(size = (self.D, self.m))).T
+        out += (cholesky(Sigma) @ normal(size = (self.D, m))).T
         out += mu[None]
         return out
 
@@ -294,7 +296,7 @@ class Chain(DirichletProcessSampler):
         lpo_curr = self.log_posterior_epsilon(delta, r, theta, eps_curr)
         lpo_cand = self.log_posterior_epsilon(delta, r, theta, eps_cand)
         logalpha = lpo_cand - lpo_curr
-        keep     = np.log(uniform) < logalpha
+        keep     = np.log(uniform(logalpha.shape)) < logalpha
         eps_curr[keep] = eps_cand[keep]
         return eps_curr
 
@@ -303,12 +305,13 @@ class Chain(DirichletProcessSampler):
             ns : int,
             ):
         # Instantiate Sampler
-        self.samples = Samples(ns, self.N, self.D)
+        self.samples = Samples(ns, self.N, self.S, self.D)
         # Set initial values
-        self.samples.delta[0] = choice(self.J - 30, size = self.N)
-        self.samples.theta[0] = normal(
-            loc = 0, scale = 0.5, size = (self.J, self.D),
-            )
+        delta = choice(self.J - 30, size = self.N)
+        theta = normal(loc = 0, scale = 0.5, size = (self.J, self.D))
+        delta, theta = self.clean_delta_theta(delta, theta)
+        self.samples.delta[0] = delta
+        self.samples.theta[0] = theta
         self.samples.epsilon[0] = normal(
             loc = 0, scale = 0.5, size = (self.S),
             )
@@ -354,10 +357,10 @@ class Chain(DirichletProcessSampler):
         ase = self.compute_shape_theta(delta, theta, epsilon) # (N,S)
         Y   = r[:,None] * self.data.Yp
         # Calculation
-        lp  = np.zeros(self.J)
+        lp  = np.zeros(theta.shape[0])
         for i in range(delta.max() + 1):
             lp[i] += (ase[delta == i] * np.log(Y[delta == i])).sum()
-            lp[i] -= gammaln(ase[delta == i])
+            lp[i] -= gammaln(ase[delta == i]).sum()
         # lp -= 0.5 * np.diag(
         #     multi_dot(theta - mu[None], Sigma, (theta - mu[None]).T),
         #     )
@@ -377,12 +380,12 @@ class Chain(DirichletProcessSampler):
             epsilon : np.ndarray,
             ):
         # setup
-        Ase = self.compute_shape_delta(theta, epsilon) # N,J,S
+        self.compute_shape_delta(theta, epsilon) # N,J,S
         Y   = r[:, None] * self.data.Yp
         # calculation
         loglik = np.zeros((self.N, self.J))
-        loglik += np.einsum('njs,ns->nj', Ase - 1, np.log(Y))
-        loglik -= gammaln(Ase).sum(axis = -1)
+        loglik += np.einsum('njs,ns->nj', self.shape_delta, np.log(Y))
+        loglik -= gammaln(self.shape_delta).sum(axis = -1)
         return loglik
 
     def record_log_density(self):
@@ -395,9 +398,9 @@ class Chain(DirichletProcessSampler):
         ld += multivariate_normal.logpdf(
             self.curr_mu, self.priors.mu_Sigma.mu, 
             self.curr_Sigma / self.priors.mu_Sigma.kappa,
-            )
+            ).sum()
         ld += invwishart.logpdf(
-            self.curr_mu, self.priors.mu_Sigma.nu, 
+            self.curr_Sigma, self.priors.mu_Sigma.nu, 
             self.priors.mu_Sigma.psi,
             )
         self.samples.ld[self.curr_iter] = ld
@@ -505,8 +508,13 @@ class Chain(DirichletProcessSampler):
             )
         self.D = sum(self.d)
 
-        self.lglik_delta = np.zeros((self.N, self.S, self.J))
-        self.shape_delta = np.zeros((self.N, self.S, self.J))
+        # self.lglik_delta = np.zeros((self.N, self.S, self.J))
+        self.shape_delta = np.zeros((self.N, self.J, self.S))
+        self.bounds = Bounds(
+            (0, self.d.beta),
+            (self.d.beta, self.d.beta + self.d.gamma), 
+            (self.d.beta + self.d.gamma, self.d.beta + self.d.gamma + self.d.zeta),
+            )
         return
 
     def __init__(
@@ -522,15 +530,21 @@ class Chain(DirichletProcessSampler):
             **kwargs
             ):
         self.data = data
+        self.J = max_clust_count
         self.set_shapes()
         # Parsing the inputs
-        self.J = max_clust_count
         self.concentration = concentration
         self.discount = discount
         self.p = p
         # Setting the priors
+        _prior_mu_Sigma = NIWPrior(
+            np.ones(self.D) * prior_mu_Sigma[0],
+            prior_mu_Sigma[1],
+            prior_mu_Sigma[2],
+            np.eye(self.D) * prior_mu_Sigma[3],
+            )
         self.priors = Prior(
-            NIWPrior(*prior_mu_Sigma), 
+            _prior_mu_Sigma, 
             NormalPrior(*prior_epsilon),
             )
         # Rest of setup
@@ -659,28 +673,48 @@ class Result(object):
         self.load_data(path)
         return
 
+Summary = namedtuple('Summary','mean sd')
+
+def summarize(X : np.ndarray):
+    m  = X.mean(axis = 0)
+    s  = X.std(axis = 0)
+    return Summary(m, s)
+
+def scale(X : np.ndarray, p : Summary):
+    Xm = np.asmatrix(X)
+    return ((Xm - p.mean[None]) / p.sd[None])
+
 if __name__ == '__main__':
     slosh  = pd.read_csv(
         './datasets/slosh/filtered_data.csv.gz', 
         compression = 'gzip',
         )
-    sloshx = pd.read_csv('./datasets/slosh/slosh_tinputs.csv')
+    sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
 
     if True: # sloshltd    
         sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
         sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
         sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
 
-        x_observation = sloshx.values
-        x_location    = sloshltd_ids[['x','y']].values
-        x_interaction = (sloshx.lat.values[:,None] * x_location[:,1])[:,:,None]
+        sloshx.theta.loc[sloshx.theta < 100] += 360
+        sloshx_par    = summarize(sloshx.values)
+        locatx_par    = summarize(sloshltd_ids[['x','y']].values)
+        sloshx_par.mean[-1] = locatx_par.mean[-1] # latitude values will be 
+        sloshx_par.sd[-1]   = locatx_par.sd[-1]   # on same scale for both datasets
+        sloshx_std    = scale(sloshx.values, sloshx_par)
+        locatx_std    = scale(sloshltd_ids[['x','y']].values, locatx_par)
+        
+        x_observation = sloshx_std
+        x_location    = locatx_std
+        x_interaction = (sloshx_std[:,-1][None] * locatx_std[:,-1][:,None])[:,:,None]
+
 
         data = RegressionData(
-            sloshltd_obs, 
-            decluster = True, 
-            quantile = 0.95,
+            raw         = sloshltd_obs, 
+            decluster   = False, 
+            quantile    = 0.90,
             observation = x_observation,
-            location = x_location,
+            location    = x_location,
             interaction = x_interaction,
             )
         model = Chain(data, p = 10)
