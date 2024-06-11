@@ -307,7 +307,7 @@ class Chain(DirichletProcessSampler):
         # Instantiate Sampler
         self.samples = Samples(ns, self.N, self.S, self.D)
         # Set initial values
-        delta = choice(self.J - 30, size = self.N)
+        delta = choice(int(0.1 * self.J), size = self.N)
         theta = normal(loc = 0, scale = 0.5, size = (self.J, self.D))
         delta, theta = self.clean_delta_theta(delta, theta)
         self.samples.delta[0] = delta
@@ -523,8 +523,8 @@ class Chain(DirichletProcessSampler):
             prior_mu_Sigma = (0, 1, 10, 10),
             prior_epsilon = (0, 1), 
             p             = 10,
-            concentration = 0.2,
-            discount      = 0.2,
+            concentration = 0.05,
+            discount      = 0.05,
             max_clust_count = 200,
             link_fn       = softplus,
             **kwargs
@@ -718,8 +718,9 @@ if __name__ == '__main__':
             interaction = x_interaction,
             )
         model = Chain(data, p = 10)
-        model.sample(5000, verbose = True)
-        model.write_to_disk('./test/results.pkl', 1000, 2)
+        model.sample(2000, verbose = True)
+        raise
+        # model.write_to_disk('./test/results.pkl', 500, 2)
         # res = Result('./test/results.pkl')
 
         # postalphas = model.generate_conditional_posterior_alphas()
