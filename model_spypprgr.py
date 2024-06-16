@@ -61,9 +61,9 @@ class Regressors(object):
         assert observation.shape[0] == interaction.shape[0]
         assert location.shape[0] == interaction.shape[1]
         # instantiation
-        self.obs = observation
-        self.loc = location
-        self.int = interaction
+        self.obs = np.asarray(observation)
+        self.loc = np.asarray(location)
+        self.int = np.asarray(interaction)
         return
 
 class RegressionData(Data_From_Raw):
@@ -192,9 +192,23 @@ class Chain(DirichletProcessSampler):
         # [n,j,s]
         # Computing Shape Parameters
         self.shape_delta[:] = 0.
-        self.shape_delta += np.einsum('nd,jd->nj', self.data.X.obs, beta)[:,:,None]
-        self.shape_delta += np.einsum('sd,jd->js', self.data.X.loc, gamma)[None]
-        self.shape_delta += np.einsum('nsd,jd->njs', self.data.X.int, zeta)
+        # self.shape_delta_t1[:] = 0.
+        # self.shape_delta_t2[:] = 0.
+        # self.shape_delta_t3[:] = 0.
+        self.shape_delta[:] = np.matmul(self.data.X.int, zeta.T).transpose(0,2,1)
+        self.shape_delta += np.matmul(self.data.X.obs, beta.T)[:,:,None]
+        self.shape_delta += np.matmul(gamma, self.data.X.loc.T)[None]
+        # np.matmul(gamma, self.data.X.loc.T, out = self.shape_delta_t2)
+
+        # np.einsum('nd,jd->nj', self.data.X.obs, beta, out = self.shape_delta_t1)
+        # np.einsum('sd,jd->js', self.data.X.loc, gamma, out = self.shape_delta_t2)
+        # np.einsum('nsd,jd->njs', self.data.X.int, zeta, out = self.shape_delta_t3)
+        # self.shape_delta += np.einsum('nd,jd->nj', self.data.X.obs, beta)[:,:,None]
+        # self.shape_delta += np.einsum('sd,jd->js', self.data.X.loc, gamma)[None]
+        # self.shape_delta += np.einsum('nsd,jd->njs', self.data.X.int, zeta)
+        # self.shape_delta += self.shape_delta_t1
+        # self.shape_delta += self.shape_delta_t2
+        # self.shape_delta += self.shape_delta_t3
         self.shape_delta += epsilon[None, None]
         self.linkfn(self.shape_delta, inplace = True)
         return
@@ -215,26 +229,29 @@ class Chain(DirichletProcessSampler):
         Ase = self.compute_shape_theta(delta, theta, epsilon)
         As  = Ase.sum(axis = -1)            # sum over last dimension
         Bs  = self.data.Yp.sum(axis = -1)   # Sum over last dimension
-        return gamma(shape = As, scale = 1 / Bs)
+        r   = gamma(shape = As, scale = 1 / Bs)
+        r[r < 1e-10] = (As / Bs)[r < 1e-10] # if it gives numerical 0, return MAP
+        return r
     
     def sample_delta(
             self, 
             delta   : np.ndarray,
-            r       : np.ndarray,
+            # r       : np.ndarray,
             theta   : np.ndarray, 
             epsilon : np.ndarray,
             ):
-        loglik = self.log_likelihood_delta(r, theta, epsilon)
+        self.log_likelihood_delta(theta, epsilon)
+        # loglik = self.log_likelihood_delta(r, theta, epsilon)
         unifs = uniform(size = self.N)
         delta = pityor_cluster_sampler(
-            delta, loglik, unifs, self.concentration, self.discount,
+            delta, self.lglik_delta, unifs, self.concentration, self.discount,
             )
         return delta
 
     def sample_theta(
             self,
             delta   : np.ndarray, # cluster ID
-            r       : np.ndarray, # radius
+            # r       : np.ndarray, # radius
             theta   : np.ndarray, # regression coef's
             epsilon : np.ndarray, # location specific effect
             mu      : np.ndarray, # mean of centering distribution
@@ -242,8 +259,8 @@ class Chain(DirichletProcessSampler):
             ):
         tcurr    =  theta.copy()
         tcand    =  normal(loc = theta, scale = 1e-3)
-        lp_curr  =  self.log_posterior_theta(delta, r, tcurr, epsilon, mu, Sigma)
-        lp_cand  =  self.log_posterior_theta(delta, r, tcand, epsilon, mu, Sigma)
+        lp_curr  =  self.log_posterior_theta(delta, tcurr, epsilon, mu, Sigma)
+        lp_cand  =  self.log_posterior_theta(delta, tcand, epsilon, mu, Sigma)
         logalpha =  np.zeros(lp_curr.shape)
         logalpha += lp_cand
         logalpha -= lp_curr
@@ -312,9 +329,10 @@ class Chain(DirichletProcessSampler):
         delta, theta = self.clean_delta_theta(delta, theta)
         self.samples.delta[0] = delta
         self.samples.theta[0] = theta
-        self.samples.epsilon[0] = normal(
-            loc = 0, scale = 0.5, size = (self.S),
-            )
+        # self.samples.epsilon[0] = normal(
+        #     loc = 0, scale = 0.5, size = (self.S),
+        #     )
+        self.samples.epsilon[0] = 0.
         self.samples.r[0] = self.sample_r(
             self.samples.delta[0], 
             self.samples.theta[0], 
@@ -347,7 +365,7 @@ class Chain(DirichletProcessSampler):
     def log_posterior_theta(
             self, 
             delta   : np.ndarray, 
-            r       : np.ndarray, 
+            # r       : np.ndarray, 
             theta   : np.ndarray, 
             epsilon : np.ndarray, 
             mu      : np.ndarray, 
@@ -355,12 +373,16 @@ class Chain(DirichletProcessSampler):
             ):
         # Setup
         ase = self.compute_shape_theta(delta, theta, epsilon) # (N,S)
-        Y   = r[:,None] * self.data.Yp
+        # Y   = r[:,None] * self.data.Yp
         # Calculation
         lp  = np.zeros(theta.shape[0])
         for i in range(delta.max() + 1):
-            lp[i] += (ase[delta == i] * np.log(Y[delta == i])).sum()
+            lp[i] += (ase[delta == i] * np.log(self.data.Yp[delta == i])).sum()
             lp[i] -= gammaln(ase[delta == i]).sum()
+            lp[i] += gammaln(ase[delta == i].sum())
+            lp[i] -= ase[delta == i].sum() * np.log(
+                self.data.Yp[delta == i].sum(axis = -1)
+                ).sum()
         # lp -= 0.5 * np.diag(
         #     multi_dot(theta - mu[None], Sigma, (theta - mu[None]).T),
         #     )
@@ -371,28 +393,32 @@ class Chain(DirichletProcessSampler):
         #     )
         tmp = (theta - mu[None]) @ Li
         lp -= 0.5 * (tmp * tmp).sum(axis = -1)
+        lp[np.isnan(lp)] = -np.inf
         return lp
 
     def log_likelihood_delta(
             self, 
-            r       : np.ndarray, 
+            # r       : np.ndarray, 
             theta   : np.ndarray, 
             epsilon : np.ndarray,
             ):
         # setup
         self.compute_shape_delta(theta, epsilon) # N,J,S
-        Y   = r[:, None] * self.data.Yp
+        # Y   = r[:, None] * self.data.Yp
         # calculation
-        loglik = np.zeros((self.N, self.J))
-        loglik += np.einsum('njs,ns->nj', self.shape_delta, np.log(Y))
-        loglik -= gammaln(self.shape_delta).sum(axis = -1)
-        return loglik
+        asum = self.shape_delta @ np.ones(self.S)
+        self.lglik_delta[:] = 0.
+        self.lglik_delta += np.einsum('njs,ns->nj', self.shape_delta, np.log(self.data.Yp))
+        self.lglik_delta -= gammaln(self.shape_delta).sum(axis = -1)
+        self.lglik_delta += gammaln(asum)
+        self.lglik_delta -= asum * np.log(self.data.Yp.sum(axis = -1))[:,None]
+        return
 
     def record_log_density(self):
         Y = self.curr_r[:,None] * self.data.Yp 
         ld = 0.
         ld += self.log_posterior_theta(
-            self.curr_delta, self.curr_r, self.curr_theta, 
+            self.curr_delta, self.curr_theta, 
             self.curr_epsilon, self.curr_mu, self.curr_Sigma,
             ).sum()
         ld += multivariate_normal.logpdf(
@@ -420,14 +446,14 @@ class Chain(DirichletProcessSampler):
         # Augment theta with new draws
         theta = np.concatenate((theta, self.sample_theta_new(mu, Sigma, m)), 0)
         # Sample Delta, 
-        delta = self.sample_delta(delta, r, theta, epsilon)
+        delta = self.sample_delta(delta, theta, epsilon)
         # clear out dropped/unused clusters and re-index
         delta, theta = self.clean_delta_theta(delta, theta)
         self.samples.delta[ci] = delta
         # sample new parameters
         self.samples.r[ci]     = self.sample_r(self.curr_delta, theta, epsilon)
         self.samples.theta[ci] = self.sample_theta(
-            self.curr_delta, self.curr_r, theta, epsilon, mu, Sigma,
+            self.curr_delta, theta, epsilon, mu, Sigma,
             )
         self.samples.mu[ci], self.samples.Sigma[ci] = self.sample_mu_Sigma(
             self.curr_theta,
@@ -508,8 +534,11 @@ class Chain(DirichletProcessSampler):
             )
         self.D = sum(self.d)
 
-        # self.lglik_delta = np.zeros((self.N, self.S, self.J))
+        self.lglik_delta = np.zeros((self.N, self.J))
         self.shape_delta = np.zeros((self.N, self.J, self.S))
+        # self.shape_delta_t1 = np.zeros((self.N, self.J, 1))
+        # self.shape_delta_t2 = np.zeros((1, self.J, self.S))
+        # self.shape_delta_t3 = np.zeros((self.N, self.J, self.S))
         self.bounds = Bounds(
             (0, self.d.beta),
             (self.d.beta, self.d.beta + self.d.gamma), 
@@ -692,7 +721,8 @@ if __name__ == '__main__':
     sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
 
     if True: # sloshltd    
-        sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
+        # sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
+        sloshltd = slosh.MTFCC.isin(['K2451'])
         sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
         sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
 

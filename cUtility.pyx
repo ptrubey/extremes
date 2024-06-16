@@ -166,15 +166,14 @@ cpdef np.ndarray[dtype = np.int_t, ndim = 1] pityor_cluster_sampler(
         np.ndarray[dtype = np.int_t, ndim = 1] curr_cluster_state # (J) <- current cluster count
         np.ndarray[dtype = np.int_t, ndim = 1] cand_cluster_state # (J) <- whether avail as cand cluster
         np.ndarray[dtype = np.float_t, ndim = 1] scratch          # (J) <- working vector
-        int i, n, J, ncandcluster, ncurrcluster
-    n = delta.shape[0]
-    J = log_likelihood.shape[1]
+        int i, N, J, ncandcluster, ncurrcluster
+    N, J = log_likelihood.shape[0], log_likelihood.shape[1]
     curr_cluster_state = np.bincount(delta, minlength = J)
     cand_cluster_state = (curr_cluster_state == 0) * 1
     scratch = np.empty(J)
     ncandcluster = sum(cand_cluster_state)
-    ncurrcluster = sum(curr_cluster_state)
-    for i in range(n):
+    ncurrcluster = J - ncandcluster
+    for i in range(N):
         # re-zero scratch
         scratch[:] = 0.
         # Adjust cluster weighting
@@ -182,7 +181,7 @@ cpdef np.ndarray[dtype = np.int_t, ndim = 1] pityor_cluster_sampler(
         scratch += curr_cluster_state
         scratch -= (curr_cluster_state > 0) * discount
         scratch += (
-            (cand_cluster_state * eta + ncurrcluster * discount) / 
+            cand_cluster_state * (eta + ncurrcluster * discount) / 
             (ncandcluster + 1e-9)
             )
         # transform cluster weights to log-scale
