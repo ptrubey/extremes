@@ -287,6 +287,17 @@ class RankTransform(DataBase):
             self.fill_outcome(outcome)
         return
 
+class RealData(Data_From_Raw, Data_From_Sphere, RankTransform):
+    def __init__(self, raw_real, real_type = 'sphere', decluster = False, quantile = 0.95):
+        self.real_type = real_type
+        if real_type == 'sphere':
+            self.fill_sphere(raw_real)
+        elif real_type == 'rank':
+            self.fill_rank_transform(raw_real)
+        elif real_type  == 'threshold':
+            self.fill_real(raw_real, decluster = decluster, quantile = quantile)
+        return
+
 class Multinomial(DataBase):
     Cats = None  # numpy array indicating number of categories per multinomial variable
     nCat = None  # total number of categories (sum of Cats)

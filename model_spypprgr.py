@@ -21,13 +21,13 @@ from io import BytesIO
 
 from cUtility import pityor_cluster_sampler, generate_indices
 from samplers import DirichletProcessSampler
-from data import euclidean_to_angular, euclidean_to_hypercube, Data_From_Sphere
+from data import euclidean_to_angular, euclidean_to_hypercube, RealData
 from projgamma import pt_logd_projgamma_my_mt_inplace_unstable, logd_gamma,     \
     logd_prodgamma_my_mt, logd_prodgamma_paired, logd_prodgamma_my_st
 from cov import OnlineCovariance
 from data import Data_From_Raw
 
-def softplus(X : np.ndarray, inplace = False):
+def softplus(X : np.ndarray, inplace : bool):
     """ 
     softplus function -- less agressive than log-transformation for 
         unbounding X to the real number line.
@@ -83,8 +83,8 @@ class RegressionData(Data_From_Raw):
         self.X = Regressors(obsi, location, inti)
         return
     
-    def __init__(self, observation, location, interaction, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, observation, location, interaction, **kwargs):
+        super().__init__(**kwargs)
         self.load_regressors(observation, location, interaction)
         return
 
@@ -107,7 +107,41 @@ class Samples(object):
         self.ld    = np.empty((nSamp + 1))
         return
 
-class Chain(DirichletProcessSampler):
+class ChainBase(object):
+    bounds = None
+    data   = None
+
+    def linkfn(self, arr : np.ndarray, inplace : bool):
+        return softplus(arr, inplace)
+
+    def compute_shape_theta(
+            self,
+            delta   : np.ndarray,
+            theta   : np.ndarray,
+            epsilon : np.ndarray,
+            ):
+        """
+        in : 
+            delta   : (N)
+            theta   : (J,D)
+            epsilon : (S)
+        out: 
+            shapes  : (N,S)
+        """
+        # Parsing the theta vector
+        beta  = theta[:, self.bounds.beta[0]  : self.bounds.beta[1] ]
+        gamma = theta[:, self.bounds.gamma[0] : self.bounds.gamma[1]]
+        zeta  = theta[:, self.bounds.zeta[0]  : self.bounds.zeta[1] ]
+        # Computing shape parameters
+        Ase = np.zeros((self.N, self.S))
+        Ase += np.einsum('nd,nd->n', self.data.X.obs, beta[delta])[:,None] # [n,d1]->[n]
+        Ase += np.einsum('sd,nd->ns', self.data.X.loc, gamma[delta])       # [s,d2]->[s]
+        Ase += np.einsum('nsd,nd->ns', self.data.X.int, zeta[delta])   # [n,s,d3]->[n,s]
+        Ase += epsilon[None]
+        self.linkfn(Ase, inplace = True)
+        return Ase
+
+class Chain(DirichletProcessSampler, ChainBase):
     concentration = None
     discount      = None
     llik_delta    = None 
@@ -146,33 +180,6 @@ class Chain(DirichletProcessSampler):
         keep, delta[:] = np.unique(delta, return_inverse = True)
         # return new indices, cluster parameters associated with populated clusters
         return delta, theta[keep]
-
-    def compute_shape_theta(
-            self, 
-            delta   : np.ndarray,
-            theta   : np.ndarray,
-            epsilon : np.ndarray,
-            ):
-        """
-        in : 
-            delta   : (N)
-            theta   : (J,D)
-            epsilon : (S)
-        out: 
-            shapes  : (N,S)
-        """
-        # Parsing the theta vector
-        beta  = theta[:, self.bounds.beta[0]  : self.bounds.beta[1] ]
-        gamma = theta[:, self.bounds.gamma[0] : self.bounds.gamma[1]]
-        zeta  = theta[:, self.bounds.zeta[0]  : self.bounds.zeta[1] ]
-        # Computing shape parameters
-        Ase = np.zeros((self.N, self.S))
-        Ase += np.einsum('nd,nd->n', self.data.X.obs, beta[delta])[:,None] # [n,d1]->[n]
-        Ase += np.einsum('sd,nd->ns', self.data.X.loc, gamma[delta])       # [s,d2]->[s]
-        Ase += np.einsum('nsd,nd->ns', self.data.X.int, zeta[delta])   # [n,s,d3]->[n,s]
-        Ase += epsilon[None]
-        self.linkfn(Ase, inplace = True)
-        return Ase
     
     def compute_shape_delta(
             self,
@@ -501,6 +508,7 @@ class Chain(DirichletProcessSampler):
             'time'     : self.time_elapsed_numeric,
             'conc'     : self.concentration,
             'disc'     : self.discount,
+            'bounds'   : self.bounds,
             }
         
         try:
@@ -536,9 +544,6 @@ class Chain(DirichletProcessSampler):
 
         self.lglik_delta = np.zeros((self.N, self.J))
         self.shape_delta = np.zeros((self.N, self.J, self.S))
-        # self.shape_delta_t1 = np.zeros((self.N, self.J, 1))
-        # self.shape_delta_t2 = np.zeros((1, self.J, self.S))
-        # self.shape_delta_t3 = np.zeros((self.N, self.J, self.S))
         self.bounds = Bounds(
             (0, self.d.beta),
             (self.d.beta, self.d.beta + self.d.gamma), 
@@ -555,7 +560,6 @@ class Chain(DirichletProcessSampler):
             concentration = 0.05,
             discount      = 0.05,
             max_clust_count = 200,
-            link_fn       = softplus,
             **kwargs
             ):
         self.data = data
@@ -578,19 +582,21 @@ class Chain(DirichletProcessSampler):
             )
         # Rest of setup
         self.set_projection()
-        self.linkfn = link_fn
         self.cov = OnlineCovariance(self.D)
         return
 
-class Result(object):
+class Result(ChainBase):
     def generate_conditional_posterior_predictive_gammas(self):
         """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
-        zetas = np.swapaxes(np.array([
-            zeta[delta]
-            for delta, zeta 
-            in zip(self.samples.delta, self.samples.zeta)
-            ]),0,1) # (n,s,d)
-        return gamma(shape = zetas)
+        gammas = []
+        for i in range(self.nSamp):
+            shape = self.compute_shape_theta(
+                self.samples.delta[i], 
+                self.samples.theta[i], 
+                self.samples.epsilon[i],
+                )
+            gammas.append(gamma(shape))
+        return np.stack(gammas)
 
     def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
         new_gammas = []
@@ -680,8 +686,10 @@ class Result(object):
         self.time_elapsed_numeric = out['time']
         self.concentration = conc
         self.discount      = disc
+        self.bounds = out['bounds']
         
-        self.data = Data_From_Sphere(out['V'])
+        self.data = RealData(out['V'], real_type = 'sphere')
+        self.data.X = RegressionData(Xobs, Xloc, Xint)
         try:
             self.data.fill_outcome(out['Y'])
         except KeyError:
@@ -693,9 +701,12 @@ class Result(object):
         self.samples.mu    = mus
         self.samples.Sigma = Sigmas
         self.samples.epsilon = epsilons
-        self.samples.theta = [thetas[np.where(thetas.T[0] == i)[0],1:] for i in range(self.nSamp)]
+        self.samples.theta = [
+            thetas[np.where(thetas.T[0] == i)[0],1:] 
+            for i in range(self.nSamp)
+            ]
         self.samples.r     = rs
-        self.samples.ld    = out['logd']
+        self.samples.ld    = logd
         return
 
     def __init__(self, path):
@@ -749,11 +760,9 @@ if __name__ == '__main__':
             )
         model = Chain(data, p = 10)
         model.sample(2000, verbose = True)
-        raise
-        # model.write_to_disk('./test/results.pkl', 500, 2)
-        # res = Result('./test/results.pkl')
-
-        # postalphas = model.generate_conditional_posterior_alphas()
+        model.write_to_disk('./test/results.pkl', 1001, 2)
+        res = Result('./test/results.pkl')
+        postalphas = res.generate_conditional_posterior_predictive_gammas()
 
         # inputs = pd.read_csv('~/git/surge/data/inputs.csv')
         # finputs = inputs.iloc[model.data.I]
