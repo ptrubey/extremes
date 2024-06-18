@@ -19,7 +19,8 @@ from numpy.linalg import cholesky, multi_dot
 from numpy.random import choice, gamma, uniform, normal
 from io import BytesIO
 
-from cUtility import pityor_cluster_sampler, generate_indices
+from cUtility import pityor_cluster_sampler, generate_indices,                  \
+    softplus_1d_inplace, softplus_2d_inplace, softplus_3d_inplace
 from samplers import DirichletProcessSampler
 from data import euclidean_to_angular, euclidean_to_hypercube, RealData
 from projgamma import pt_logd_projgamma_my_mt_inplace_unstable, logd_gamma,     \
@@ -38,6 +39,18 @@ def softplus(X : np.ndarray, inplace : bool):
         np.exp(X, out = X)
         X += 1
         np.log(X, out = X)
+    return
+
+def softplus_inplace(X : np.ndarray):
+    if len(X.shape) == 1:
+        return softplus_1d_inplace(X)
+    elif len(X.shape) == 2:
+        return softplus_2d_inplace(X)
+    elif len(X.shape) == 3:
+        return softplus_3d_inplace(X)
+
+def softplus_inplace_old(X : np.ndarray, threshold : float = 20.) -> None:
+    X[X < threshold] = np.log(1. + np.exp(X[X < threshold]))
     return
 
 NormalPrior = namedtuple('NormalPrior','mu sigma')
@@ -112,7 +125,10 @@ class ChainBase(object):
     data   = None
 
     def linkfn(self, arr : np.ndarray, inplace : bool):
-        return softplus(arr, inplace)
+        if not inplace:
+            return softplus(arr, False)
+        else:
+            return softplus_inplace(arr)
 
     def compute_shape_theta(
             self,
@@ -643,26 +659,6 @@ class Result(ChainBase):
         else:
             with open(path, 'rb') as file:
                 out = pickle.load(file)
-        
-        # out = {
-        #     'thetas'   : thetas,
-        #     'epsilons' : epsilons,
-        #     'rs'       : rs,
-        #     'deltas'   : deltas,
-        #     'mus'      : mus,
-        #     'Sigmas'   : Sigmas,
-        #     'nCol'     : self.D,
-        #     'nDat'     : self.N,
-        #     'nLoc'     : self.S,
-        #     'Xobs'     : self.data.X.obs,
-        #     'Xloc'     : self.data.X.loc,
-        #     'Xint'     : self.data.X.int,
-        #     'V'        : self.data.V,
-        #     'logd'     : self.samples.ld,
-        #     'time'     : self.time_elapsed_numeric,
-        #     'conc'     : self.concentration,
-        #     'disc'     : self.discount,
-        #     }
 
         epsilons = out['epsilons']
         thetas = out['thetas']
@@ -683,19 +679,20 @@ class Result(ChainBase):
         self.D = out['nCol']
         self.N = out['nDat']
         self.S = out['nLoc']
+        self.nSamp = epsilons.shape[0]
         self.time_elapsed_numeric = out['time']
         self.concentration = conc
         self.discount      = disc
         self.bounds = out['bounds']
         
         self.data = RealData(out['V'], real_type = 'sphere')
-        self.data.X = RegressionData(Xobs, Xloc, Xint)
+        self.data.X = Regressors(Xobs, Xloc, Xint)
         try:
             self.data.fill_outcome(out['Y'])
         except KeyError:
             pass
 
-        self.samples       = Samples(self.nSamp, self.nDat, self.nCol)
+        self.samples       = Samples(self.nSamp, self.N, self.D, self.S)
         self.samples.delta = deltas
         self.samples.theta = thetas
         self.samples.mu    = mus
@@ -732,8 +729,8 @@ if __name__ == '__main__':
     sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
 
     if True: # sloshltd    
-        # sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
-        sloshltd = slosh.MTFCC.isin(['K2451'])
+        sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
+        # sloshltd = slosh.MTFCC.isin(['K2451'])
         sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
         sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
 
@@ -748,7 +745,6 @@ if __name__ == '__main__':
         x_observation = sloshx_std
         x_location    = locatx_std
         x_interaction = (sloshx_std[:,-1][None] * locatx_std[:,-1][:,None])[:,:,None]
-
 
         data = RegressionData(
             raw         = sloshltd_obs, 
@@ -888,6 +884,5 @@ if __name__ == '__main__':
         pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar_}).to_csv(
             './datasets/slosh/slosht90_clusters_post.csv', index = False, 
             )
-
 
 # EOF

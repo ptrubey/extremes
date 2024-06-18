@@ -1,9 +1,71 @@
+# distutils: extra_compile_args=-fopenmp
+# distutils: extra_link_args=-fopenmp
+
 import numpy as np
 cimport numpy as np
-# from scipy.stats import multinomial
+cimport cython
+
 from numpy.random import multinomial
+from cython.parallel import prange
+
+from libc.math cimport exp, log
 
 np.import_array()
+
+cdef double softplus_(double input, double threshold = 20) noexcept nogil:
+    if input > threshold:
+        return input
+    else:
+        return log(1. + exp(input))
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void softplus_1d_inplace(
+        np.ndarray[dtype = np.float_t, ndim = 1] arr,
+        double threshold = 20.,
+        ):
+    cdef Py_ssize_t i_max = arr.shape[0]
+    cdef Py_ssize_t i
+
+    cdef double [::1] arr_view = arr
+    for i in prange(i_max, nogil = True):
+        arr_view[i] = softplus_(arr_view[i], threshold)
+    return
+
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void softplus_2d_inplace(
+        np.ndarray[dtype = np.float_t, ndim = 2] arr,
+        double threshold = 20.,
+        ):
+    cdef Py_ssize_t i_max = arr.shape[0]
+    cdef Py_ssize_t j_max = arr.shape[1]
+    cdef Py_ssize_t i, j
+
+    cdef double [:,::1] arr_view = arr
+    for j in prange(j_max, nogil = True):
+        for i in range(i_max):
+            arr_view[i,j] = softplus_(arr_view[i,j], threshold)
+    return
+
+@cython.boundscheck(False)
+@cython.wraparound(False)
+cpdef void softplus_3d_inplace(
+        np.ndarray[dtype = np.float_t, ndim = 3] arr,
+        double threshold = 20.,
+        ):
+    cdef Py_ssize_t i_max = arr.shape[0]
+    cdef Py_ssize_t j_max = arr.shape[1]
+    cdef Py_ssize_t k_max = arr.shape[2]
+    cdef Py_ssize_t i, j, k
+
+    cdef double [:,:,::1] arr_view = arr
+    for k in prange(k_max, nogil = True):
+        for j in range(j_max):
+            for i in range(i_max):
+                arr_view[i,j,k] = softplus_(arr_view[i,j,k], threshold)
+    return
 
 cpdef np.ndarray[dtype = np.int_t, ndim = 1] counter(
         np.ndarray[dtype = np.int_t, ndim = 1] delta,
