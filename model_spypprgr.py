@@ -755,8 +755,8 @@ if __name__ == '__main__':
             interaction = x_interaction,
             )
         model = Chain(data, p = 10)
-        model.sample(2000, verbose = True)
-        model.write_to_disk('./test/results.pkl', 1001, 2)
+        model.sample(20000, verbose = True)
+        model.write_to_disk('./test/results.pkl', 1, 1)
         res = Result('./test/results.pkl')
         postalphas = res.generate_conditional_posterior_predictive_gammas()
 
