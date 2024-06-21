@@ -25,7 +25,7 @@ from samplers import DirichletProcessSampler
 from data import euclidean_to_angular, euclidean_to_hypercube, RealData
 from projgamma import pt_logd_projgamma_my_mt_inplace_unstable, logd_gamma,     \
     logd_prodgamma_my_mt, logd_prodgamma_paired, logd_prodgamma_my_st
-from cov import OnlineCovariance
+from cov import PerObsOnlineCovariance, OnlineCovariance
 from data import Data_From_Raw
 
 def softplus(X : np.ndarray, inplace : bool):
@@ -79,7 +79,7 @@ class Regressors(object):
         self.int = np.asarray(interaction)
         return
 
-class RegressionData(Data_From_Raw):
+class RegressionData(RealData):
     def load_regressors(
             self, 
             observation : np.ndarray,
@@ -274,21 +274,26 @@ class Chain(DirichletProcessSampler, ChainBase):
     def sample_theta(
             self,
             delta   : np.ndarray, # cluster ID
-            # r       : np.ndarray, # radius
+            r       : np.ndarray, # radius
             theta   : np.ndarray, # regression coef's
             epsilon : np.ndarray, # location specific effect
             mu      : np.ndarray, # mean of centering distribution
             Sigma   : np.ndarray, # cov of centering distribution
             ):
         tcurr    =  theta.copy()
-        tcand    =  normal(loc = theta, scale = 1e-3)
-        lp_curr  =  self.log_posterior_theta(delta, tcurr, epsilon, mu, Sigma)
-        lp_cand  =  self.log_posterior_theta(delta, tcand, epsilon, mu, Sigma)
+        propchol =  np.linalg.cholesky(
+            self.cov_theta.cluster_covariance(delta)[:tcurr.shape[0]] * 5.6644 / self.D,
+            )        
+        tcand    =  np.einsum('jde,je->jd', propchol, normal(size = tcurr.shape))
+        tcand += tcurr
+        lp_curr  =  self.log_posterior_theta(delta, r, tcurr, epsilon, mu, Sigma)
+        lp_cand  =  self.log_posterior_theta(delta, r, tcand, epsilon, mu, Sigma)
         logalpha =  np.zeros(lp_curr.shape)
         logalpha += lp_cand
         logalpha -= lp_curr
         keep = np.log(uniform(size = lp_curr.shape)) < logalpha
         tcurr[keep] = tcand[keep]
+        self.theta_acceptance[:keep.shape[0]][keep] += 1
         return tcurr
 
     def sample_theta_new(
@@ -332,12 +337,16 @@ class Chain(DirichletProcessSampler, ChainBase):
             epsilon : np.ndarray,
             ):
         eps_curr = epsilon.copy()
+        propchol = np.linalg.cholesky(self.cov_epsil.Sigma) 
+        eps_cand = eps_curr + propchol @ normal(size = self.S)
+
         eps_cand = normal(loc = eps_curr, scale = 1e-3)
         lpo_curr = self.log_posterior_epsilon(delta, r, theta, eps_curr)
         lpo_cand = self.log_posterior_epsilon(delta, r, theta, eps_cand)
         logalpha = lpo_cand - lpo_curr
         keep     = np.log(uniform(logalpha.shape)) < logalpha
         eps_curr[keep] = eps_cand[keep]
+        self.epsil_acceptance[keep] += 1
         return eps_curr
 
     def initialize_sampler(
@@ -367,6 +376,9 @@ class Chain(DirichletProcessSampler, ChainBase):
         self.curr_iter = 0
         self.rate_placeholder_1 = np.ones((self.J, self.D))
         self.rate_placeholder_2 = np.ones((self.N, self.D))
+        # AM tune-checking
+        self.theta_acceptance = np.zeros(self.J)
+        self.epsil_acceptance = np.zeros(self.S)
         return
     
     def log_posterior_epsilon(
@@ -388,7 +400,7 @@ class Chain(DirichletProcessSampler, ChainBase):
     def log_posterior_theta(
             self, 
             delta   : np.ndarray, 
-            # r       : np.ndarray, 
+            r       : np.ndarray, 
             theta   : np.ndarray, 
             epsilon : np.ndarray, 
             mu      : np.ndarray, 
@@ -396,16 +408,17 @@ class Chain(DirichletProcessSampler, ChainBase):
             ):
         # Setup
         ase = self.compute_shape_theta(delta, theta, epsilon) # (N,S)
-        # Y   = r[:,None] * self.data.Yp
+        Y   = r[:,None] * self.data.Yp
         # Calculation
         lp  = np.zeros(theta.shape[0])
         for i in range(delta.max() + 1):
-            lp[i] += (ase[delta == i] * np.log(self.data.Yp[delta == i])).sum()
+            # lp[i] += (ase[delta == i] * np.log(self.data.Yp[delta == i])).sum()
+            lp[i] += (ase[delta == i] * np.log(Y[delta == i])).sum()
             lp[i] -= gammaln(ase[delta == i]).sum()
-            lp[i] += gammaln(ase[delta == i].sum())
-            lp[i] -= ase[delta == i].sum() * np.log(
-                self.data.Yp[delta == i].sum(axis = -1)
-                ).sum()
+            # lp[i] += gammaln(ase[delta == i].sum())
+            # lp[i] -= ase[delta == i].sum() * np.log(
+            #    self.data.Yp[delta == i].sum(axis = -1)
+            #     ).sum()
         # lp -= 0.5 * np.diag(
         #     multi_dot(theta - mu[None], Sigma, (theta - mu[None]).T),
         #     )
@@ -431,17 +444,19 @@ class Chain(DirichletProcessSampler, ChainBase):
         # calculation
         asum = self.shape_delta @ np.ones(self.S)
         self.lglik_delta[:] = 0.
-        self.lglik_delta += np.einsum('njs,ns->nj', self.shape_delta, np.log(self.data.Yp))
-        self.lglik_delta -= gammaln(self.shape_delta).sum(axis = -1)
-        self.lglik_delta += gammaln(asum)
-        self.lglik_delta -= asum * np.log(self.data.Yp.sum(axis = -1))[:,None]
+        with np.errstate(divide = 'ignore', invalid = 'ignore'):
+            self.lglik_delta += np.einsum('njs,ns->nj', self.shape_delta, np.log(self.data.Yp))
+            self.lglik_delta -= gammaln(self.shape_delta).sum(axis = -1)
+            self.lglik_delta += gammaln(asum)
+            self.lglik_delta -= asum * np.log(self.data.Yp.sum(axis = -1))[:,None]
+        np.nan_to_num(self.lglik_delta, copy = False, nan = -np.inf)
         return
 
     def record_log_density(self):
         Y = self.curr_r[:,None] * self.data.Yp 
         ld = 0.
         ld += self.log_posterior_theta(
-            self.curr_delta, self.curr_theta, 
+            self.curr_delta, self.curr_r, self.curr_theta, 
             self.curr_epsilon, self.curr_mu, self.curr_Sigma,
             ).sum()
         ld += multivariate_normal.logpdf(
@@ -476,7 +491,7 @@ class Chain(DirichletProcessSampler, ChainBase):
         # sample new parameters
         self.samples.r[ci]     = self.sample_r(self.curr_delta, theta, epsilon)
         self.samples.theta[ci] = self.sample_theta(
-            self.curr_delta, theta, epsilon, mu, Sigma,
+            self.curr_delta, self.curr_r, theta, epsilon, mu, Sigma,
             )
         self.samples.mu[ci], self.samples.Sigma[ci] = self.sample_mu_Sigma(
             self.curr_theta,
@@ -486,6 +501,8 @@ class Chain(DirichletProcessSampler, ChainBase):
             )
         # cleanup
         self.record_log_density()
+        self.cov_theta.update(self.curr_theta[self.curr_delta])
+        self.cov_epsil.update(self.curr_epsilon)
         return
     
     def write_to_disk(self, path, nBurn, nThin = 1):
@@ -598,7 +615,8 @@ class Chain(DirichletProcessSampler, ChainBase):
             )
         # Rest of setup
         self.set_projection()
-        self.cov = OnlineCovariance(self.D)
+        self.cov_theta = PerObsOnlineCovariance(self.N, self.D, self.J, 0.0001)
+        self.cov_epsil = OnlineCovariance(self.S)
         return
 
 class Result(ChainBase):
@@ -722,43 +740,54 @@ def scale(X : np.ndarray, p : Summary):
     return ((Xm - p.mean[None]) / p.sd[None])
 
 if __name__ == '__main__':
-    slosh  = pd.read_csv(
-        './datasets/slosh/filtered_data.csv.gz', 
-        compression = 'gzip',
+    Xobs = pd.read_csv('./simulated/reg/X.csv').values
+    Y = pd.read_csv('./simulated/reg/Y.csv').values
+    Xloc = np.zeros(shape = (Y.shape[1],0))
+    Xint = np.zeros(shape = (Xobs.shape[0], Y.shape[1], 0))
+    data = RegressionData(
+        raw_real = Y, real_type = 'sphere', 
+        observation = Xobs, location = Xloc, interaction = Xint,
         )
-    sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
+    model = Chain(data)
+    model.sample(20000, True)
+    # slosh  = pd.read_csv(
+    #     './datasets/slosh/filtered_data.csv.gz', 
+    #     compression = 'gzip',
+    #     )
+    # sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
 
-    if True: # sloshltd    
-        sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
-        # sloshltd = slosh.MTFCC.isin(['K2451'])
-        sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
-        sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
+    # if True: # sloshltd    
+    #     # sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
+    #     sloshltd = slosh.MTFCC.isin(['K2451'])
+    #     sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
+    #     sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
 
-        sloshx.theta.loc[sloshx.theta < 100] += 360
-        sloshx_par    = summarize(sloshx.values)
-        locatx_par    = summarize(sloshltd_ids[['x','y']].values)
-        sloshx_par.mean[-1] = locatx_par.mean[-1] # latitude values will be 
-        sloshx_par.sd[-1]   = locatx_par.sd[-1]   # on same scale for both datasets
-        sloshx_std    = scale(sloshx.values, sloshx_par)
-        locatx_std    = scale(sloshltd_ids[['x','y']].values, locatx_par)
+    #     sloshx.theta.loc[sloshx.theta < 100] += 360
+    #     sloshx_par    = summarize(sloshx.values)
+    #     locatx_par    = summarize(sloshltd_ids[['x','y']].values)
+    #     sloshx_par.mean[-1] = locatx_par.mean[-1] # latitude values will be 
+    #     sloshx_par.sd[-1]   = locatx_par.sd[-1]   # on same scale for both datasets
+    #     sloshx_std    = scale(sloshx.values, sloshx_par)
+    #     locatx_std    = scale(sloshltd_ids[['x','y']].values, locatx_par)
         
-        x_observation = sloshx_std
-        x_location    = locatx_std
-        x_interaction = (sloshx_std[:,-1][None] * locatx_std[:,-1][:,None])[:,:,None]
+    #     x_observation = sloshx_std
+    #     x_location    = locatx_std
+    #     x_interaction = (sloshx_std[:,-1][None] * locatx_std[:,-1][:,None])[:,:,None]
 
-        data = RegressionData(
-            raw         = sloshltd_obs, 
-            decluster   = False, 
-            quantile    = 0.90,
-            observation = x_observation,
-            location    = x_location,
-            interaction = x_interaction,
-            )
-        model = Chain(data, p = 10)
-        model.sample(20000, verbose = True)
-        model.write_to_disk('./test/results.pkl', 1, 1)
-        res = Result('./test/results.pkl')
-        postalphas = res.generate_conditional_posterior_predictive_gammas()
+    #     data = RegressionData(
+    #         raw         = sloshltd_obs, 
+    #         real_type   = 'threshold',
+    #         decluster   = False, 
+    #         quantile    = 0.90,
+    #         observation = x_observation,
+    #         location    = x_location,
+    #         interaction = x_interaction,
+    #         )
+    #     model = Chain(data, p = 10)
+    #     model.sample(20000, verbose = True)
+    #     model.write_to_disk('./test/results.pkl', 1, 1)
+    #     res = Result('./test/results.pkl')
+    #     postalphas = res.generate_conditional_posterior_predictive_gammas()
 
         # inputs = pd.read_csv('~/git/surge/data/inputs.csv')
         # finputs = inputs.iloc[model.data.I]

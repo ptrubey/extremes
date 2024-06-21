@@ -23,18 +23,19 @@ class OnlineCovariance(object):
         self.A += x * x[:,None]
         self.b += x
         self.n += 1
-        self.xbar[:] = self.b / self.n
-        self.Sigma[:] = (1/self.n) * (
-            + self.A 
-            - self.xbar * self.b[:,None]
-            - self.b * self.xbar[:,None]
-            + self.n * self.xbar * self.xbar[:,None]
-            )
+        if self.n > 300:
+            self.xbar[:] = self.b / self.n
+            self.Sigma[:] = (1/self.n) * (
+                + self.A 
+                - self.xbar * self.b[:,None]
+                - self.b * self.xbar[:,None]
+                + self.n * self.xbar * self.xbar[:,None]
+                ) + np.eye(self.nCol) * 1e-5
         return
 
-    def __init__(self, nCol):
+    def __init__(self, nCol, init_diag = 1e-3):
         self.nCol = nCol
-        self.Sigma = np.empty((nCol, nCol))
+        self.Sigma = np.eye(nCol) * init_diag
         self.A = np.zeros((nCol, nCol))
         self.b = np.zeros((nCol))
         self.xbar = np.zeros((nCol))
@@ -85,9 +86,9 @@ class PerObsOnlineCovariance(OnlineCovariance):
         self.c_b[:] = 0.
         self.c_n[:] = 0.
         for n in range(self.nDat):
-            self.c_n[delta.T[n]] += self.n
-            self.c_A[delta.T[n]] += self.A[n]
-            self.c_b[delta.T[n]] += self.b[n]
+            self.c_n[delta[n]] += self.n
+            self.c_A[delta[n]] += self.A[n]
+            self.c_b[delta[n]] += self.b[n]
         self.c_xbar = self.c_b / (self.c_n[:,None] + EPS)
         self.c_Sigma += self.c_A
         self.c_Sigma -= self.c_xbar[:,None] * self.c_b[:,:,None]
@@ -106,7 +107,7 @@ class PerObsOnlineCovariance(OnlineCovariance):
         self.n += 1
         return
     
-    def __init__(self, nDat, nCol, nClust, init_diag = 1e-5):
+    def __init__(self, nDat, nCol, nClust, init_diag = 1e-4):
         self.nDat, self.nCol, self.nClust = nDat, nCol, nClust
         self.A = np.zeros((self.nDat, self.nCol, self.nCol))
         self.b = np.zeros((self.nDat, self.nCol))
@@ -119,8 +120,6 @@ class PerObsOnlineCovariance(OnlineCovariance):
         self.c_A     = np.zeros((self.nClust, self.nCol, self.nCol))
         self.c_b     = np.zeros((self.nClust, self.nCol))
         return
-
-
 
 class PerObsTemperedOnlineCovariance(OnlineCovariance):
     c_Sigma = None
