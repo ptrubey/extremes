@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import projgamma as pg
 from scipy.special import digamma, softmax
+from scipy.stats import norm as normal
 from samplers import bincount2D_vectorized
 from data import Data, euclidean_to_psphere, euclidean_to_hypercube
 import matplotlib.pyplot as plt
@@ -113,10 +114,11 @@ def stickbreak_tf(nu):
 class SurrogateVars(object):
     def init_vars(self, J, D, dtype):
         self.nu_mu    = tf.Variable(
-            tf.random.normal([J-1], mean = -3, dtype = dtype), name = 'nu_mu',
+            normal.ppf(1 / np.arange(2, J + 1)[::-1]), dtype = dtype, name = 'nu_mu',
             )
         self.nu_sd    = tf.Variable(
-            tf.random.normal([J-1], mean = -3, dtype = dtype), name = 'nu_sd',
+            tf.ones([J-1], dtype = dtype) * -3., name = 'nu_sd',
+            # tf.random.normal([J-1], mean = -3, dtype = dtype), name = 'nu_sd',
             )
         self.alpha_mu = tf.Variable(
             tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
@@ -152,20 +154,12 @@ class SurrogateModel(object):
     def init_model(self):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
-                # tfd.Gamma(
-                #     tf.nn.softplus(self.vars.xi_shape),
-                #     tf.nn.softplus(self.vars.xi_rate),
-                #     ),
                 tfd.LogNormal(
                     self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
                     ), 
                 reinterpreted_batch_ndims = 1,
                 ),
             tau = tfd.Independent(
-                # tfd.Gamma(
-                #     tf.nn.softplus(self.vars.tau_shape),
-                #     tf.nn.softplus(self.vars.tau_rate),
-                #     ),
                 tfd.LogNormal(
                     self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
                     ), 
@@ -181,10 +175,6 @@ class SurrogateModel(object):
                 tfd.LogNormal(
                     self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd)
                     ),
-                # tfd.Gamma(
-                #     tf.nn.softplus(self.vars.alpha_shape),
-                #     tf.nn.softplus(self.vars.alpha_rate),
-                #     ), 
                 reinterpreted_batch_ndims = 2,
                 ),
             ))
@@ -297,7 +287,7 @@ class VarPYPG(object):
             discount = 0.2, 
             prior_xi = (0.5, 0.5), 
             prior_tau = (2., 2.), 
-            max_clusters = 200, # 200,
+            max_clusters = 100, # 200,
             dtype = np.float64,
             p = 10,
             advi_sample_size = 1,
@@ -333,7 +323,7 @@ class VarPYPG(object):
         return euclidean_to_hypercube(gammas)
     
     def generate_conditional_posterior_deltas_alphas(self, n = 1000):
-        " \delta | y_i "
+        """ delta | y_i """
         samples = self.surrogate.sample(n)
         alpha   = samples['alpha'].numpy()
         nu      = samples['nu'].numpy()

@@ -33,7 +33,7 @@ class OnlineCovariance(object):
                 ) + np.eye(self.nCol) * 1e-5
         return
 
-    def __init__(self, nCol, init_diag = 1e-3):
+    def __init__(self, nCol, init_diag = 1e-6):
         self.nCol = nCol
         self.Sigma = np.eye(nCol) * init_diag
         self.A = np.zeros((nCol, nCol))
@@ -107,7 +107,7 @@ class PerObsOnlineCovariance(OnlineCovariance):
         self.n += 1
         return
     
-    def __init__(self, nDat, nCol, nClust, init_diag = 1e-4):
+    def __init__(self, nDat, nCol, nClust, init_diag = 1e-6):
         self.nDat, self.nCol, self.nClust = nDat, nCol, nClust
         self.A = np.zeros((self.nDat, self.nCol, self.nCol))
         self.b = np.zeros((self.nDat, self.nCol))
@@ -231,7 +231,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         # self.Sigma /= self.n
         return
     
-    def __init__(self, nTemp, nDat, nCol, nClust = None):
+    def __init__(self, nTemp, nDat, nCol, nClust = None, init_diag = 1e-6):
         # regular
         self.nTemp, self.nDat, self.nCol = nTemp, nDat, nCol
         self.temps = np.arange(self.nTemp)
@@ -244,7 +244,7 @@ class PerObsTemperedOnlineCovariance(OnlineCovariance):
         if nClust is not None:
             self.nClust  = nClust
             self.c_Sigma = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))
-            self.c_Sigma += np.eye(self.nCol)[None, None, :, :] * 1e-6
+            self.c_Sigma += np.eye(self.nCol)[None, None, :, :] * init_diag
             self.c_xbar  = np.zeros((self.nTemp, self.nClust, self.nCol))
             self.c_n     = np.zeros((self.nTemp, self.nClust))
             self.c_A     = np.zeros((self.nTemp, self.nClust, self.nCol, self.nCol))

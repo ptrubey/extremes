@@ -74,7 +74,7 @@ if __name__ == '__main__':
     slosh_ids = slosh.T[:8].T
     slosh_obs = slosh.T[8:].T
 
-    if False: # sloshltd
+    if True: # sloshltd
         sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
         sloshltd_ids = slosh_ids[sloshltd]
         sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
@@ -162,7 +162,7 @@ if __name__ == '__main__':
             './datasets/slosh/slosh_clusters_post.csv', index = False, 
             )
 
-    if True: # filtered to 0.9 threshold
+    if False: # filtered to 0.9 threshold
         slosh9_obs = pd.read_csv(
             './datasets/slosh/slosh_thr.90.csv.gz', 
             compression = 'gzip',
