@@ -168,7 +168,7 @@ if __name__ == '__main__':
             compression = 'gzip',
             )
         data = Data_From_Raw(
-            slosh9_obs[:,8:].values.T.astype(np.float64), 
+            slosh9_obs.iloc[:,8:].values.T.astype(np.float64), 
             decluster = False, 
             quantile = 0.90,
             )
