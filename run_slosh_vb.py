@@ -162,7 +162,7 @@ if __name__ == '__main__':
             './datasets/slosh/slosh_clusters_post.csv', index = False, 
             )
 
-    if False: # filtered to 0.9 threshold
+    if True: # filtered to 0.9 threshold
         slosh9_obs = pd.read_csv(
             './datasets/slosh/slosh_thr.90.csv.gz', 
             compression = 'gzip',
