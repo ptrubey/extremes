@@ -66,12 +66,12 @@ if __name__ == '__main__':
             location    = x_location,
             interaction = x_interaction,
             )
-    # model = Chain(data, p = 10)
-    # model.sample(int(args.nSamp))
+    model = Chain(data, p = 10)
+    model.sample(int(args.nSamp))
     fname = 'sloshltd_{}_{}_{}'
     fname_pkl = fname + '.pkl'
     fpath_pkl = os.path.join('./test', fname_pkl)
-    # model.write_to_disk(fpath_pkl, int(args.nKeep), int(args.nThin))
+    model.write_to_disk(fpath_pkl, int(args.nKeep), int(args.nThin))
     fpath_del = fname + '_delta.csv'
     fpath_gam = fname + '_gamma.pkl'
       
