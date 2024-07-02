@@ -18,7 +18,7 @@ if __name__ == '__main__':
         for conc in concs:
             for disc in discs:
                 processes.append(Popen(
-                    sys.executable, 'test_reg.py', srce, conc, disc,
+                    [sys.executable, 'test_reg.py', srce, conc, disc,]
                     ))
     
     for process in processes:
