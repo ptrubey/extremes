@@ -544,6 +544,7 @@ class Chain(DirichletProcessSampler, ChainBase):
             'conc'     : self.concentration,
             'disc'     : self.discount,
             'bounds'   : self.bounds,
+            'mhdiag'   : self.mh_accept_rate()
             }
         
         try:
@@ -589,11 +590,7 @@ class Chain(DirichletProcessSampler, ChainBase):
     def mh_accept_rate(self):
         theta = (self.theta_mh_keep / (self.theta_mh_try + 1e-9))
         epsil = (self.epsil_mh_keep / (self.epsil_mh_try + 1e-9))
-        print('Theta')
-        print(theta)
-        print('Epsilon')
-        print(epsil)
-        return
+        return (theta, epsil)
 
     def __init__(
             self,
