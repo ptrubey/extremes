@@ -66,9 +66,14 @@ if __name__ == '__main__':
             location    = x_location,
             interaction = x_interaction,
             )
-    model = Chain(data, p = 10)
+    model = Chain(
+        data, 
+        p = 10, 
+        concentration = float(args.conc), 
+        discount = float(args.disc),
+        )
     model.sample(int(args.nSamp))
-    fname = 'sloshltd_{}_{}_{}'
+    fname = 'sloshltd_{}_{}_{}'.format(args.src, args.conc, args.disc)
     fname_pkl = fname + '.pkl'
     fpath_pkl = os.path.join('./test', fname_pkl)
     model.write_to_disk(fpath_pkl, int(args.nKeep), int(args.nThin))
