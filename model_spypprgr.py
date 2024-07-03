@@ -748,23 +748,31 @@ def scale(X : np.ndarray, p : Summary):
     return ((Xm - p.mean[None]) / p.sd[None])
 
 if __name__ == '__main__':
-    # Xobs = pd.read_csv('./simulated/reg/X.csv').values
-    # Y = pd.read_csv('./simulated/reg/Y.csv').values
-    # Xloc = np.zeros(shape = (Y.shape[1],0))
-    # Xint = np.zeros(shape = (Xobs.shape[0], Y.shape[1], 0))
-    # data = RegressionData(
-    #     raw_real = Y, real_type = 'sphere', 
-    #     observation = Xobs, location = Xloc, interaction = Xint,
-    #     )
-    # model = Chain(data)
-    # model.sample(20000, True)
-    slosh  = pd.read_csv(
-        './datasets/slosh/filtered_data.csv.gz', 
-        compression = 'gzip',
+    Xobs = pd.read_csv('./simulated/reg/X.csv').values
+    Y    = pd.read_csv('./simulated/reg/Y.csv').values
+    Xloc = np.zeros(shape = (Y.shape[1],0))
+    Xint = np.zeros(shape = (Xobs.shape[0], Y.shape[1], 0))
+    data = RegressionData(
+        raw_real = Y, real_type = 'sphere', 
+        observation = Xobs, location = Xloc, interaction = Xint,
         )
-    sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
+    model = Chain(data)
+    model.sample(30000, True)
+    model.write_to_disk('./sumulated/reg/result.pkl', 1, 1)
+    res   = Result('./simulated/reg/result.pkl')
+    postalphas = res.generate_conditional_posterior_predictive_gammas()
+    with open('./simulated/reg/postalphas.pkl', 'wb') as file:
+        pickle.dump(postalphas, file)
+    pd.DataFrame(res.samples.delta).to_csv('./simulated/reg/postdeltas.csv', index = False)
+    
+    if False:
+        slosh  = pd.read_csv(
+            './datasets/slosh/filtered_data.csv.gz', 
+            compression = 'gzip',
+            )
+        sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
 
-    if True: # sloshltd    
+    if False: # sloshltd    
         # sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
         sloshltd = slosh.MTFCC.isin(['K2451'])
         sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
