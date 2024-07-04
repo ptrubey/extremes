@@ -22,7 +22,8 @@ from io import BytesIO
 from cUtility import pityor_cluster_sampler, generate_indices,                  \
     softplus_1d_inplace, softplus_2d_inplace, softplus_3d_inplace
 from samplers import DirichletProcessSampler
-from data import euclidean_to_angular, euclidean_to_hypercube, RealData
+from data import euclidean_to_angular, euclidean_to_hypercube,                  \
+    euclidean_to_simplex, RealData
 from projgamma import pt_logd_projgamma_my_mt_inplace_unstable, logd_gamma,     \
     logd_prodgamma_my_mt, logd_prodgamma_paired, logd_prodgamma_my_st
 from cov import PerObsOnlineCovariance, OnlineCovariance
@@ -603,8 +604,8 @@ class Chain(DirichletProcessSampler, ChainBase):
             prior_mu_Sigma = (0, 1, 10, 10),
             prior_epsilon = (0, 1), 
             p             = 10,
-            concentration = 0.03,
-            discount      = 0.03,
+            concentration = 0.02,
+            discount      = 0.02,
             max_clust     = 100,
             fixed_effects = True,
             **kwargs
@@ -769,15 +770,30 @@ if __name__ == '__main__':
         observation = Xobs, location = Xloc, interaction = Xint,
         )
     
-    model = Chain(data)
-    model.sample(30000, True)
-    model.write_to_disk('./simulated/reg/result.pkl', 1, 1)
+    # model = Chain(data)
+    # model.sample(30000, True)
+    # model.write_to_disk('./simulated/reg/result.pkl', 1, 1)
     res   = Result('./simulated/reg/result.pkl')
     postalphas = res.generate_conditional_posterior_predictive_gammas()
     with open('./simulated/reg/postalphas.pkl', 'wb') as file:
         pickle.dump(postalphas, file)
     pd.DataFrame(res.samples.delta).to_csv('./simulated/reg/postdeltas.csv', index = False)
     
+    temp = postalphas[20000::10].swapaxes(0,1)
+    gamm = gamma(shape = temp)
+    delt = res.samples.delta[20000::10] # 1000, 600
+    outt = np.empty((gamm.shape[0], gamm.shape[1], gamm.shape[2] + 3)) # 600, 1000, 3+1+1+1
+    outt[:,:,:3] = euclidean_to_simplex(gamm)
+    outt[:,:,3]  = np.arange(600)[:,None]
+    outt[:,:,4]  = np.repeat(np.arange(3), 200)[:,None]
+    outt[:,:,5]  = delt.swapaxes(0,1)
+
+    df_out = pd.DataFrame(outt.reshape(600*1000, 6))
+    df_out.to_csv('./simulated/reg/postpred.csv', index = False)
+    
+
+
+
     if False:
         slosh  = pd.read_csv(
             './datasets/slosh/filtered_data.csv.gz', 
