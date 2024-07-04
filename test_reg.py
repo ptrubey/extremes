@@ -77,8 +77,8 @@ if __name__ == '__main__':
     fname_pkl = fname + '.pkl'
     fpath_pkl = os.path.join('./test', fname_pkl)
     model.write_to_disk(fpath_pkl, int(args.nKeep), int(args.nThin))
-    fpath_del = fname + '_delta.csv'
-    fpath_gam = fname + '_gamma.pkl'
+    fpath_del = os.path.join('./test', fname + '_delta.csv')
+    fpath_gam = os.path.join('./test', fname + '_gamma.pkl')
       
     res = Result(fpath_pkl)
     postdeltas = res.samples.delta

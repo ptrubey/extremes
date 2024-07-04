@@ -70,9 +70,9 @@ class Regressors(object):
             location    : np.ndarray,  # (S,d2)
             interaction : np.ndarray,  # (N,S,D3)
             ):
-        # Bounds checking
-        assert observation.shape[0] == interaction.shape[0]
-        assert location.shape[0] == interaction.shape[1]
+        # Bounds checking (omitting)
+        # assert observation.shape[0] == interaction.shape[0]
+        # assert location.shape[0] == interaction.shape[1]
         # instantiation
         self.obs = np.asarray(observation)
         self.loc = np.asarray(location)
@@ -338,6 +338,8 @@ class Chain(DirichletProcessSampler, ChainBase):
             theta   : np.ndarray, 
             epsilon : np.ndarray,
             ):
+        if not self.fixed_effects:
+            return np.zeros(epsilon.shape)
         eps_curr = epsilon.copy()
         propchol = np.linalg.cholesky(self.cov_epsil.Sigma) 
         eps_cand = eps_curr + propchol @ normal(size = self.S)
@@ -363,7 +365,10 @@ class Chain(DirichletProcessSampler, ChainBase):
         delta, theta = self.clean_delta_theta(delta, theta)
         self.samples.delta[0] = delta
         self.samples.theta[0] = theta
-        self.samples.epsilon[0] = 0.
+        if not self.fixed_effects:
+            self.samples.epsilon[:] = 0.
+        else:
+            self.samples.epsilon[0] = 0.
         self.samples.r[0] = self.sample_r(
             self.samples.delta[0], 
             self.samples.theta[0], 
@@ -600,15 +605,17 @@ class Chain(DirichletProcessSampler, ChainBase):
             p             = 10,
             concentration = 0.05,
             discount      = 0.05,
-            max_clust_count = 200,
+            max_clust     = 100,
+            fixed_effects = True,
             **kwargs
             ):
         self.data = data
-        self.J = max_clust_count
+        self.J = max_clust
         self.set_shapes()
         # Parsing the inputs
         self.concentration = concentration
         self.discount = discount
+        self.fixed_effects = fixed_effects
         self.p = p
         # Setting the priors
         _prior_mu_Sigma = NIWPrior(
@@ -748,17 +755,23 @@ def scale(X : np.ndarray, p : Summary):
     return ((Xm - p.mean[None]) / p.sd[None])
 
 if __name__ == '__main__':
-    Xobs = pd.read_csv('./simulated/reg/X.csv').values
+    X    = pd.read_csv('./simulated/reg/X.csv').values
+    loc  = pd.read_csv('./simulated/reg/Xloc.csv').values
     Y    = pd.read_csv('./simulated/reg/Y.csv').values
-    Xloc = np.zeros(shape = (Y.shape[1],0))
-    Xint = np.zeros(shape = (Xobs.shape[0], Y.shape[1], 0))
+
+    Xobs = np.zeros((X.shape[0], 0))
+    Xloc = np.zeros((Y.shape[1], 0))
+    Xint = np.empty((X.shape[0], Y.shape[1], X.shape[1] * Y.shape[1]))
+    Xint[:] = np.kron(X, loc).reshape(Xint.shape) # verified
+    
     data = RegressionData(
         raw_real = Y, real_type = 'sphere', 
         observation = Xobs, location = Xloc, interaction = Xint,
         )
+    
     model = Chain(data)
     model.sample(30000, True)
-    model.write_to_disk('./sumulated/reg/result.pkl', 1, 1)
+    model.write_to_disk('./simulated/reg/result.pkl', 1, 1)
     res   = Result('./simulated/reg/result.pkl')
     postalphas = res.generate_conditional_posterior_predictive_gammas()
     with open('./simulated/reg/postalphas.pkl', 'wb') as file:
