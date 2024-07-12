@@ -74,6 +74,51 @@ if __name__ == '__main__':
     slosh_ids = slosh.T[:8].T
     slosh_obs = slosh.T[8:].T
 
+    if True: # sloshapt
+        sloshapt     = slosh.MTFCC.isin(['K2451'])
+        sloshapt_ids = slosh_ids[sloshapt]
+        sloshapt_obs = slosh_obs[sloshapt].values.T.astype(np.float64)
+
+        data = Data_From_Raw(sloshapt_obs, decluster = False, quantile = 0.95)
+        model = vb.VarPYPG(data)
+        model.fit_advi()
+        postalphas = model.generate_conditional_posterior_alphas()
+
+        inputs = pd.read_csv('~/git/surge/data/inputs.csv')
+        finputs = inputs.iloc[model.data.I]
+
+        deltas = model.generate_conditional_posterior_deltas()
+        import posterior as post
+        smat   = post.similarity_matrix(deltas)
+        graph  = post.minimum_spanning_trees(smat)
+        g      = pd.DataFrame(graph)
+        g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
+        # write to disk
+
+        d = {
+            'ids'    : sloshapt_ids,
+            'obs'    : sloshapt_obs,
+            'inputs' : finputs,
+            'alphas' : postalphas,
+            'deltas' : deltas,
+            'smat'   : smat,
+            'graph'  : g,
+            }
+        with open('./datasets/slosh/sloshapt.pkl', 'wb') as file:
+            pkl.dump(d, file)
+        g.to_csv('./datasets/slosh/sloshapt_mst.csv', index = False)
+        finputs.to_csv('./datasets/slosh/sloshapt_in.csv', index = False)
+        pd.DataFrame(deltas).to_csv('./datasets/slosh/sloshapt_delta.csv', index = False)
+        
+        deltastar = post.emergent_clusters_pre(model)
+        pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar}).to_csv(
+            './datasets/slosh/sloshapt_cluster_pre.csv', index = False,
+            )
+        deltastar_ = post.emergent_clusters_post(model)
+        pd.DataFrame({'obs' : np.arange(model.N), 'cid' : deltastar_}).to_csv(
+            './datasets/slosh/sloshapt_clusters_post.csv', index = False, 
+            )
+
     if True: # sloshltd
         sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
         sloshltd_ids = slosh_ids[sloshltd]
@@ -82,7 +127,7 @@ if __name__ == '__main__':
         data = Data_From_Raw(sloshltd_obs, decluster = False, quantile = 0.95)
         model = vb.VarPYPG(data)
         model.fit_advi()
-        # postalphas = model.generate_conditional_posterior_alphas()
+        postalphas = model.generate_conditional_posterior_alphas()
 
         inputs = pd.read_csv('~/git/surge/data/inputs.csv')
         finputs = inputs.iloc[model.data.I]
@@ -98,7 +143,7 @@ if __name__ == '__main__':
         d = {
             'ids'    : sloshltd_ids,
             'obs'    : sloshltd_obs,
-            # 'alphas' : postalphas,
+            'alphas' : postalphas,
             'inputs' : finputs,
             'deltas' : deltas,
             'smat'   : smat,
@@ -190,6 +235,7 @@ if __name__ == '__main__':
             'ids'    : slosh_ids,
             'obs'    : slosh9_obs,
             'inputs' : finputs,
+            'alphas' : postalphas,
             'deltas' : deltas,
             'smat'   : smat,
             'graph'  : g,
