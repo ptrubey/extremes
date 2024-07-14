@@ -67,18 +67,24 @@ def run_model_from_path(path, *pargs):
 if __name__ == '__main__':
     limit_cpu()
 
-    slosh = pd.read_csv(
-        './datasets/slosh/filtered_data.csv.gz', 
-        compression = 'gzip',
-        )
-    slosh_ids = slosh.T[:8].T
-    slosh_obs = slosh.T[8:].T
+    # slosh = pd.read_csv(
+    #     './datasets/slosh/filtered_data.csv.gz', 
+    #     compression = 'gzip',
+    #     )
+    # slosh_ids = slosh.T[:8].T
+    # slosh_obs = slosh.T[8:].T
 
     if True: # sloshapt
-        sloshapt     = slosh.MTFCC.isin(['K2451'])
-        sloshapt_ids = slosh_ids[sloshapt]
-        sloshapt_obs = slosh_obs[sloshapt].values.T.astype(np.float64)
-
+        # sloshapt     = slosh.MTFCC.isin(['K2451'])
+        # sloshapt_ids = slosh_ids[sloshapt]
+        # sloshapt_obs = slosh_obs[sloshapt].values.T.astype(np.float64)
+        sloshapt = pd.read_csv(
+            './datasets/slosh/slosh_apt_data.csv.gz', 
+            compression = 'gzip',
+            )
+        sloshapt_ids = sloshapt.T[:8].T
+        sloshapt_obs = sloshapt.T[8:].values.astype(np.float64)
+        
         data = Data_From_Raw(sloshapt_obs, decluster = False, quantile = 0.95)
         model = vb.VarPYPG(data)
         model.fit_advi()
@@ -117,9 +123,15 @@ if __name__ == '__main__':
             }).to_csv('./datasets/slosh/sloshapt_clusters.csv', index = False)
 
     if True: # sloshltd
-        sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
-        sloshltd_ids = slosh_ids[sloshltd]
-        sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
+        # sloshltd  = ~slosh.MTFCC.isin(['C3061','C3081'])
+        # sloshltd_ids = slosh_ids[sloshltd]
+        # sloshltd_obs = slosh_obs[sloshltd].values.T.astype(np.float64)
+        sloshltd = pd.read_csv(
+            './datasets/slosh/slosh_ltd_data.csv.gz', 
+            compression = 'gzip',
+            )
+        sloshltd_ids = sloshltd.T[:8].T
+        sloshltd_obs = sloshltd.T[8:].values.astype(np.float64)
 
         data = Data_From_Raw(sloshltd_obs, decluster = False, quantile = 0.95)
         model = vb.VarPYPG(data)
@@ -159,15 +171,18 @@ if __name__ == '__main__':
             }).to_csv('./datasets/slosh/sloshltd_clusters.csv', index = False)
 
     if True: # slosht90
-        slosh9_obs = pd.read_csv(
-            './datasets/slosh/slosh_thr.90.csv.gz', 
+        # slosh9_obs = pd.read_csv(
+        #     './datasets/slosh/slosh_thr.90.csv.gz', 
+        #     compression = 'gzip',
+        #     )
+        slosht90 = pd.read_csv(
+            './datasets/slosh/slosh_t90_data.csv.gz', 
             compression = 'gzip',
             )
-        data = Data_From_Raw(
-            slosh9_obs.iloc[:,8:].values.T.astype(np.float64), 
-            decluster = False, 
-            quantile = 0.90,
-            )
+        slosht90_ids = sloshltd.T[:8].T
+        slosht90_obs = sloshltd.T[8:].values.astype(np.float64)
+
+        data = Data_From_Raw(slosht90_obs, decluster = False, quantile = 0.90)
         model = vb.VarPYPG(data)
         model.fit_advi()
 
@@ -183,8 +198,8 @@ if __name__ == '__main__':
         # write to disk
 
         d = {
-            'ids'    : slosh_ids,
-            'obs'    : slosh9_obs,
+            'ids'    : slosht90_ids,
+            'obs'    : slosht90_obs,
             'inputs' : finputs,
             'alphas' : postalphas,
             'deltas' : deltas,
