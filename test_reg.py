@@ -53,11 +53,17 @@ if __name__ == '__main__':
 
     sloshx.loc[sloshx.theta < 100, 'theta'] += 360
     sloshx_par    = summarize(sloshx.values)
-    locatx_par    = summarize(sloshltd_ids[['x','y']].values)
+    
+    try:
+        locatx_par    = summarize(sloshltd_ids[['x','y']].values)
+        locatx_std    = scale(sloshltd_ids[['long','lat']].values, locatx_par)
+    except KeyError:
+        locatx_par    = summarize(sloshltd_ids[['long','lat']].values)
+        locatx_std    = scale(sloshltd_ids[['long','lat']].values, locatx_par)
+    
     sloshx_par.mean[-1] = locatx_par.mean[-1] # latitude values will be 
     sloshx_par.sd[-1]   = locatx_par.sd[-1]   # on same scale for both datasets
     sloshx_std    = scale(sloshx.values, sloshx_par)
-    locatx_std    = scale(sloshltd_ids[['x','y']].values, locatx_par)
         
     x_observation = sloshx_std
     x_location    = locatx_std
