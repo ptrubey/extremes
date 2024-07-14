@@ -30,20 +30,26 @@ if __name__ == '__main__':
     args = argparser()
     limit_cpu()
 
-    slosh  = pd.read_csv(
-        './datasets/slosh/filtered_data.csv.gz', 
-        compression = 'gzip',
-        )
+    # slosh  = pd.read_csv(
+    #     './datasets/slosh/filtered_data.csv.gz', 
+    #     compression = 'gzip',
+    #     )
     sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
 
     if args.src == 'ltd':
-        sloshltd = ~slosh.MTFCC.isin(['C3061','C3081'])
+        slosh = pd.read_csv(
+            './datasets/slosh/slosh_ltd_data.csv.gz',
+            compression = 'gzip',
+            )
     elif args.src == 'apt':
-        sloshltd = slosh.MTFCC.isin(['K2451'])
+        slosh = pd.read_csv(
+            './datasets/slosh/slosh_apt_data.csv.gz',
+            compression = 'gzip',
+            )
     else:
         raise
-    sloshltd_ids = slosh[sloshltd].iloc[:,:8]                             # location parms
-    sloshltd_obs = slosh[sloshltd].iloc[:,8:].values.astype(np.float64).T # storm runs
+    sloshltd_ids = slosh.iloc[:,:8]
+    sloshltd_obs = slosh.iloc[:,8:].values.astype(np.float64)
 
     sloshx.loc[sloshx.theta < 100, 'theta'] += 360
     sloshx_par    = summarize(sloshx.values)
@@ -61,7 +67,7 @@ if __name__ == '__main__':
             raw_real    = sloshltd_obs, 
             real_type   = 'threshold',
             decluster   = False, 
-            quantile    = 0.90,
+            quantile    = 0.95,
             observation = x_observation,
             location    = x_location,
             interaction = x_interaction,
