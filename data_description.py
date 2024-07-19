@@ -10,6 +10,9 @@ def data_description():
     path_apt  = './datasets/slosh/slosh_apt_data.csv.gz'
     path_ltd  = './datasets/slosh/slosh_ltd_data.csv.gz'
     path_t90  = './datasets/slosh/slosh_t90_data.csv.gz'
+    path_emg  = './datasets/slosh/slosh_emg_data.csv.gz'
+    path_xpt  = './datasets/slosh/slosh_xpt_data.csv.gz'
+
     slosh_apt = pd.read_csv(
         path_apt, compression = 'gzip',
         ).T[8:].values.astype(float)
@@ -19,14 +22,22 @@ def data_description():
     slosh_t90 = pd.read_csv(
         path_t90, compression = 'gzip',
         ).T[8:].values.astype(float)
+    slosh_emg = pd.read_csv(
+        path_emg, compression = 'gzip',
+        ).T[8:].values.astype(float)
+    slosh_xpt = pd.read_csv(
+        path_xpt, compression = 'gzip',
+        ).T[8:].values.astype(float)
     data_ltd = RealData(slosh_ltd, 'threshold', False, 0.95)
     data_apt = RealData(slosh_apt, 'threshold', False, 0.95)
     data_t90 = RealData(slosh_t90, 'threshold', False, 0.90)
+    data_emg = RealData(slosh_emg, 'threshold', False, 0.95)
+    data_xpt = RealData(slosh_xpt, 'threshold', False, 0.95)
 
-    datas = [data_ltd, data_apt, data_t90]
+    datas = [data_ltd, data_apt, data_t90, data_emg, data_xpt]
     Ns = [data.nDat for data in datas]
     Ss = [data.nCol for data in datas]
-    names = ['ltd','apt','t90']
+    names = ['ltd','apt','t90', 'emg', 'xpt']
     Is = []
     for data in datas:
         I = np.zeros(4000, dtype = int)
@@ -71,4 +82,3 @@ if __name__ == '__main__':
     extant_clusters()
 
 # EOF
-    
