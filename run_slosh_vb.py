@@ -67,7 +67,7 @@ def run_model_from_path(path, *pargs):
 if __name__ == '__main__':
     limit_cpu()
 
-    if True: # sloshapt
+    if False: # sloshapt
         sloshapt = pd.read_csv(
             './datasets/slosh/slosh_apt_data.csv.gz', 
             compression = 'gzip',
@@ -111,7 +111,7 @@ if __name__ == '__main__':
             'pos' : post.emergent_clusters_post(model),
             }).to_csv('./datasets/slosh/sloshapt_clusters.csv', index = False)
 
-    if True: # sloshltd
+    if False: # sloshltd
         sloshltd = pd.read_csv(
             './datasets/slosh/slosh_ltd_data.csv.gz', 
             compression = 'gzip',
@@ -166,6 +166,7 @@ if __name__ == '__main__':
         data = Data_From_Raw(slosht90_obs, decluster = False, quantile = 0.90)
         model = vb.VarPYPG(data)
         model.fit_advi()
+        postalphas = model.generate_conditional_posterior_alphas()
 
         inputs = pd.read_csv('~/git/surge/data/inputs.csv')
         finputs = inputs.iloc[model.data.I]
@@ -198,7 +199,7 @@ if __name__ == '__main__':
             'pos' : post.emergent_clusters_post(model),
             }).to_csv('./datasets/slosh/slosht90_clusters.csv', index = False)
 
-    if True: # sloshemg
+    if False: # sloshemg
         sloshemg = pd.read_csv(
             './datasets/slosh/slosh_emg_data.csv.gz', 
             compression = 'gzip',
@@ -242,7 +243,7 @@ if __name__ == '__main__':
             'pos' : post.emergent_clusters_post(model),
             }).to_csv('./datasets/slosh/sloshemg_clusters.csv', index = False)
 
-    if True: # sloshxpt
+    if False: # sloshxpt
         sloshxpt = pd.read_csv(
             './datasets/slosh/slosh_xpt_data.csv.gz', 
             compression = 'gzip',
