@@ -160,8 +160,8 @@ if __name__ == '__main__':
             './datasets/slosh/slosh_t90_data.csv.gz', 
             compression = 'gzip',
             )
-        slosht90_ids = sloshltd.T[:8].T
-        slosht90_obs = sloshltd.T[8:].values.astype(np.float64)
+        slosht90_ids = slosht90.T[:8].T
+        slosht90_obs = slosht90.T[8:].values.astype(np.float64)
 
         data = Data_From_Raw(slosht90_obs, decluster = False, quantile = 0.90)
         model = vb.VarPYPG(data)
