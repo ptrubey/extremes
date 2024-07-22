@@ -6,67 +6,141 @@ import multiprocessing as mp
 import sqlite3 as sql
 from io import BytesIO
 from time import sleep
+from collections import namedtuple
 from numpy.random import uniform
 import pickle as pkl
 
 from energy import limit_cpu, postpred_loss_full, energy_score_full_sc
 from data import Data_From_Sphere, Data_From_Raw
 import varbayes as vb
+import posterior as post
 
 raw_path  = './datasets/slosh/filtered_data.csv.gz'
 out_sql   = './datasets/slosh/results.sql'
 out_table = 'energy'
 
-def run_model_from_index(df, col_index, quantile = 0.95):
-    raw = df[:,col_index]
-    data = Data_From_Raw(raw, False, quantile = 0.95)
-    model = vb.VarPYPG(data)
+def run_slosh(
+        path_in,   path_out, 
+        delta_out, cluster_out, 
+        quantile, 
+        eta,       discount,
+        ):
+    slosh = pd.read_csv(path_in, compression = 'gzip')
+    slosh_ids = slosh.T[:8].T
+    slosh_obs = slosh.T[8:].values.astype(np.float64)
+    data = Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
+    model = vb.VarPYPG(data, eta = eta, discount = discount)
     model.fit_advi()
-    pp = model.generate_posterior_predictive_hypercube()
-    
-def run_model_from_path(path, *pargs):
-    basepath, fname = os.path.split(path)
-    raw = pd.read_csv(path).values
-    testpath = os.path.join(basepath, 'test' + fname[4:])
-    if not os.path.exists(testpath):
-        return
-    test = pd.read_csv(testpath).values
-    data = Data_From_Sphere(raw)
-    
-    model = vb.VarPYPG(data)
-    model.fit_advi()
-    pp = model.generate_posterior_predictive_hypercube(5000)
-    
-    es1 = energy_score_full_sc(pp, data.V)
-    es2 = energy_score_full_sc(pp, test)
-    esbl1 = energy_score_full_sc(data.V, test)
-    esbl2 = energy_score_full_sc(test, data.V)
-    
-    df = pd.DataFrame([{
-        'path'   : path,
-        'model'  : 'VarPYPG',
-        'es1'    : es1,
-        'es2'    : es2,
-        'esbl1'  : esbl1,
-        'esbl2'  : esbl2,
-        'time'   : model.time_elapsed
-        }])
-    conn = sql.connect(out_sql)
-    for _ in range(10):
-        try:
-            df.to_sql(out_table, conn, if_exists = 'append', index = False)
-            conn.commit()
-            break
-        except sql.OperationalError:
-            sleep(uniform())
-            pass
-    
-    conn.close()
+    deltas = model.generate_conditional_posterior_deltas()
+    smat = post.similarity_matrix(deltas)
+    graph = post.minimum_spanning_trees(smat)
+    g     = pd.DataFrame(graph)
+    g = g.rename(columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'})
+    d = {
+        'ids'    : slosh_ids,
+        'obs'    : slosh_obs,
+        'deltas' : deltas,
+        'smat'   : smat,
+        'graph'  : g,
+        }
+    with open(path_out, 'wb') as file:
+        pkl.dump(d, file)
+    pd.DataFrame({'delta' : deltas}).to_csv(delta_out, index = False)
+    pd.DataFrame({
+        'obs' : np.arange(model.N),
+        'pre' : post.emergent_clusters_pre(model),
+        'pos' : post.emergent_clusters_post(model),
+        }).to_csv(cluster_out, index = False)
     return
+
+def run_slosh_for_nclusters(data, dataname, concentrations, discounts):
+    ClusterCount = namedtuple('ClusterCount', 'eta discount ncluster')
+    counts = []
+    for eta in concentrations:
+        for discount in discounts:
+            model = vb.VarPYPG(data, eta = eta, discount = discount)
+            model.fit_advi()
+            nclusters = np.unique(post.emergent_clusters_post(model)).shape[0]
+            counts.append(ClusterCount(eta, discount, nclusters))
+    pd.DataFrame(counts).to_csv('./test/ncluster_{}.csv'.format(dataname))
+    return
+
+def instantiate_data(path, quantile):
+    slosh = pd.read_csv(path, compression = 'gzip')
+    slosh_obs = slosh.T[8:].values.astype(np.float64)
+    return Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
+
+run = {
+    't90' : True,
+    'ltd' : True,
+    'xpt' : True,
+    'apt' : True,
+    'emg' : True,
+    }
+path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
+path_out_base = './datasets/slosh/slosh_{}.pkl'
+clus_out_base = './datasets/slosh/slosh_{}_clusters.csv'
+delt_out_base = './datasets/slosh/slosh_{}_delta.csv'
+args = {
+    't90' : {
+        'path_in'     : path_in_base.format('t90'),
+        'path_out'    : path_out_base.format('t90'),
+        'cluster_out' : clus_out_base.format('t90'),
+        'delta_out'   : delt_out_base.format('t90'),
+        'quantile'    : 0.90,
+        },
+    'ltd' : {
+        'path_in'     : path_in_base.format('ltd'),
+        'path_out'    : path_out_base.format('ltd'),
+        'cluster_out' : clus_out_base.format('ltd'),
+        'delta_out'   : delt_out_base.format('ltd'),
+        'quantile'     : 0.95, 
+        },
+    'xpt' : {
+        'path_in'     : path_in_base.format('xpt'),
+        'path_out'    : path_out_base.format('xpt'),
+        'cluster_out' : clus_out_base.format('xpt'),
+        'delta_out'   : delt_out_base.format('xpt'),
+        'quantile'     : 0.95, 
+        },
+    'apt' : {
+        'path_in'     : path_in_base.format('apt'),
+        'path_out'    : path_out_base.format('apt'),
+        'cluster_out' : clus_out_base.format('apt'),
+        'delta_out'   : delt_out_base.format('apt'),
+        'quantile'     : 0.95, 
+        },
+    'emg' : {
+        'path_in'     : path_in_base.format('emg'),
+        'path_out'    : path_out_base.format('emg'),
+        'cluster_out' : clus_out_base.format('emg'),
+        'delta_out'   : delt_out_base.format('emg'),
+        'quantile'     : 0.95, 
+        },
+    }
 
 if __name__ == '__main__':
     limit_cpu()
+    # for dataset in run:
+    #     if run[dataset]:
+    #         run_slosh(**args[dataset])
 
+    concs = [0.001, 0.01, 0.1, 0.2]
+    discs = [0.001, 0.01, 0.1, 0.2]
+
+    for dataset in ['ltd','xpt','apt','emg']:
+        if run[dataset]:
+            data = instantiate_data(
+                args[dataset]['path_in'], args[dataset]['quantile'],
+                )
+            run_slosh_for_nclusters(data, dataset, concs, discs)
+
+    if run['t90']:
+        data = instantiate_data(
+            args['t90']['path_in'], args['t90']['quantile'],
+            )
+        run_slosh_for_nclusters(data, 't90', concs[2:], discs[2:])
+    
     if False: # sloshapt
         sloshapt = pd.read_csv(
             './datasets/slosh/slosh_apt_data.csv.gz', 
@@ -155,7 +229,7 @@ if __name__ == '__main__':
             'pos' : post.emergent_clusters_post(model),
             }).to_csv('./datasets/slosh/sloshltd_clusters.csv', index = False)
 
-    if True: # slosht90
+    if False: # slosht90
         slosht90 = pd.read_csv(
             './datasets/slosh/slosh_t90_data.csv.gz', 
             compression = 'gzip',
