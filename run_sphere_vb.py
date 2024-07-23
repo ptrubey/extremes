@@ -60,7 +60,7 @@ def run_model_from_path(path, *pargs):
     return
 
 if __name__ == '__main__':
-    limit_cpu()
+    # limit_cpu()
     files = glob.glob(source_path)
 
     conn = sql.connect(out_sql)
@@ -73,10 +73,18 @@ if __name__ == '__main__':
         todo = args
     conn.close()
     todo_len = len(todo)
-    for i, arg in enumerate(todo):
+    # for i, arg in enumerate(todo):
+    #     run_model_from_path_wrapper(arg)
+    pool = mp.Pool(
+        processes = mp.cpu_count() // 4, 
+        initializer = limit_cpu, 
+        maxtasksperchild = 1,
+        )
+    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
         sys.stderr.write('\rdone {0:.2%}'.format((i+1) / todo_len))
-        run_model_from_path_wrapper(arg)
-    print('\nDone!')
         
+    pool.close()
+    pool.join()
+    print('\nDone!')
 
 # EOF
