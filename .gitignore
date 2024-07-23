@@ -5,9 +5,12 @@
 **build/
 output/
 output*/
+test/
 simulated/
 ad/
+ad*/
 condsurv/
 .vscode/
 *.code-workspace
 *.png
+.Rproj.user
