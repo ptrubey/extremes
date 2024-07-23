@@ -200,6 +200,19 @@ def pt_logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
     np.nan_to_num(out, False, -np.inf)
     return
 
+def logd_projgamma_my_mt_inplace_unstable(out, aY, aAlpha, aBeta):
+    if aY.shape[0] == 0:
+        return
+    Asum = aAlpha.sum(axis = -1)
+    with np.errstate(divide = 'ignore', invalid = 'ignore'):
+        out += np.einsum('jd,jd->j', aAlpha, np.log(aBeta))[None]
+        out -= np.einsum('jd->j', loggamma(aAlpha))[None]
+        out += np.einsum('nd,jd->nj', np.log(aY), aAlpha - 1)
+        out += loggamma(Asum)[None]
+        out -= Asum[None] * np.log(np.einsum('nd,jd->nj', aY, aBeta))
+    np.nan_to_num(out, False, -np.inf)
+    return
+
 def pt_logd_projgamma_paired_yt(aY, aAlpha, aBeta):
     # def dprojgamma_log_paired_yt(aY, aAlpha, aBeta):
     """

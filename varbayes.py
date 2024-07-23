@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import projgamma as pg
-from scipy.special import digamma, softmax
+from scipy.special import digamma, softmax, logit, expit
 from scipy.stats import norm as normal
 from samplers import bincount2D_vectorized
 from data import Data, euclidean_to_psphere, euclidean_to_hypercube
@@ -12,10 +12,12 @@ import tensorflow_probability as tfp
 import time
 from tensorflow_probability import distributions as tfd
 from tensorflow_probability import bijectors as tfb
+from cUtility import pityor_cluster_sampler
 from collections import namedtuple, deque
 from tfprojgamma import ProjectedGamma
 from numpy.random import beta
-from projgamma import pt_logd_projgamma_my_mt_inplace_unstable
+from projgamma import pt_logd_projgamma_my_mt_inplace_unstable,                 \
+    logd_projgamma_my_mt_inplace_unstable
 from samplers import py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed,    \
     pt_py_sample_cluster_bgsb_fixed
 
@@ -193,6 +195,59 @@ class SurrogateModel(object):
     
     pass
 
+class WeightsInitializer(object):
+    def clean_alpha_delta(self, alpha, delta):
+        keep, delta[:] = np.unique(delta, return_inverse = True)
+        return delta, alpha[keep]
+
+    def posterior_means_of_cluster_weights(self, nj):
+        shape1 = np.zeros(nj.shape[0] - 1)
+        shape2 = np.zeros(nj.shape[0] - 1)
+        shape1 += 1 - self.discount + nj[:-1]
+        shape2 += self.concentration + np.arange(1, nj.shape[0]) * self.discount
+        shape2 += (np.cumsum(nj[::-1])[::-1] - nj)[1:]
+        mean = shape1 / (shape1 + shape2)
+        var  = (shape1 * shape2) / ((shape1 + shape2)**2 * (shape1 + shape2 + 1))
+        sd   = np.sqrt(var)
+        return mean, sd
+    
+    def invsoftplus(self, y):
+        return np.log(np.exp(y) - 1.)
+
+    def set_weights(self):
+        alpha  = np.exp(self.surrogate.vars.alpha_mu.numpy())
+        J, D   = alpha.shape
+        delta  = np.random.choice(J, size = self.data.nDat)
+        N      = delta.shape[0]
+        beta   = np.ones((J,D))
+        loglik = np.zeros((N, J))
+        for _ in range(self.niter):
+            loglik[:] = 0.
+            logd_projgamma_my_mt_inplace_unstable(loglik, self.Yp, alpha, beta)
+            unifs = np.random.uniform(size = delta.shape[0])
+            delta = pityor_cluster_sampler(
+                delta, loglik, unifs, self.concentration, self.discount,
+                )
+            delta, alpha = self.clean_alpha_delta(alpha, delta)
+            alpha = np.vstack((
+                alpha, 
+                np.random.lognormal(sigma = 3, size = (J - alpha.shape[0], D)),
+                ))
+        nj = np.bincount(delta, minlength = J)
+        mean, sd = self.posterior_means_of_cluster_weights(nj)
+        self.surrogate.vars.nu_mu.assign(logit(mean))
+        self.surrogate.vars.nu_sd.assign(self.invsoftplus(sd))
+        return
+    
+    def __init__(self, data, surrogate, concentration, discount, niter = 50):
+        self.data  = data
+        self.Yp = euclidean_to_psphere(self.data.V, 10.)
+        self.concentration = concentration
+        self.discount = discount
+        self.surrogate = surrogate
+        self.niter = niter
+        return
+
 class VarPYPG(object):
     """ 
         Variational Approximation of Pitman-Yor Mixture of Projected Gammas
@@ -255,6 +310,10 @@ class VarPYPG(object):
 
     def init_surrogate(self):
         self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
+        weightinit = WeightsInitializer(
+            self.data, self.surrogate, self.eta, self.discount,
+            )
+        weightinit.set_weights()
         return
     
     def fit_advi(self, min_steps = 5000, max_steps = 100000,
