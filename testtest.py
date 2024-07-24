@@ -16,7 +16,8 @@ sql_paths = [
     # './simulated/sphere2/result_240404.sql', # mean = -2, -2
     # './simulated/sphere2/result_240417.sql', # mean = -3, -2
     # './simulated/sphere2/result_240418.sql', # mean = -4, -3
-    './simulated/sphere2/result_240710.sql',   # mean = -4, -2
+    # './simulated/sphere2/result_240710.sql', # uniform
+    './simulated/sphere2/result_240723.sql',  # pregamed
     ]
 
 def get_table(path, table):

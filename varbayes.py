@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import projgamma as pg
-from scipy.special import digamma, softmax, logit, expit
+from scipy.special import digamma, polygamma, softmax, logit, expit
 from scipy.stats import norm as normal
 from samplers import bincount2D_vectorized
 from data import Data, euclidean_to_psphere, euclidean_to_hypercube
@@ -102,8 +102,8 @@ def stickbreak(nu):
 
     S = nu.shape[0]; J = nu.shape[1] + 1
     out = np.zeros((S,J))
-    out[:,:-1] + np.log(nu)
-    out[:, 1:] += np.cumsum(np.log(1 - nu), axis = -1)
+    out[:,:-1] += lognu
+    out[:, 1:] += np.cumsum(log1mnu, axis = -1)
     return np.exp(out)
 
 def stickbreak_tf(nu):
@@ -206,8 +206,10 @@ class WeightsInitializer(object):
         shape1 += 1 - self.discount + nj[:-1]
         shape2 += self.concentration + np.arange(1, nj.shape[0]) * self.discount
         shape2 += (np.cumsum(nj[::-1])[::-1] - nj)[1:]
-        mean = shape1 / (shape1 + shape2)
-        var  = (shape1 * shape2) / ((shape1 + shape2)**2 * (shape1 + shape2 + 1))
+        # mean = shape1 / (shape1 + shape2)
+        # var  = (shape1 * shape2) / ((shape1 + shape2)**2 * (shape1 + shape2 + 1))
+        mean = digamma(shape1) - digamma(shape2)
+        var  = polygamma(1, shape1) + polygamma(1, shape2)
         sd   = np.sqrt(var)
         return mean, sd
     
@@ -235,17 +237,18 @@ class WeightsInitializer(object):
                 ))
         nj = np.bincount(delta, minlength = J)
         mean, sd = self.posterior_means_of_cluster_weights(nj)
-        self.surrogate.vars.nu_mu.assign(logit(mean))
-        self.surrogate.vars.nu_sd.assign(self.invsoftplus(sd))
+        self.surrogate.vars.alpha_mu.assign(np.log(alpha))
+        self.surrogate.vars.nu_mu.assign(mean)
+        self.surrogate.vars.nu_sd.assign(sd)
         return
     
-    def __init__(self, data, surrogate, concentration, discount, niter = 50):
+    def __init__(self, data, surrogate, concentration, discount, nburn = 1000):
         self.data  = data
         self.Yp = euclidean_to_psphere(self.data.V, 10.)
         self.concentration = concentration
         self.discount = discount
         self.surrogate = surrogate
-        self.niter = niter
+        self.niter = nburn
         return
 
 class VarPYPG(object):
