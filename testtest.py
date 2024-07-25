@@ -13,11 +13,11 @@ sql_paths = [
     './simulated/sphere2/result_240324.sql',
     # './simulated/sphere2/result_240330.sql',
     # './simulated/sphere2/result_240331.sql',
-    # './simulated/sphere2/result_240404.sql', # mean = -2, -2
+    './simulated/sphere2/result_240404.sql',   # mean = -2, -2
     # './simulated/sphere2/result_240417.sql', # mean = -3, -2
     # './simulated/sphere2/result_240418.sql', # mean = -4, -3
-    # './simulated/sphere2/result_240710.sql', # uniform
-    './simulated/sphere2/result_240723.sql',  # pregamed
+    './simulated/sphere2/result_240710.sql',   # uniform
+    './simulated/sphere2/result_240723.sql',   # pregamed
     ]
 
 def get_table(path, table):
@@ -28,5 +28,9 @@ def get_table(path, table):
 
 dfs = [get_table(path, 'energy') for path in sql_paths]
 dfs[0] = dfs[0][dfs[0].model != 'spypg']
+dfs[0].model = 'MCMC'
+dfs[1].model = 'VB Random'
+dfs[2].model = 'VB Uniform'
+dfs[3].model = 'VB Optimal'
 df = pd.concat(dfs)
-df.to_csv('~/Desktop/performance.csv', index = False)
+df.to_csv('./simulated/sphere2/performance.csv', index = False)
