@@ -71,11 +71,14 @@ def instantiate_data(path, quantile):
     return Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
 
 run = {
-    't90' : True,
-    'ltd' : True,
-    'xpt' : True,
-    'apt' : True,
-    'emg' : True,
+    't90' : False, # True,
+    'ltd' : False, # True,
+    'xpt' : False, # True,
+    'apt' : False, # True,
+    'emg' : False, # True,
+    'loc' : True,
+    'del' : True,
+    'nyc' : True,
     }
 path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
 path_out_base = './datasets/slosh/slosh_{}.pkl'
@@ -117,6 +120,27 @@ args = {
         'delta_out'   : delt_out_base.format('emg'),
         'quantile'     : 0.95, 
         },
+    'loc' : {
+        'path_in'     : path_in_base.format('loc'),
+        'path_out'    : path_out_base.format('loc'),
+        'cluster_out' : clus_out_base.format('loc'),
+        'delta_out'   : delt_out_base.format('loc'),
+        'quantile'     : 0.95, 
+        },
+    'del' : {
+        'path_in'     : path_in_base.format('del'),
+        'path_out'    : path_out_base.format('del'),
+        'cluster_out' : clus_out_base.format('del'),
+        'delta_out'   : delt_out_base.format('del'),
+        'quantile'     : 0.95, 
+        },
+    'nyc' : {
+        'path_in'     : path_in_base.format('nyc'),
+        'path_out'    : path_out_base.format('nyc'),
+        'cluster_out' : clus_out_base.format('nyc'),
+        'delta_out'   : delt_out_base.format('nyc'),
+        'quantile'     : 0.95, 
+        },
     }
 
 if __name__ == '__main__':
@@ -128,7 +152,7 @@ if __name__ == '__main__':
     concs = [0.001, 0.01, 0.1, 0.2]
     discs = [0.001, 0.01, 0.1, 0.2]
 
-    for dataset in ['ltd','xpt','apt','emg']:
+    for dataset in run.keys(): # ['ltd','xpt','apt','emg']:
         if run[dataset]:
             data = instantiate_data(
                 args[dataset]['path_in'], args[dataset]['quantile'],
