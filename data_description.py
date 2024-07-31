@@ -4,52 +4,48 @@ import os
 import glob
 
 from data import RealData
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 def data_description():
-    path_apt  = './datasets/slosh/slosh_apt_data.csv.gz'
-    path_ltd  = './datasets/slosh/slosh_ltd_data.csv.gz'
-    path_t90  = './datasets/slosh/slosh_t90_data.csv.gz'
-    path_emg  = './datasets/slosh/slosh_emg_data.csv.gz'
-    path_xpt  = './datasets/slosh/slosh_xpt_data.csv.gz'
+    """
+    Writes data description for each dataset. 
 
-    slosh_apt = pd.read_csv(
-        path_apt, compression = 'gzip',
-        ).T[8:].values.astype(float)
-    slosh_ltd = pd.read_csv(
-        path_ltd, compression = 'gzip',
-        ).T[8:].values.astype(float)
-    slosh_t90 = pd.read_csv(
-        path_t90, compression = 'gzip',
-        ).T[8:].values.astype(float)
-    slosh_emg = pd.read_csv(
-        path_emg, compression = 'gzip',
-        ).T[8:].values.astype(float)
-    slosh_xpt = pd.read_csv(
-        path_xpt, compression = 'gzip',
-        ).T[8:].values.astype(float)
-    data_ltd = RealData(slosh_ltd, 'threshold', False, 0.95)
-    data_apt = RealData(slosh_apt, 'threshold', False, 0.95)
-    data_t90 = RealData(slosh_t90, 'threshold', False, 0.90)
-    data_emg = RealData(slosh_emg, 'threshold', False, 0.95)
-    data_xpt = RealData(slosh_xpt, 'threshold', False, 0.95)
+    Number of columns, number of rows that survive thresholding.
+    Also outputs dataset of row inclusion (survived thresholding).
+    """
+    qtl = defaultdict(lambda: 0.95)
+    qtl['t90'] = 0.9
+    dss = ['apt', 'ltd', 't90', 'emg', 'xpt', 'loc', 'del', 'nyc']
 
-    datas = [data_ltd, data_apt, data_t90, data_emg, data_xpt]
-    Ns = [data.nDat for data in datas]
-    Ss = [data.nCol for data in datas]
-    names = ['ltd','apt','t90', 'emg', 'xpt']
-    Is = []
-    for data in datas:
+    paths = {
+        ds : './datasets/slosh/slosh_{}_data.csv.gz'.format(ds) for ds in dss
+        }
+    sloss = {
+        ds : pd.read_csv(
+            paths[ds], compression = 'gzip',
+            ).T[8:].values.astype(float) 
+        for ds in dss
+        }
+    datas = {ds : RealData(sloss[ds], 'threshold', False, qtl[ds]) for ds in dss}
+    Nobsv = {ds : datas[ds].nDat for ds in dss}
+    Nlocs = {ds : datas[ds].nCol for ds in dss}
+    Is    = {}
+    for ds in dss:
         I = np.zeros(4000, dtype = int)
-        I[data.I] = 1
-        Is.append(I)
-    
-    Is = np.array(Is).T
-    desc = pd.DataFrame({'data' : names, 'N' : Ns, 'S' : Ss})
+        I[datas[ds].I] = 1
+        Is[ds] = I
+    Is = pd.DataFrame(Is)
+    desc = pd.DataFrame({
+        'data' : dss,
+        'N'    : [Nobsv[ds] for ds in dss],
+        'S'    : [Nlocs[ds] for ds in dss],
+        })    
     desc.to_csv('./test/threshold_summary.csv', index = False)
-    pd.DataFrame(Is).to_csv('./test/threshold_inclusion.csv', index = False)
+    Is.to_csv('./test/threshold_inclusion.csv', index = False)
+    return
 
 def extant_clusters():
+    """ Number of extant clusters per dataset """
     path_wildcard = './test/sloshltd_*_delta.csv'
     ParmSet = namedtuple('ParmSet', 'dataset conc disc ncluster')
 
