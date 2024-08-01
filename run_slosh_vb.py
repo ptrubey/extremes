@@ -31,6 +31,7 @@ def run_slosh(
     model = vb.VarPYPG(data, eta = eta, discount = discount)
     model.fit_advi()
     deltas = model.generate_conditional_posterior_deltas()
+    alphas = model.generate_conditional_posterior_alphas()
     smat = post.similarity_matrix(deltas)
     graph = post.minimum_spanning_trees(smat)
     g     = pd.DataFrame(graph)
@@ -38,13 +39,17 @@ def run_slosh(
     d = {
         'ids'    : slosh_ids,
         'obs'    : slosh_obs,
+        'alphas' : alphas,
         'deltas' : deltas,
         'smat'   : smat,
         'graph'  : g,
         }
     with open(path_out, 'wb') as file:
         pkl.dump(d, file)
-    pd.DataFrame({'delta' : deltas}).to_csv(delta_out, index = False)
+    pd.DataFrame(
+        deltas.T, 
+        columns = ['X{:03}'.format(i) for i in range(data.nDat)],
+        ).to_csv(delta_out, index = False)
     pd.DataFrame({
         'obs' : np.arange(model.N),
         'pre' : post.emergent_clusters_pre(model),
@@ -131,14 +136,14 @@ args = {
         'path_out'    : path_out_base.format('del'),
         'cluster_out' : clus_out_base.format('del'),
         'delta_out'   : delt_out_base.format('del'),
-        'quantile'     : 0.95, 
+        'quantile'     : 0.90, 
         },
     'nyc' : {
         'path_in'     : path_in_base.format('nyc'),
         'path_out'    : path_out_base.format('nyc'),
         'cluster_out' : clus_out_base.format('nyc'),
         'delta_out'   : delt_out_base.format('nyc'),
-        'quantile'     : 0.95, 
+        'quantile'     : 0.90, 
         },
     }
 
@@ -148,14 +153,15 @@ if __name__ == '__main__':
     #     if run[dataset]:
     #         run_slosh(**args[dataset])
 
-    concs = [0.001, 0.01, 0.1, 0.2]
-    discs = [0.001, 0.01, 0.1, 0.2]
+    # concs = [0.001, 0.01, 0.1, 0.2]
+    # discs = [0.001, 0.01, 0.1, 0.2]
 
-    for dataset in run.keys(): 
-        if run[dataset]:
-            data = instantiate_data(
-                args[dataset]['path_in'], args[dataset]['quantile'],
-                )
-            run_slosh_for_nclusters(data, dataset, concs, discs)
+    # for dataset in run.keys(): 
+    #     if run[dataset]:
+    #         data = instantiate_data(
+    #             args[dataset]['path_in'], args[dataset]['quantile'],
+    #             )
+    #         run_slosh_for_nclusters(data, dataset, concs, discs)
+    run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
 
 # EOF
