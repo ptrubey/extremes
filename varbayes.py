@@ -120,7 +120,6 @@ class SurrogateVars(object):
             )
         self.nu_sd    = tf.Variable(
             tf.ones([J-1], dtype = dtype) * -3., name = 'nu_sd',
-            # tf.random.normal([J-1], mean = -3, dtype = dtype), name = 'nu_sd',
             )
         self.alpha_mu = tf.Variable(
             tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
@@ -233,7 +232,10 @@ class WeightsInitializer(object):
             delta, alpha = self.clean_alpha_delta(alpha, delta)
             alpha = np.vstack((
                 alpha, 
-                np.random.lognormal(sigma = 3, size = (J - alpha.shape[0], D)),
+                np.random.lognormal(
+                    mean = np.log(alpha).mean(axis = 0), 
+                    sigma = np.max((np.log(alpha).std(), 2)), 
+                    size = (J - alpha.shape[0], D)),
                 ))
         nj = np.bincount(delta, minlength = J)
         mean, sd = self.posterior_means_of_cluster_weights(nj)
@@ -619,6 +621,55 @@ class MVarPYPG(VarPYPG):
         self.samples = Samples(self.J, self.S, self.nKeep)
         return
     pass
+
+class CVarPYPG(VarPYPG):
+    rate_placeholder : np.ndarray
+
+    @property
+    def curr_expected_nu(self):
+        return expit(self.surrogate.vars.nu_mu.numpy())
+
+    def sample_delta(self, alpha, nu):
+        loglik = np.zeros((self.S, self.N, self.J))
+        pt_logd_projgamma_my_mt_inplace_unstable(loglik, self.Yp, alpha, self.rate_placeholder)
+        return pt_py_sample_cluster_bgsb_fixed(log_likelihood=loglik, )
+
+    def update_nu(self, alpha):
+        delta = self.sample_delta(alpha.numpy().mean(axis = 0), self.curr_expected_nu)
+
+
+    def fit_advi(self, min_steps = 5000, max_steps = 100000,
+                 relative_tolerance = 1e-6, seed = 1):
+        optimizer = tf.optimizers.Adam(learning_rate = self.advi_learning_rate)
+        concrit = tfp.optimizer.convergence_criteria.LossNotDecreasing(
+            rtol = relative_tolerance, min_num_steps = min_steps,
+            )
+        self.start_time = time.time()
+        losses = tfp.vi.fit_surrogate_posterior(
+            target_log_prob_fn = self.log_prob_fn,
+            surrogate_posterior = self.surrogate.model,
+            optimizer = optimizer,
+            convergence_criterion = concrit,
+            sample_size = self.S,
+            seed = seed,
+            num_steps = max_steps,
+            trainable_variables = [
+                self.surrogate.vars.alpha_mu, # (J x D)
+                self.surrogate.vars.alpha_sd, # (J x D)
+                self.surrogate.vars.xi_mu,    # (D)
+                self.surrogate.vars.xi_sd,    # (D)
+                self.surrogate.vars.tau_mu,   # (D)
+                self.surrogate.vars.tau_sd,   # (D)
+                ]
+            )
+        # if num_steps and convergence criteria are both defined, then
+        # num_steps becomes max_steps.  min_steps is defined in convergence
+        # criteria object.
+        self.end_time = time.time()
+        self.time_elapsed = self.end_time - self.start_time
+        return(losses)
+
+
 
 if __name__ == '__main__':
     np.random.seed(1)

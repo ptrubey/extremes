@@ -13,7 +13,7 @@ from data import Data_From_Sphere
 import varbayes as vb
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere2/result_240723.sql'
+out_sql     = './simulated/sphere2/result_240802.sql'
 out_table   = 'energy'
 
 def run_model_from_path_wrapper(args):
