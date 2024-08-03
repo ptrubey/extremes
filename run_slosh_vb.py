@@ -75,11 +75,11 @@ def instantiate_data(path, quantile):
     return Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
 
 run = {
-    't90' : False, # True,
-    'ltd' : False, # True,
-    'xpt' : False, # True,
-    'apt' : False, # True,
-    'emg' : False, # True,
+    't90' : True,
+    'ltd' : True,
+    'xpt' : True,
+    'apt' : True,
+    'emg' : True,
     'loc' : True,
     'del' : True,
     'nyc' : True,
@@ -149,19 +149,19 @@ args = {
 
 if __name__ == '__main__':
     limit_cpu()
-    # for dataset in run:
-    #     if run[dataset]:
-    #         run_slosh(**args[dataset])
+    for dataset in run:
+        if run[dataset]:
+            run_slosh(**args[dataset])
 
-    # concs = [0.001, 0.01, 0.1, 0.2]
-    # discs = [0.001, 0.01, 0.1, 0.2]
+    concs = [0.001, 0.01, 0.1, 0.2]
+    discs = [0.001, 0.01, 0.1, 0.2]
 
-    # for dataset in run.keys(): 
-    #     if run[dataset]:
-    #         data = instantiate_data(
-    #             args[dataset]['path_in'], args[dataset]['quantile'],
-    #             )
-    #         run_slosh_for_nclusters(data, dataset, concs, discs)
-    run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
+    for dataset in run.keys(): 
+        if run[dataset]:
+            data = instantiate_data(
+                args[dataset]['path_in'], args[dataset]['quantile'],
+                )
+            run_slosh_for_nclusters(data, dataset, concs, discs)
+    # run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
 
 # EOF
