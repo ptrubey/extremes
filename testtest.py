@@ -18,6 +18,7 @@ sql_paths = [
     # './simulated/sphere2/result_240418.sql', # mean = -4, -3
     './simulated/sphere2/result_240710.sql',   # uniform
     './simulated/sphere2/result_240723.sql',   # pregamed
+    './simulated/sphere2/result_240802.sql',   # pregamed2
     ]
 
 def get_table(path, table):
@@ -31,6 +32,7 @@ dfs[0] = dfs[0][dfs[0].model != 'spypg']
 dfs[0].model = 'MCMC'
 dfs[1].model = 'VB Random'
 dfs[2].model = 'VB Uniform'
-dfs[3].model = 'VB Optimal'
+dfs[3].model = 'VB Pregamed 1'
+dfs[4].model = 'VB Pregamed 2'
 df = pd.concat(dfs)
 df.to_csv('./simulated/sphere2/performance.csv', index = False)
