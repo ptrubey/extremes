@@ -74,6 +74,12 @@ def instantiate_data(path, quantile):
     slosh_obs = slosh.T[8:].values.astype(np.float64)
     return Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
 
+concs_small = [0.001, 0.01, 0.1, 0.2]
+discs_small = [0.001, 0.01, 0.1, 0.2]
+
+concs_large = [0.1, 0.5, 2.0]
+discs_large = [0.1, 0.2, 0.3]
+
 run = {
     't90' : True,
     'ltd' : True,
@@ -95,6 +101,8 @@ args = {
         'cluster_out' : clus_out_base.format('t90'),
         'delta_out'   : delt_out_base.format('t90'),
         'quantile'    : 0.90,
+        'concs'       : concs_large,
+        'discs'       : discs_large,
         },
     'ltd' : {
         'path_in'     : path_in_base.format('ltd'),
@@ -102,6 +110,8 @@ args = {
         'cluster_out' : clus_out_base.format('ltd'),
         'delta_out'   : delt_out_base.format('ltd'),
         'quantile'     : 0.95, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
         },
     'xpt' : {
         'path_in'     : path_in_base.format('xpt'),
@@ -109,6 +119,8 @@ args = {
         'cluster_out' : clus_out_base.format('xpt'),
         'delta_out'   : delt_out_base.format('xpt'),
         'quantile'     : 0.95, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
         },
     'apt' : {
         'path_in'     : path_in_base.format('apt'),
@@ -116,6 +128,8 @@ args = {
         'cluster_out' : clus_out_base.format('apt'),
         'delta_out'   : delt_out_base.format('apt'),
         'quantile'     : 0.95, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
         },
     'emg' : {
         'path_in'     : path_in_base.format('emg'),
@@ -123,6 +137,8 @@ args = {
         'cluster_out' : clus_out_base.format('emg'),
         'delta_out'   : delt_out_base.format('emg'),
         'quantile'     : 0.95, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
         },
     'loc' : {
         'path_in'     : path_in_base.format('loc'),
@@ -130,6 +146,8 @@ args = {
         'cluster_out' : clus_out_base.format('loc'),
         'delta_out'   : delt_out_base.format('loc'),
         'quantile'     : 0.95, 
+        'concs'       : concs_large,
+        'discs'       : discs_large,
         },
     'del' : {
         'path_in'     : path_in_base.format('del'),
@@ -137,6 +155,8 @@ args = {
         'cluster_out' : clus_out_base.format('del'),
         'delta_out'   : delt_out_base.format('del'),
         'quantile'     : 0.90, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
         },
     'nyc' : {
         'path_in'     : path_in_base.format('nyc'),
@@ -144,24 +164,24 @@ args = {
         'cluster_out' : clus_out_base.format('nyc'),
         'delta_out'   : delt_out_base.format('nyc'),
         'quantile'     : 0.90, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
         },
     }
 
 if __name__ == '__main__':
     limit_cpu()
-    for dataset in run:
-        if run[dataset]:
-            run_slosh(**args[dataset])
-
-    concs = [0.001, 0.01, 0.1, 0.2]
-    discs = [0.001, 0.01, 0.1, 0.2]
-
+    # for dataset in run:
+    #     if run[dataset]:
+    #         run_slosh(**args[dataset])
     for dataset in run.keys(): 
         if run[dataset]:
             data = instantiate_data(
                 args[dataset]['path_in'], args[dataset]['quantile'],
                 )
-            run_slosh_for_nclusters(data, dataset, concs, discs)
+            run_slosh_for_nclusters(
+                data, dataset, args[dataset]['concs'], args[dataset]['discs'],
+                )
     # run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
 
 # EOF
