@@ -80,15 +80,18 @@ discs_small = [0.001, 0.01, 0.1, 0.2]
 concs_large = [0.1, 0.5, 2.0]
 discs_large = [0.1, 0.2, 0.3]
 
+concs_xlarg = [1.0, 10.0]
+discs_xlarg = [0.2, 0.35, 0.5]
+
 run = {
     't90' : True,
-    'ltd' : True,
-    'xpt' : True,
-    'apt' : True,
-    'emg' : True,
-    'loc' : True,
-    'del' : True,
-    'nyc' : True,
+    'ltd' : False,
+    'xpt' : False,
+    'apt' : False,
+    'emg' : False,
+    'loc' : False,
+    'del' : False,
+    'nyc' : False,
     }
 path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
 path_out_base = './datasets/slosh/slosh_{}.pkl'
@@ -101,8 +104,8 @@ args = {
         'cluster_out' : clus_out_base.format('t90'),
         'delta_out'   : delt_out_base.format('t90'),
         'quantile'    : 0.90,
-        'concs'       : concs_large,
-        'discs'       : discs_large,
+        'concs'       : concs_xlarg,
+        'discs'       : discs_xlarg,
         },
     'ltd' : {
         'path_in'     : path_in_base.format('ltd'),
@@ -146,8 +149,8 @@ args = {
         'cluster_out' : clus_out_base.format('loc'),
         'delta_out'   : delt_out_base.format('loc'),
         'quantile'     : 0.95, 
-        'concs'       : concs_large,
-        'discs'       : discs_large,
+        'concs'       : concs_xlarg,
+        'discs'       : discs_xlarg,
         },
     'del' : {
         'path_in'     : path_in_base.format('del'),
