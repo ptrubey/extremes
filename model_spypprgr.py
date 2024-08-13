@@ -601,7 +601,7 @@ class Chain(DirichletProcessSampler, ChainBase):
     def __init__(
             self,
             data : RegressionData,
-            prior_mu_Sigma = (0, 1, 10, 10),
+            prior_mu_Sigma = (0, 1, 1.5, 1.5),
             prior_epsilon = (0, 1), 
             p             = 10,
             concentration = 0.02,
@@ -622,8 +622,8 @@ class Chain(DirichletProcessSampler, ChainBase):
         _prior_mu_Sigma = NIWPrior(
             np.ones(self.D) * prior_mu_Sigma[0],
             prior_mu_Sigma[1],
-            prior_mu_Sigma[2],
-            np.eye(self.D) * prior_mu_Sigma[3],
+            int(self.D * prior_mu_Sigma[2]),
+            int(self.D * prior_mu_Sigma[3]) * np.eye(self.D),
             )
         self.priors = Prior(
             _prior_mu_Sigma, 
