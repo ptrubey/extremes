@@ -604,8 +604,8 @@ class Chain(DirichletProcessSampler, ChainBase):
             prior_mu_Sigma = (0, 1, 1.5, 1.5),
             prior_epsilon = (0, 1), 
             p             = 10,
-            concentration = 0.02,
-            discount      = 0.02,
+            concentration = 0.01,
+            discount      = 0.01,
             max_clust     = 100,
             fixed_effects = True,
             **kwargs
