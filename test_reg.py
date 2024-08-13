@@ -52,18 +52,19 @@ if __name__ == '__main__':
     # args = fake_argparser()
     limit_cpu()
 
-    # slosh  = pd.read_csv(
-    #     './datasets/slosh/filtered_data.csv.gz', 
-    #     compression = 'gzip',
-    #     )
-    sloshx = pd.read_csv('./datasets/slosh/slosh_params.csv')
+    params = pd.read_csv('./datasets/slosh/slosh_params.csv')
+    locats = pd.read_csv('./datasets/slosh/slosh_locs.csv')[['IDX','NearOcean','elevation']]
+    locats.IDX = locats.IDX.astype(np.int64)
     slosh  = pd.read_csv(basepath.format(args.src), compression = 'gzip')
 
     sloshltd_ids = slosh.iloc[:,:8]
+    sloshltd_idi = sloshltd_ids.set_index('IDX').join(locats.set_index('IDX')).reset_index()
+    sloshltd_idi.elevation = sloshltd_idi.elevation / 10 # decafeet
     sloshltd_obs = slosh.iloc[:,8:].T.values.astype(np.float64)
 
-    sloshx.loc[sloshx.theta < 100, 'theta'] += 360
-    sloshx_par = summarize(sloshx.values)
+    params.loc[params.theta < 100, 'theta'] += 360
+    params_par = summarize(params.values)
+    params_std = scale(params.values, params_par)
     
     try:
         locatx_par = summarize(sloshltd_ids[['x','y']].values)
@@ -72,22 +73,20 @@ if __name__ == '__main__':
         locatx_par = summarize(sloshltd_ids[['long','lat']].values)
         locatx_std = scale(sloshltd_ids[['long','lat']].values, locatx_par)
     
-    # sloshx_par.mean[-1] = locatx_par.mean[-1] # latitude values will be 
-    # sloshx_par.sd[-1]   = locatx_par.sd[-1]   # on same scale for both datasets
-    sloshx_std = scale(sloshx.values, sloshx_par)
-        
-    x_observation = sloshx_std
-    x_location    = locatx_std
+    x_observation = params_std
+    x_location    = np.hstack((
+        locatx_std, 
+        sloshltd_idi[['NearOcean','elevation']].values.astype(np.float64),
+        ))
 
-    storm_locs = list(map(tuple, sloshx[['lat','long']].values))
+    storm_locs = list(map(tuple, params[['lat','long']].values))
     slosh_locs = list(map(tuple, sloshltd_ids[['lat','long']].values))
     distances  = np.array([
         [geodesic(slosh_loc, storm_loc).miles for slosh_loc in slosh_locs] 
         for storm_loc in storm_locs
         ])
     # storms on the horizontal, locations on the vertical.
-    x_interaction = distances[:,:,None] / 100 # in decamiles.
-    # x_interaction = (sloshx_std[:,-1][None] * locatx_std[:,-1][:,None])[:,:,None]
+    x_interaction = distances[:,:,None] / 100 # in hectomiles.
     data = RegressionData(
             raw_real    = sloshltd_obs, 
             real_type   = 'threshold',
