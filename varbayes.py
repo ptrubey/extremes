@@ -669,40 +669,77 @@ class CVarPYPG(VarPYPG):
         self.time_elapsed = self.end_time - self.start_time
         return(losses)
 
-
-
-if __name__ == '__main__':
-    np.random.seed(1)
-    tf.random.set_seed(1)
-
-    if False:
-        # slosh = pd.read_csv(
-        #     './datasets/slosh/filtered_data.csv.gz', 
-        #     compression = 'gzip',
-        #     )
-        # slosh_ids = slosh.T[:8].T
-        # slosh_obs = slosh.T[8:].T
-        
-        # Result = namedtuple('Result','type ncol ndat time')
-        # sloshes = []
-
-        # for category in slosh_ids.Category.unique():
-        #     idx = (slosh_ids.Category == category)
-        #     ids = slosh_ids[idx]
-        #     obs = slosh_obs[idx].values.T.astype(np.float64)
-        #     dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
-        #     mod = MVarPYPG(dat)
-        #     mod.fit_advi()
-
-        #     sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
-        #     print(sloshes[-1])
-        
-        # pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
-        pass
+class MVNCholPrecisionTriL(tfd.TransformedDistribution):
+    def __init__(self, loc, chol_precision_tril, name = None):
+        super().__init__(
+            distribution = tfd.Independent(
+                tfd.Normal(
+                    tf.zeros_like(loc), 
+                    scale = tf.ones_like(loc),
+                    reinterpreted_batch_ndims = 1,
+                    ),
+                bijector = tfb.Chain([
+                    tfb.Shift(shift = loc), 
+                    tfb.Invert(tfb.ScaleMatvecTriL(
+                        scale_tril = chol_precision_tril, adjoint = True,
+                        ))
+                    ])
+                ),
+                name = name,
+            )
 
     raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
     dat = Data(raw, real_vars = np.arange(raw.shape[1]), quantile = 0.95)
     mod = VarPYPG(dat)
     mod.fit_advi()
+
+def compute_shape(x_obs, x_loc, x_int, theta, epsilon):
+    x_obs_reshape = [*theta.shape[:-1], *x_obs.shape]
+    x_loc_reshape = [*theta.shape[:-1], *x_loc.shape]
+    x_int_reshape = [*theta.shape[:-1], *x_int.shape]
+
+
+
+    batch_ndims = len(theta.shape) - 2
+    out = tf.zeros((*theta.shape[:-1], x_obs.shape[0], x_loc.shape[0]))
+
+class VarPYPGR(VarPYPG):
+    def init_model(self):
+        self.model = tfd.JointDistributionNamed(dict(
+            mu    = tfd.MVNCholPrecisionTriL(),
+            Sigma = tfd.InverseWishart(),
+            theta = tfd.MVNCholPrecisionTriL(),
+
+        ))
+    pass
+
+if __name__ == '__main__':
+    if False:
+        np.random.seed(1)
+        tf.random.set_seed(1)
+
+        slosh = pd.read_csv(
+            './datasets/slosh/filtered_data.csv.gz', 
+            compression = 'gzip',
+            )
+        slosh_ids = slosh.T[:8].T
+        slosh_obs = slosh.T[8:].T
+        
+        Result = namedtuple('Result','type ncol ndat time')
+        sloshes = []
+
+        for category in slosh_ids.Category.unique():
+            idx = (slosh_ids.Category == category)
+            ids = slosh_ids[idx]
+            obs = slosh_obs[idx].values.T.astype(np.float64)
+            dat = Data(obs, real_vars = np.arange(obs.shape[1]), quantile = 0.95)
+            mod = MVarPYPG(dat)
+            mod.fit_advi()
+
+            sloshes.append(Result(category, dat.nCol, dat.nDat, mod.time_elapsed))
+            print(sloshes[-1])
+        
+        pd.DataFrame(sloshes).to_csv('./datasets/slosh/times.csv', index = False)
+        pass
 
 # EOF
