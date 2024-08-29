@@ -131,9 +131,9 @@ def emergent_clusters_pre(model : vb.VarPYPG):
     """
     Assumes that label-switching has been corrected.
     Computes posterior cluster assignment
-        1:  \alpha_{jl}^* = mean(\alpha_{jl}^{(s)} for s = 1,...,S)
-        2:  \nu_{j} = mean(\nu_{js} for s = 1,...,S)
-        3:  \delta_i^* = \argmax(cluster prob given alpha^*, nu^*)
+        1:  alpha_{jl}^* = mean(alpha_{jl}^{(s)} for s = 1,...,S)
+        2:  nu_{j} = mean(nu_{js} for s = 1,...,S)
+        3:  delta_i^* = argmax(cluster prob given alpha^*, nu^*)
     """
     albar = np.zeros((model.J, model.D))
     nubar = np.zeros((model.J - 1))
@@ -161,8 +161,8 @@ def emergent_clusters_post(model : vb.VarPYPG):
     """
     Assumes that label-switching has been corrected.
     Computes posterior cluster assignment
-        1: \delta_{is} ~ P(cluster_prob | alpha_s, nu_s)
-        2: \delta_i^* = \argmax delta_i / S
+        1: delta_{is} ~ P(cluster_prob | alpha_s, nu_s)
+        2: delta_i^* = \argmax delta_i / S
     """
     deltas = model.generate_conditional_posterior_deltas()
     assert deltas.shape[1] == 1000
