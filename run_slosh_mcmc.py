@@ -190,7 +190,9 @@ if __name__ == '__main__':
                 args[dataset]['path_in'], args[dataset]['quantile'],
                 )
             run_slosh_for_nclusters(
-                data, dataset, args[dataset]['concs'], args[dataset]['discs'],
+                data, dataset, 
+                args[dataset]['concs'], args[dataset]['discs'],
+                True,
                 )
     # run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
 
