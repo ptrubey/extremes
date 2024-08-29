@@ -11,7 +11,8 @@ import pickle as pkl
 
 from energy import limit_cpu
 from data import Data_From_Raw
-import varbayes as vb
+# import varbayes as vb
+from model_spypprg import Chain, Result
 import posterior as post
 
 raw_path  = './datasets/slosh/filtered_data.csv.gz'
@@ -28,10 +29,13 @@ def run_slosh(
     slosh_ids = slosh.T[:8].T
     slosh_obs = slosh.T[8:].values.astype(np.float64)
     data = Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
-    model = vb.VarPYPG(data, eta = eta, discount = discount)
-    model.fit_advi()
-    deltas = model.generate_conditional_posterior_deltas()
-    alphas = model.generate_conditional_posterior_alphas()
+    model = Chain(data, concentration=eta, discount = discount)
+    model.sample(50000)
+    out = BytesIO()
+    model.write_to_disk(out, 40000, 10)
+    res = Result(out)
+    deltas = model.samples.delta
+    # alphas = model.generate_conditional_posterior_alphas()
     smat = post.similarity_matrix(deltas)
     graph = post.minimum_spanning_trees(smat)
     g     = pd.DataFrame(graph)
@@ -39,7 +43,7 @@ def run_slosh(
     d = {
         'ids'    : slosh_ids,
         'obs'    : slosh_obs,
-        'alphas' : alphas,
+        # 'alphas' : alphas,
         'deltas' : deltas,
         'smat'   : smat,
         'graph'  : g,
@@ -57,16 +61,19 @@ def run_slosh(
         }).to_csv(cluster_out, index = False)
     return
 
-def run_slosh_for_nclusters(data, dataname, concentrations, discounts):
+def run_slosh_for_nclusters(data, dataname, concentrations, discounts, verbose = False):
     ClusterCount = namedtuple('ClusterCount', 'eta discount ncluster')
     counts = []
     for eta in concentrations:
         for discount in discounts:
-            model = vb.VarPYPG(data, eta = eta, discount = discount)
-            model.fit_advi()
-            nclusters = np.unique(post.emergent_clusters_post(model)).shape[0]
+            model = Chain(data, concentration = eta, discount = discount)
+            model.sample(50000, verbose = verbose)
+            out = BytesIO()
+            model.write_to_disk(out, 40000, 10)
+            res = Result(out)
+            nclusters = pd.DataFrame(res.samples.delta).nunique(axis = 1).mean()
             counts.append(ClusterCount(eta, discount, nclusters))
-    pd.DataFrame(counts).to_csv('./test/ncluster_{}.csv'.format(dataname))
+    pd.DataFrame(counts).to_csv('./test/ncluster_mc_{}.csv'.format(dataname))
     return
 
 def instantiate_data(path, quantile):
@@ -94,9 +101,9 @@ run = {
     # 'nyc' : True,
     }
 path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
-path_out_base = './datasets/slosh/slosh_{}.pkl'
-clus_out_base = './datasets/slosh/slosh_{}_clusters.csv'
-delt_out_base = './datasets/slosh/slosh_{}_delta.csv'
+path_out_base = './datasets/slosh/slosh_{}_mc.pkl'
+clus_out_base = './datasets/slosh/slosh_{}_mc_clusters.csv'
+delt_out_base = './datasets/slosh/slosh_{}_mc_delta.csv'
 args = {
     't90' : {
         'path_in'     : path_in_base.format('t90'),

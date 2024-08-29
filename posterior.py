@@ -170,7 +170,7 @@ def emergent_clusters_post(model : vb.VarPYPG):
     for i in range(model.J):
         d_arr[:,:,i] = (deltas == i) * 1
     return(np.argmax(d_arr.mean(axis = 1), axis = 1))
-    
+   
 if __name__ == '__main__':
     import pandas as pd
     # knock off 5 edges    
