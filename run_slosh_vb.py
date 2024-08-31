@@ -14,15 +14,9 @@ from data import Data_From_Raw
 import varbayes as vb
 import posterior as post
 
-raw_path  = './datasets/slosh/filtered_data.csv.gz'
-out_sql   = './datasets/slosh/results.sql'
-out_table = 'energy'
-
 def run_slosh(
-        path_in,   path_out, 
-        delta_out, cluster_out, 
-        quantile, 
-        eta,       discount,
+        path_in, path_out, delta_out, cluster_out, 
+        quantile, eta, discount, **kwargs,
         ):
     slosh = pd.read_csv(path_in, compression = 'gzip')
     slosh_ids = slosh.T[:8].T
@@ -66,7 +60,7 @@ def run_slosh_for_nclusters(data, dataname, concentrations, discounts):
             model.fit_advi()
             nclusters = np.unique(post.emergent_clusters_post(model)).shape[0]
             counts.append(ClusterCount(eta, discount, nclusters))
-    pd.DataFrame(counts).to_csv('./test/ncluster_{}.csv'.format(dataname))
+    pd.DataFrame(counts).to_csv('./test/ncluster_vb_{}.csv'.format(dataname))
     return
 
 def instantiate_data(path, quantile):
@@ -94,9 +88,9 @@ run = {
     # 'nyc' : True,
     }
 path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
-path_out_base = './datasets/slosh/slosh_{}.pkl'
-clus_out_base = './datasets/slosh/slosh_{}_clusters.csv'
-delt_out_base = './datasets/slosh/slosh_{}_delta.csv'
+path_out_base = './datasets/slosh/slosh_{}_vb.pkl'
+clus_out_base = './datasets/slosh/slosh_{}_vb_clusters.csv'
+delt_out_base = './datasets/slosh/slosh_{}_vb_delta.csv'
 args = {
     't90' : {
         'path_in'     : path_in_base.format('t90'),
@@ -112,7 +106,7 @@ args = {
         'path_out'    : path_out_base.format('ltd'),
         'cluster_out' : clus_out_base.format('ltd'),
         'delta_out'   : delt_out_base.format('ltd'),
-        'quantile'     : 0.95, 
+        'quantile'    : 0.95, 
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
@@ -121,7 +115,7 @@ args = {
         'path_out'    : path_out_base.format('xpt'),
         'cluster_out' : clus_out_base.format('xpt'),
         'delta_out'   : delt_out_base.format('xpt'),
-        'quantile'     : 0.95, 
+        'quantile'    : 0.95, 
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
@@ -130,7 +124,7 @@ args = {
         'path_out'    : path_out_base.format('apt'),
         'cluster_out' : clus_out_base.format('apt'),
         'delta_out'   : delt_out_base.format('apt'),
-        'quantile'     : 0.95, 
+        'quantile'    : 0.95, 
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
@@ -139,7 +133,7 @@ args = {
         'path_out'    : path_out_base.format('emg'),
         'cluster_out' : clus_out_base.format('emg'),
         'delta_out'   : delt_out_base.format('emg'),
-        'quantile'     : 0.95, 
+        'quantile'    : 0.95, 
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
@@ -148,7 +142,7 @@ args = {
         'path_out'    : path_out_base.format('loc'),
         'cluster_out' : clus_out_base.format('loc'),
         'delta_out'   : delt_out_base.format('loc'),
-        'quantile'     : 0.95, 
+        'quantile'    : 0.95, 
         'concs'       : concs_xlarg,
         'discs'       : discs_xlarg,
         },
@@ -157,7 +151,7 @@ args = {
         'path_out'    : path_out_base.format('del'),
         'cluster_out' : clus_out_base.format('del'),
         'delta_out'   : delt_out_base.format('del'),
-        'quantile'     : 0.90, 
+        'quantile'    : 0.90, 
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
@@ -166,7 +160,7 @@ args = {
         'path_out'    : path_out_base.format('nyc'),
         'cluster_out' : clus_out_base.format('nyc'),
         'delta_out'   : delt_out_base.format('nyc'),
-        'quantile'     : 0.90, 
+        'quantile'    : 0.90, 
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
@@ -174,17 +168,15 @@ args = {
 
 if __name__ == '__main__':
     limit_cpu()
-    # for dataset in run:
-    #     if run[dataset]:
-    #         run_slosh(**args[dataset])
+    
     for dataset in run.keys(): 
         if run[dataset]:
             data = instantiate_data(
                 args[dataset]['path_in'], args[dataset]['quantile'],
                 )
-            run_slosh_for_nclusters(
-                data, dataset, args[dataset]['concs'], args[dataset]['discs'],
-                )
-    # run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
+            # run_slosh_for_nclusters(
+            #     data, dataset, args[dataset]['concs'], args[dataset]['discs'],
+            #     )
+            run_slosh(**{**args[dataset], 'eta' : 0.1, 'discount' : 0.1})
 
 # EOF
