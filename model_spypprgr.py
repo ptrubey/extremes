@@ -636,6 +636,17 @@ class Chain(DirichletProcessSampler, ChainBase):
         return
 
 class Result(ChainBase):
+    def generate_conditional_posterior_predictive_alphas(self):
+        alphas = []
+        for i in range(self.nSamp):
+            shape = self.compute_shape_theta(
+                self.samples.delta[i], 
+                self.samples.theta[i], 
+                self.samples.epsilon[i],
+                )
+            alphas.append(shape)
+        return np.stack(alphas)
+    
     def generate_conditional_posterior_predictive_gammas(self):
         """ rho | zeta, delta + W ~ Gamma(rho | zeta[delta] + W) """
         gammas = []
