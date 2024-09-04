@@ -55,8 +55,8 @@ def run_slosh_vb(
     deltas = model.generate_conditional_posterior_deltas()
     alphas = model.generate_conditional_posterior_alphas()
 
-    smat   = post.similarity_matrix(deltas)
-    graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
+    smat   = post.similarity_matrix(deltas.T)
+    graph  = pd.DataFrame(post.minimum_spanning_trees(deltas.T)).rename(
         columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'},
         )
     pd.DataFrame(
