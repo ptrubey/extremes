@@ -22,6 +22,8 @@ graph_out_base = './datasets/slosh/{}/{}_graph.csv.gz'
 slosh_out_base = './datasets/slosh/{}/{}_locinfo.csv.gz'
 theta_out_base = './datasets/slosh/{}/{}_theta.csv.gz'
 
+regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
+
 args = {
     'dataset'   : 'del',
     'quantile'  : 0.90, 
@@ -142,6 +144,10 @@ def run_slosh_reg(
     graph_out_path = graph_out_base.format(dataset, 'reg')
     theta_out_path = theta_out_base.format(dataset, 'reg')
     slosh_out_path = slosh_out_base.format(dataset, 'reg')
+
+    reobs_out_path = regre_out_base.format(dataset, 'reg', 'obs')
+    reloc_out_path = regre_out_base.format(dataset, 'reg', 'loc')
+    reint_out_path = regre_out_base.format(dataset, 'reg', 'int')
     
     params = pd.read_csv('./datasets/slosh/slosh_params.csv')
     locats = pd.read_csv('./datasets/slosh/slosh_locs.csv')[['IDX','NearOcean','elevation']]
@@ -191,14 +197,16 @@ def run_slosh_reg(
         )
     model.sample(50000, verbose = True)
     out = BytesIO()
-    model.write_to_disk(out, 40000, 10)
+    model.write_to_disk(out, 40001, 10)
     res = mcr.Result(out)
 
     deltas = res.samples.delta
-    thetas = res.samples.theta
+    thetas = np.vstack([
+        np.hstack((np.ones(theta.shape[0]).reshape(-1,1) * i, theta))
+        for i, theta in 
+        enumerate(res.samples.theta)
+        ])
     alphas = res.generate_conditional_posterior_predictive_alphas()
-
-    raise
 
     alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 1))
     alphaM[:,:,1:] = alphas
@@ -216,21 +224,32 @@ def run_slosh_reg(
     pd.DataFrame(deltas).to_csv(
         delta_out_path, index = False, compression = 'gzip',
         )
-    pd.DataFrame(alphas).to_csv(
-        alpha_out_path, index = False, compression = 'gzip',
-        )
-    pd.DataFrame(thetas).to_csv(
-        theta_out_path, index = False, compression = 'gzip',
-        )
+    pd.DataFrame(
+        thetas,
+        columns = ['iter'] + ['T{:03}'.format(i) for i in range(thetas.shape[1] - 1)]
+        ).to_csv(
+            theta_out_path, index = False, compression = 'gzip',
+            )
     graph.to_csv(graph_out_path, index = False, compression = 'gzip')
     pd.DataFrame(
         smat,
         columns = ['S{:03}'.format(i) for i in range(data.nDat)]
         ).to_csv(clust_out_path, index = False, compression = 'gzip')
-    slosh_ids.loc[data.I].to_csv(
-        slosh_out_path, index = False, compression = 'gzip',
+    pd.DataFrame(data.X.obs).to_csv(
+        reobs_out_path, index = False, compression='gzip',
         )
+    pd.DataFrame(data.X.loc).to_csv(
+        reloc_out_path, index = False, compression = 'gzip',
+        )
+    pd.DataFrame(data.X.int.squeeze()).to_csv(
+        reint_out_path, index = False, compression = 'gzip',
+        )
+    return
     
+
+
+
+
 if __name__ == '__main__':
     # run_slosh_vb(**args)
     # run_slosh_mc(**args)

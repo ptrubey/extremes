@@ -606,7 +606,7 @@ class Chain(DirichletProcessSampler, ChainBase):
             p             = 10,
             concentration = 0.01,
             discount      = 0.01,
-            max_clust     = 100,
+            max_clust     = 200,
             fixed_effects = True,
             **kwargs
             ):
