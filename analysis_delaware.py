@@ -268,7 +268,8 @@ def run_slosh_reg(
 
 if __name__ == '__main__':
     run_slosh_vb(**args)
-    # run_slosh_mc(**args)
-    # run_slosh_reg(**args)
+    run_slosh_mc(**args)
+    run_slosh_reg(**{**args, 'fixed' : False})
+    run_slosh_reg(**{**args, 'fixed' : True})
 
 # EOF
