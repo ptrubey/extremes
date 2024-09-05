@@ -181,8 +181,8 @@ def euclidean_dmat_per_obs(conditional, postpred, pool):
 
 def hypercube_dmat_per_obs(conditional, postpred, pool):
     """
-    conditional : (n, s_c, d)  in S_{\infty}^{d-1}
-    postpred    : (s_p, d)     in S_{\infty}^{d-1}
+    conditional : (n, s_c, d)  in S_{infty}^{d-1}
+    postpred    : (s_p, d)     in S_{infty}^{d-1}
     pool        : multiprocessing.Pool
     """
     cshape = conditional.shape; pshape = postpred.shape
