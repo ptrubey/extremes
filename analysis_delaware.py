@@ -223,7 +223,7 @@ def run_slosh_reg(
     alphaM[:,:,2:] = alphas
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
     alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
-    smat   = post.similarity_matrix(deltas)
+    smat   = post.similarity_matrix(deltas.T)
     graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
         columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
         )
@@ -267,8 +267,8 @@ def run_slosh_reg(
 
 
 if __name__ == '__main__':
-    run_slosh_vb(**args)
-    run_slosh_mc(**args)
+    # run_slosh_vb(**args)
+    # run_slosh_mc(**args)
     run_slosh_reg(**{**args, 'fixed' : False})
     run_slosh_reg(**{**args, 'fixed' : True})
 
