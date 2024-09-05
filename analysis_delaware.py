@@ -23,6 +23,7 @@ slosh_out_base = './datasets/slosh/{}/{}_locinfo.csv.gz'
 theta_out_base = './datasets/slosh/{}/{}_theta.csv.gz'
 
 regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
+fixed_out_base = './datasets/slosh/{}/{}_epsilon.csv.gz'
 
 args = {
     'dataset'   : 'del',
@@ -55,7 +56,7 @@ def run_slosh_vb(
     deltas = model.generate_conditional_posterior_deltas()
     alphas = model.generate_conditional_posterior_alphas()
 
-    smat   = post.similarity_matrix(deltas.T)
+    smat   = post.similarity_matrix(deltas)
     graph  = pd.DataFrame(post.minimum_spanning_trees(deltas.T)).rename(
         columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'},
         )
@@ -64,12 +65,15 @@ def run_slosh_vb(
         columns = ['X{:03}'.format(i) for i in range(data.nDat)],
         ).to_csv(delta_out_path, index = False, compression = 'gzip')
     graph.to_csv(graph_out_path, index = False, compression = 'gzip')
-    alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 1))
-    alphaM[:,:,1:] = alphas
+    alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 2))
+    alphaM[:,:,2:] = alphas
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
+    alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
     pd.DataFrame(
         alphaM.reshape(-1,alphaM.shape[2]), 
-        columns = ['Obs'] + ['A{:03}'.format(i) for i in range(alphas.shape[2])]
+        columns = ['storm','iter'] + [
+            'A{:03}'.format(i) for i in range(alphas.shape[2])
+            ]
         ).to_csv(alpha_out_path, index = False, compression = 'gzip')
     pd.DataFrame(
         smat,
@@ -116,12 +120,15 @@ def run_slosh_mc(
         columns = ['X{:03}'.format(i) for i in range(data.nDat)],
         ).to_csv(delta_out_path, index = False, compression = 'gzip')
     graph.to_csv(graph_out_path, index = False, compression = 'gzip')
-    alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 1))
-    alphaM[:,:,1:] = alphas
+    alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 2))
+    alphaM[:,:,2:] = alphas
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
+    alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
     pd.DataFrame(
-        alphaM.reshape(-1,alphaM.shape[2]), 
-        columns = ['A{:03}'.format(i) for i in range(alphas.shape[2])]
+        alphaM.reshape(-1, alphaM.shape[2]), 
+        columns = ['iter','storm'] + [
+            'A{:03}'.format(i) for i in range(alphas.shape[2])
+            ]
         ).to_csv(alpha_out_path, index = False)
     pd.DataFrame(
         smat,
@@ -136,18 +143,21 @@ def run_slosh_reg(
         quantile  : float, 
         conc      : float, 
         disc      : float,
+        fixed     : bool,
         ):
     data_in_path = data_in_base.format(dataset)
-    alpha_out_path = alpha_out_base.format(dataset, 'reg')
-    delta_out_path = delta_out_base.format(dataset, 'reg')
-    clust_out_path = clust_out_base.format(dataset, 'reg')
-    graph_out_path = graph_out_base.format(dataset, 'reg')
-    theta_out_path = theta_out_base.format(dataset, 'reg')
-    slosh_out_path = slosh_out_base.format(dataset, 'reg')
+    alpha_out_path = alpha_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    delta_out_path = delta_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    clust_out_path = clust_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    graph_out_path = graph_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    theta_out_path = theta_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    slosh_out_path = slosh_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    fixed_out_path = fixed_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
 
-    reobs_out_path = regre_out_base.format(dataset, 'reg', 'obs')
-    reloc_out_path = regre_out_base.format(dataset, 'reg', 'loc')
-    reint_out_path = regre_out_base.format(dataset, 'reg', 'int')
+    reobs_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'obs')
+    reloc_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'loc')
+    reint_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'int')
+
     
     params = pd.read_csv('./datasets/slosh/slosh_params.csv')
     locats = pd.read_csv('./datasets/slosh/slosh_locs.csv')[['IDX','NearOcean','elevation']]
@@ -194,6 +204,7 @@ def run_slosh_reg(
         p = 10, 
         concentration = conc, 
         discount = disc,
+        fixed_effects = fixed
         )
     model.sample(50000, verbose = True)
     out = BytesIO()
@@ -208,18 +219,23 @@ def run_slosh_reg(
         ])
     alphas = res.generate_conditional_posterior_predictive_alphas()
 
-    alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 1))
-    alphaM[:,:,1:] = alphas
+    alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 2))
+    alphaM[:,:,2:] = alphas
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
-    
+    alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
     smat   = post.similarity_matrix(deltas)
     graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
         columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
         )
-    
+    if fixed:
+        pd.DataFrame(res.samples.epsilon).to_csv(
+            fixed_out_path, index = False, compression = 'gzip',
+            )
     pd.DataFrame(
-        alphaM.reshape(-1,alphas.shape[2]), 
-        columns = ['A{:03}'.format(i) for i in range(alphas.shape[2])]
+        alphaM.reshape(-1, alphaM.shape[2]), 
+        columns = ['iter','storm'] + [
+            'A{:03}'.format(i) for i in range(alphas.shape[2])
+            ]
         ).to_csv(alpha_out_path, index = False)
     pd.DataFrame(deltas).to_csv(
         delta_out_path, index = False, compression = 'gzip',
@@ -252,7 +268,7 @@ def run_slosh_reg(
 
 if __name__ == '__main__':
     run_slosh_vb(**args)
-    run_slosh_mc(**args)
-    run_slosh_reg(**args)
+    # run_slosh_mc(**args)
+    # run_slosh_reg(**args)
 
 # EOF
