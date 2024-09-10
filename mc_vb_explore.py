@@ -131,20 +131,7 @@ class UnivariateGammaGammaVB(object):
             + (self.a - 1)
             - self.b * alpha
             )
-        # dtau = (
-        #     + alpha * self.lYs * ete
-        #     - self.n * digamma(alpha) * alpha * ete
-        #     + (self.a - 1) * ete
-        #     - b * alpha * ete
-        #     ).mean()
         dtau = dmu * ete
-        # dsigma = (
-        #     + alpha * self.lYs * epsilon
-        #     - self.n * digamma(alpha) * alpha * epsilon
-        #     + (self.a - 1) * epsilon
-        #     - b * alpha * epsilon
-        #     ).mean()
-        # return np.array((dmu, dsigma))
         return np.array((dmu.mean(), dtau.mean()))
 
     def __init__(self, Y, a, b, ns = 20):
@@ -164,22 +151,19 @@ if __name__ == '__main__':
     
     mc = UnivariateGammaGammaMC(Y, a, b)
     mc.sample(5000)
-    # print(np.log(mc.samples.alpha[-2000:]).mean())
-    # print(np.log(mc.samples.alpha[-2000:]).std())
     vb = UnivariateGammaGammaVB(Y, a, b)
 
     def dloss(theta):
         return -vb.gradient(*theta)
     
-    adam = Adam(np.array((0.,0.)), dloss, rate = 1e-1, decay1 = 0.9, decay2 = 0.999)
+    adam = Adam(np.array((0.,0.)), dloss, rate = 1e-2, decay1 = 0.9, decay2 = 0.999)
     adam.optimize(100)
     print(adam.theta)
+    adam.optimize(100)
+    print(adam.theta)
+    adam.optimize(100)
+    print(adam.theta)
+    adam.optimize(10000)
+    print(adam.theta)
     
-    
-    # mc = UnivariateGammaGammaMC(Y, a, b)
-    # mc.sample(5000)
-
-    # plt.plot(np.arange(5000), mc.samples.alpha[1:])
-    # plt.show()
-
 # EOF
