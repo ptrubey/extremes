@@ -261,10 +261,6 @@ def run_slosh_reg(
         reint_out_path, index = False, compression = 'gzip',
         )
     return
-    
-
-
-
 
 if __name__ == '__main__':
     # run_slosh_vb(**args)
