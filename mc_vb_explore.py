@@ -170,7 +170,10 @@ class UnivariateResGammaGammaVB(object):
             - self.b * alpha
             )
         dtau = dmu * ete
-        return np.array((dmu.mean(axis = -1), dtau.mean(axis = -1)))
+        return np.array((
+            dmu.mean(axis = -1) - 1, 
+            dtau.mean(axis = -1) - 1 - np.exp(2 * tau)
+            ))
 
     def __init__(self, Y, a, b, ns = 20):
         self.Y = Y
@@ -187,7 +190,9 @@ class UnivariateGammaGammaVB(UnivariateResGammaGammaVB):
         epsilon = normal(size = self.ns)
         ete = np.exp(tau) * epsilon
         alpha = np.exp(mu + ete)
+        # + dlogf(t(eps|mu,tau), ...)
         dmu = (
+           
             + alpha * self.lYs
             - self.n * digamma(alpha) * alpha
             + (self.a - 1)
@@ -196,7 +201,10 @@ class UnivariateGammaGammaVB(UnivariateResGammaGammaVB):
             - (self.n * alpha + self.c) * np.log(self.Ys + self.d)
             )
         dtau = dmu * ete
-        return np.array((dmu.mean(axis = -1), dtau.mean(axis = -1)))
+        # - dE[logq(alpha|mu,tau)]
+        dmu -= -1
+        dtau -= (-1 - np.exp(2 * tau))
+        return np.array((dmu.mean(axis = -1),dtau.mean(axis = -1)))
     
     def __init__(self, Y, a, b, c, d, ns = 20):
         super().__init__(Y, a, b, ns)
@@ -206,7 +214,7 @@ class UnivariateGammaGammaVB(UnivariateResGammaGammaVB):
     pass
 
 if __name__ == '__main__':
-    Y = gamma(shape = 5, scale = 1, size = 10)
+    Y = gamma(shape = 1e-2, scale = 1, size = 10)
     abcd = (1,1,1,1)
     
     # mc = UnivariateResGammaGammaMC(Y, a, b)
@@ -226,13 +234,16 @@ if __name__ == '__main__':
         decay1 = 0.9, 
         decay2 = 0.999,
         )
-    adam.optimize(100)
+    print('Initial')
     print(adam.theta)
-    adam.optimize(100)
-    print(adam.theta)
-    adam.optimize(100)
-    print(adam.theta)
-    adam.optimize(10000)
-    print(adam.theta)
+    print('Optimizing 100 intervals')
+    for _ in range(10):
+        adam.optimize(100)
+        print(adam.theta)
+    print('Optimizing 10000 intervals')
+    for _ in range(100):
+        adam.optimize(10000)
+        print(adam.theta)
+    raise
     
 # EOF
