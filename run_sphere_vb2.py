@@ -30,7 +30,7 @@ def run_model_from_path(path, modeltype):
     
     model = Chain(data, p = 10, gibbs_samples = 1000,)
     try:
-        model.sample(5000, verbose = True)
+        model.sample(5000)
     except: # (AssertionError, FloatingPointError, ValueError):
         print('\nFailed: {}\n'.format(path))
         return 
