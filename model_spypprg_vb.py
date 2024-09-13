@@ -46,9 +46,9 @@ def stickbreak(nu):
         Stickbreaking cluster probability
         nu : (S x (J - 1))
     """
-    lognu = np.log(nu)
-    log1mnu = np.log(1 - nu)
-
+    with np.errstate(divide = 'ignore'):
+        lognu = np.log(nu)
+        log1mnu = np.log(1 - nu)
     S = nu.shape[0]; J = nu.shape[1] + 1
     out = np.zeros((S,J))
     out[:,:-1] += lognu
@@ -451,9 +451,10 @@ class Result(object):
         Sprob = np.cumsum(probs, axis = -1)
         unis  = uniform(size = (self.nSamp, n_per_sample))
         for s in range(self.nSamp):
-            delta = np.searchsorted(unis[s], probs[s])
+            delta = np.searchsorted(Sprob[s], unis[s])
             zetas.append(self.samples.zeta[s][delta])
-        return np.vstack(zetas)
+        zetas = np.vstack(zetas)
+        return(zetas)
     
     def generate_posterior_predictive_gammas(self, n_per_sample = 10):
         zetas = self.generate_posterior_predictive_zetas(n_per_sample)

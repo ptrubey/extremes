@@ -19,7 +19,7 @@ out_table   = 'energy'
 def run_model_from_path_wrapper(args):
     return run_model_from_path(*args)
 
-def run_model_from_path(path, modeltype):
+def run_model_from_path(path, modeltype, verbose = False):
     basepath, fname = os.path.split(path)
     raw = pd.read_csv(path).values
     testpath = os.path.join(basepath, 'test' + fname[4:])
@@ -30,7 +30,7 @@ def run_model_from_path(path, modeltype):
     
     model = Chain(data, p = 10, gibbs_samples = 1000, max_clusters = 100)
     try:
-        model.sample(5000)
+        model.sample(5000, verbose = verbose)
     except: # (AssertionError, FloatingPointError, ValueError):
         print('\nFailed: {}\n'.format(path))
         return 
@@ -75,7 +75,7 @@ def argparser():
 if __name__ == '__main__':
     files = glob.glob(source_path)
 
-    # run_model_from_path(files[0], 'MVarPYPG')
+    # run_model_from_path(files[0], 'MVarPYPG', True)
     pool = mp.Pool(
         processes = mp.cpu_count(), 
         initializer = limit_cpu, 
