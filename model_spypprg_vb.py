@@ -460,7 +460,7 @@ class Result(object):
         return gamma(shape = zetas)
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 10):
-        gammas = self.generate_conditional_posterior_predictive_gammas(n_per_sample)
+        gammas = self.generate_posterior_predictive_gammas(n_per_sample)
         return euclidean_to_hypercube(gammas)
 
     def load_data(self, path):
