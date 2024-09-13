@@ -452,8 +452,8 @@ class Result(object):
         unis  = uniform(size = (self.nSamp, n_per_sample))
         for s in range(self.nSamp):
             delta = np.searchsorted(unis[s], probs[s])
-            zetas.append(self.samples.zeta[delta])
-        return np.stack(zetas)
+            zetas.append(self.samples.zeta[s][delta])
+        return np.vstack(zetas)
     
     def generate_posterior_predictive_gammas(self, n_per_sample = 10):
         zetas = self.generate_posterior_predictive_zetas(n_per_sample)
