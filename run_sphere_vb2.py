@@ -30,7 +30,7 @@ def run_model_from_path(path, modeltype):
     
     model = Chain(data, p = 10, gibbs_samples = 1000,)
     try:
-        model.sample(5000)
+        model.sample(5000, verbose = True)
     except: # (AssertionError, FloatingPointError, ValueError):
         print('\nFailed: {}\n'.format(path))
         return 
@@ -75,6 +75,7 @@ def argparser():
 if __name__ == '__main__':
     files = glob.glob(source_path)
 
+    # run_model_from_path(files[0], 'MVarPYPG')
     pool = mp.Pool(
         processes = mp.cpu_count(), 
         initializer = limit_cpu, 
