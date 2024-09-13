@@ -28,7 +28,7 @@ def run_model_from_path(path, modeltype):
     test = pd.read_csv(testpath).values
     data = Data_From_Sphere(raw)
     
-    model = Chain(data, p = 10, gibbs_samples = 1000,)
+    model = Chain(data, p = 10, gibbs_samples = 1000, max_clusters = 100)
     try:
         model.sample(5000)
     except: # (AssertionError, FloatingPointError, ValueError):
