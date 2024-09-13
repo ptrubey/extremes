@@ -459,6 +459,10 @@ class Result(object):
         zetas = self.generate_posterior_predictive_zetas(n_per_sample)
         return gamma(shape = zetas)
 
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 10):
+        gammas = self.generate_conditional_posterior_predictive_gammas(n_per_sample)
+        return euclidean_to_hypercube(gammas)
+
     def load_data(self, path):
         if type(path) is BytesIO:
             out = pickle.loads(path.getvalue())
@@ -479,16 +483,17 @@ class Result(object):
         return
     
 if __name__ == '__main__':
-    from data import Data_From_Raw
-    raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
-    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    model = Chain(data, p = 10, gibbs_samples = 1000,)
-    model.sample(5000, verbose = True)
-    model.write_to_disk('./test/results.pkl')
-    res = Result('./test/results.pkl')
-    cond_zetas  = res.generate_conditional_posterior_predictive_zetas()
-    cond_gammas = res.generate_conditional_posterior_predictive_gammas()
-    zetas       = res.generate_posterior_predictive_zetas()
-    gammas      = res.generate_posterior_predictive_gammas()
+    pass
+    # from data import Data_From_Raw
+    # raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
+    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    # model = Chain(data, p = 10, gibbs_samples = 1000,)
+    # model.sample(5000, verbose = True)
+    # model.write_to_disk('./test/results.pkl')
+    # res = Result('./test/results.pkl')
+    # cond_zetas  = res.generate_conditional_posterior_predictive_zetas()
+    # cond_gammas = res.generate_conditional_posterior_predictive_gammas()
+    # zetas       = res.generate_posterior_predictive_zetas()
+    # gammas      = res.generate_posterior_predictive_gammas()
 
 # EOF
