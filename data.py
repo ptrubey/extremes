@@ -146,6 +146,14 @@ class Transformer(object):
         return (- 0.5 * np.log(2 * pi) - y * y / 2.).sum()
 
 class DataBase(Outcome):
+    V : np.ndarray
+    R : np.ndarray
+    Z : np.ndarray
+    W : np.ndarray
+    X : np.ndarray
+    Y : np.ndarray
+    Yp : np.ndarray # Z projected onto S_p^{d-1}
+
     """ Base data class; to be amended with monkey patching. """
     def __init__(self, V = None, R = None, W = None, X = None, Y = None):
         if type(V) is np.ndarray:

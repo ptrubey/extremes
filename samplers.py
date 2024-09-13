@@ -123,10 +123,16 @@ class StickBreakingSampler(DirichletProcessSampler):
         return (np.bincount(self.curr_delta) > 0).sum()
     
     def average_cluster_count(self, ns):
-        cc = bincount2D_vectorized(
-            self.samples.delta[(ns//2):], 
-            self.samples.delta.max() + 1,
-            )
+        try:
+            cc = bincount2D_vectorized(
+                self.samples.delta[(ns//2):], 
+                self.samples.delta.max() + 1,
+                )
+        except TypeError:
+            cc = bincount2D_vectorized(
+                np.stack(self.samples.delta),
+                np.stack(self.samples.delta).max() + 1,
+                )
         return (cc > 0).sum(axis = 1).mean()
 
 def dp_sample_cluster_crp8(delta, log_likelihood, prob, eta):
