@@ -79,12 +79,12 @@ def argparser():
 if __name__ == '__main__':
     files = glob.glob(source_path)
 
-    # run_model_from_path(files[0], 'MVarPYPG', True)
-    # pool = mp.Pool(
-    #     processes = mp.cpu_count(), 
-    #     initializer = limit_cpu, 
-    #     maxtasksperchild = 1,
-    #     )
+    run_model_from_path(files[0], 'MVarPYPG', True)
+    pool = mp.Pool(
+        processes = mp.cpu_count(), 
+        initializer = limit_cpu, 
+        maxtasksperchild = 1,
+        )
     
     conn = sql.connect(out_sql)
     args = [(file, 'MVarPYPG') for file in files]
@@ -95,14 +95,14 @@ if __name__ == '__main__':
     except pd.io.sql.DatabaseError:
         todo = args
     todo_len = len(todo)
-    # for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
-    #     sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    for i, arg in enumerate(todo):
-        print(arg[0])
-        run_model_from_path(arg[0], arg[1], True)
+    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
+        sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
+    # for i, arg in enumerate(todo):
+    #     print(arg[0])
+    #     run_model_from_path(arg[0], arg[1], True)
 
-    # pool.close()
-    # pool.join()
+    pool.close()
+    pool.join()
 
     # raise
 
