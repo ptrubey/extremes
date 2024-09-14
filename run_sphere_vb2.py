@@ -101,9 +101,9 @@ if __name__ == '__main__':
     todo_len = len(todo)
     for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
         sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    for i, arg in enumerate(todo):
-        print(arg[0])
-        run_model_from_path(arg[0], arg[1], True)
+    # for i, arg in enumerate(todo):
+    #     print(arg[0])
+    #     run_model_from_path(arg[0], arg[1], True)
 
     pool.close()
     pool.join()
