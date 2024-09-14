@@ -296,7 +296,9 @@ class Chain(samp.StickBreakingSampler):
     def update_r(self, zeta : np.ndarray, delta : np.ndarray):
         As = zeta[delta].sum(axis = -1)  # np.einsum('il->i', zeta[delta])
         Bs = self.data.Yp.sum(axis = -1) # np.einsum('il->i', self.data.Yp)
-        self.samples.r.append(gamma(shape = As, scale = 1 / Bs))
+        r = gamma(shape = As, scale = 1 / Bs)
+        r[r < 1e-4] = 1e-4               # lower-bounding radius
+        self.samples.r.append(r)
         return
     
     def update_chi(self, delta : np.ndarray):

@@ -28,7 +28,13 @@ def run_model_from_path(path, modeltype, verbose = False):
     test = pd.read_csv(testpath).values
     data = Data_From_Sphere(raw)
     
-    model = Chain(data, p = 10, gibbs_samples = 500, max_clusters = 100)
+    model = Chain(
+        data, 
+        p = 10, 
+        gibbs_samples = 500, 
+        max_clusters = 100, 
+        variational_iterations_per = 20,
+        )
     try:
         model.sample(10000, verbose = verbose)
     except: # (AssertionError, FloatingPointError, ValueError):
@@ -37,8 +43,7 @@ def run_model_from_path(path, modeltype, verbose = False):
     out = BytesIO()
     model.write_to_disk(out)
     res = Result(out)
-    pp = res.generate_posterior_predictive_hypercube(10)
-    
+    pp = res.generate_posterior_predictive_hypercube(10)    
     try:
         es1 = energy_score_full_sc(pp, data.V)
         es2 = energy_score_full_sc(pp, test)
@@ -78,8 +83,7 @@ def argparser():
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
-
-    # run_model_from_path(files[0], 'MVarPYPG', True)
+    
     pool = mp.Pool(
         processes = mp.cpu_count(), 
         initializer = limit_cpu, 
@@ -97,13 +101,11 @@ if __name__ == '__main__':
     todo_len = len(todo)
     for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
         sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    # for i, arg in enumerate(todo):
-    #     print(arg[0])
-    #     run_model_from_path(arg[0], arg[1], True)
+    for i, arg in enumerate(todo):
+        print(arg[0])
+        run_model_from_path(arg[0], arg[1], True)
 
     pool.close()
     pool.join()
-
-    # raise
 
 # EOF
