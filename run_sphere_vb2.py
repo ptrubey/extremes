@@ -79,7 +79,7 @@ def argparser():
 if __name__ == '__main__':
     files = glob.glob(source_path)
 
-    run_model_from_path(files[0], 'MVarPYPG', True)
+    # run_model_from_path(files[0], 'MVarPYPG', True)
     pool = mp.Pool(
         processes = mp.cpu_count(), 
         initializer = limit_cpu, 
