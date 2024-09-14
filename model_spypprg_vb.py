@@ -22,6 +22,8 @@ class Samples(object):
     chi   : deque      # stick-breaking weights (unnormalized)
     delta : deque   # cluster identifiers
     beta  : deque   # rate hyperparameter
+    alpha : deque   # shape hyperparameter (inferred)
+    zeta  : deque   # shape parameter (inferred)
     
     def __init__(
             self, 
@@ -34,10 +36,14 @@ class Samples(object):
         self.chi   = deque([], maxlen = nkeep)
         self.delta = deque([], maxlen = nkeep)
         self.beta  = deque([], maxlen = nkeep)
+        
         self.r.append(lognormal(mean = 3, sigma = 1, size = N))
         self.chi.append(1 / np.arange(2, J + 1)[::-1]) # uniform probability
         self.delta.append(choice(J, N))
         self.beta.append(gamma(shape = 2, scale = 1 / 2, size = S))
+        
+        self.alpha = deque([], maxlen = nkeep)
+        self.zeta  = deque([], maxlen = nkeep)
         return
     pass
 
@@ -246,9 +252,8 @@ class Chain(samp.StickBreakingSampler):
 
         self.varparm.zeta_adam.specify_dloss(func)
         self.varparm.zeta_adam.optimize()
-        replace = np.where(n == 0)[0]
-        # self.varparm.zeta_mutau[0,replace] = 0.
-        # self.varparm.zeta_mutau[1,replace] = 3.
+        
+        self.samples.zeta.append(self.curr_zeta)
         return
     
     def update_alpha(
@@ -270,6 +275,8 @@ class Chain(samp.StickBreakingSampler):
                 
         self.varparm.alpha_adam.specify_dloss(func)
         self.varparm.alpha_adam.optimize()
+
+        self.samples.alpha.append(self.curr_alpha)
         return
 
     def update_beta(
@@ -351,6 +358,8 @@ class Chain(samp.StickBreakingSampler):
         out = {
             'zeta_mutau'  : self.varparm.zeta_mutau,
             'alpha_mutau' : self.varparm.alpha_mutau,
+            'zetas'       : np.stack(self.samples.zeta),
+            'alphas'      : np.stack(self.samples.alpha),
             'betas'       : np.stack(self.samples.beta),
             'rs'          : np.stack(self.samples.r),
             'deltas'      : np.stack(self.samples.delta),
@@ -412,16 +421,18 @@ class ResultSamples(Samples):
         self.chi   = dict['chis']
         self.delta = dict['deltas']
         self.beta  = dict['betas']
-        self.alpha = lognormal(
-            mean = dict['alpha_mutau'][0], 
-            sigma = np.exp(dict['alpha_mutau'][1]),
-            size = (self.r.shape[0], *dict['alpha_mutau'][0].shape),
-            )
-        self.zeta  = lognormal(
-            mean = dict['zeta_mutau'][0],
-            sigma = np.exp(dict['zeta_mutau'][1]),
-            size = (self.r.shape[0], *dict['zeta_mutau'][0].shape),
-            )
+        # self.alpha = lognormal(
+        #     mean = dict['alpha_mutau'][0], 
+        #     sigma = np.exp(dict['alpha_mutau'][1]),
+        #     size = (self.r.shape[0], *dict['alpha_mutau'][0].shape),
+        #     )
+        # self.zeta  = lognormal(
+        #     mean = dict['zeta_mutau'][0],
+        #     sigma = np.exp(dict['zeta_mutau'][1]),
+        #     size = (self.r.shape[0], *dict['zeta_mutau'][0].shape),
+        #     )
+        self.alpha = dict['alphas'],
+        self.zeta  = dict['zetas']
         return
 
 class Result(object):
