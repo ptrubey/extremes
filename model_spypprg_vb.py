@@ -57,8 +57,8 @@ def stickbreak(nu):
         log1mnu = np.log(1 - nu)
     S = nu.shape[0]; J = nu.shape[1] + 1
     out = np.zeros((S,J))
-    out[:,:-1] += lognu
-    out[:, 1:] += np.cumsum(log1mnu, axis = -1)
+    out[...,:-1] += lognu
+    out[..., 1:] += np.cumsum(log1mnu, axis = -1)
     return np.exp(out)
 
 def gradient_resgammagamma_ln(
@@ -74,15 +74,16 @@ def gradient_resgammagamma_ln(
     alpha = np.exp(theta[0] + ete)
 
     dtheta = np.zeros((ns, *theta.shape))
+
     dtheta += alpha[:,None] * lYs
     dtheta -= n[None,None,:,None] * digamma(alpha[:,None]) * alpha[:,None]
-    dtheta += (a - 1)
+    dtheta += a
     dtheta -= b * alpha[:,None]
     
     dtheta[:,1] *= ete
     
-    dtheta[:,0] -= -1
-    dtheta[:,1] -= -1 - np.exp(2 * theta[1])
+    dtheta[:,0] -= 1
+    dtheta[:,1] -= 1 + theta[1] 
     return dtheta.mean(axis = 0)
 
 def gradient_gammagamma_ln(
@@ -97,21 +98,21 @@ def gradient_gammagamma_ln(
         ns = 10,
         ):
     epsilon = normal(size = (ns, *theta.shape[1:]))
-    ete = np.exp(theta[1]) * epsilon
-    alpha = np.exp(theta[0] + ete)
+    ete    = np.exp(theta[1]) * epsilon
+    alpha  = np.exp(theta[0] + ete)
 
     dtheta = np.zeros((ns, *theta.shape))
     dtheta += alpha[:,None] * lYs
     dtheta -= n * digamma(alpha[:,None]) * alpha[:,None]
-    dtheta += (a - 1)
+    dtheta += a
     dtheta -= b * alpha[:,None]
-    dtheta += digamma(n * alpha[:,None] + c)
-    dtheta -= (n * alpha[:,None] + c) * np.log(Ys + d)
+    dtheta += digamma(n * alpha[:,None]) * n * alpha[:,None]
+    dtheta -= (n * alpha[:,None]) * np.log(Ys + d)
     
     dtheta[:,1] *= ete
     
-    dtheta[:,0] -= -1
-    dtheta[:,1] -= -1 - np.exp(2 * theta[1])
+    dtheta[:,0] -= 1
+    dtheta[:,1] -= 1 + theta[1]
     return dtheta.mean(axis = 0)
 
 class Adam(object):

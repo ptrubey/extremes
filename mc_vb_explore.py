@@ -166,13 +166,14 @@ class UnivariateResGammaGammaVB(object):
         dmu = (
             + alpha * self.lYs
             - self.n * digamma(alpha) * alpha
-            + (self.a - 1)
+            + self.a
             - self.b * alpha
             )
+
         dtau = dmu * ete
         return np.array((
             dmu.mean(axis = -1) - 1, 
-            dtau.mean(axis = -1) - 1 - np.exp(2 * tau)
+            dtau.mean(axis = -1) - 1 - tau # np.exp(2 * tau)
             ))
 
     def __init__(self, Y, a, b, ns = 20):
@@ -190,20 +191,18 @@ class UnivariateGammaGammaVB(UnivariateResGammaGammaVB):
         epsilon = normal(size = self.ns)
         ete = np.exp(tau) * epsilon
         alpha = np.exp(mu + ete)
-        # + dlogf(t(eps|mu,tau), ...)
         dmu = (
-           
             + alpha * self.lYs
             - self.n * digamma(alpha) * alpha
-            + (self.a - 1)
+            + self.a
             - self.b * alpha
-            + digamma(self.n * alpha + self.c)
-            - (self.n * alpha + self.c) * np.log(self.Ys + self.d)
+            + digamma(self.n * alpha + self.c) * self.n * alpha
+            - (self.n * alpha) * np.log(self.Ys + self.d)
             )
         dtau = dmu * ete
         # - dE[logq(alpha|mu,tau)]
-        dmu -= -1
-        dtau -= (-1 - np.exp(2 * tau))
+        dmu += - 1
+        dtau += - 1 - tau # (-1 - np.exp(2 * tau))
         return np.array((dmu.mean(axis = -1),dtau.mean(axis = -1)))
     
     def __init__(self, Y, a, b, c, d, ns = 20):
@@ -214,16 +213,18 @@ class UnivariateGammaGammaVB(UnivariateResGammaGammaVB):
     pass
 
 if __name__ == '__main__':
-    Y = gamma(shape = 1e-2, scale = 1, size = 10)
-    abcd = (1,1,1,1)
+    # gammavars = (8., 4.)
+    gammavars = (5., 1.)
+    Y = gamma(shape = gammavars[0], scale = 1 / gammavars[1], size = 10000)
+    abcd = (0.1,0.1,0.1,0.1)
     
     # mc = UnivariateResGammaGammaMC(Y, a, b)
     # mc.sample(5000)
     # vb = UnivariateResGammaGammaVB(Y, a, b)
 
-    mc = UnivariateGammaGammaMC(Y, *abcd)
-    vb = UnivariateGammaGammaVB(Y, *abcd)
-
+    # mc = UnivariateGammaGammaMC(Y, *abcd)
+    # vb = UnivariateGammaGammaVB(Y, *abcd)
+    vb = UnivariateResGammaGammaVB(Y, *abcd[:2])
     def dloss(theta):
         return -vb.gradient(*theta)
     
@@ -234,16 +235,23 @@ if __name__ == '__main__':
         decay1 = 0.9, 
         decay2 = 0.999,
         )
-    print('Initial')
-    print(adam.theta)
-    print('Optimizing 100 intervals')
-    for _ in range(10):
-        adam.optimize(100)
-        print(adam.theta)
-    print('Optimizing 10000 intervals')
-    for _ in range(100):
-        adam.optimize(10000)
-        print(adam.theta)
-    raise
-    
+    print('Initial: E[Y]: {}, Var[Y]: {}'.format(
+        gammavars[0] / gammavars[1], 
+        gammavars[0] / gammavars[1]**2
+        ))
+    print('mu: {}, tau: {}, E[Y]: {}, Var[Y]: {}'.format(
+        *adam.theta, 
+        np.exp(adam.theta[0] + np.exp(2 * adam.theta[1])/2),
+        np.exp(2 * adam.theta[0] + np.exp(2 * adam.theta[1]) * 
+               (np.exp(np.exp(2 * adam.theta[1])) - 1))
+        ))
+    print('Optimizing 1000 intervals')
+    for _ in range(20):
+        adam.optimize(1000)
+        print('mu: {}, tau: {}, E[Y]: {}, Var[Y]: {}'.format(
+            *adam.theta, 
+            np.exp(adam.theta[0] + np.exp(2 * adam.theta[1])/2),
+            np.exp(2 * adam.theta[0] + np.exp(2 * adam.theta[1]) * 
+                (np.exp(np.exp(2 * adam.theta[1])) - 1))
+            ))
 # EOF
