@@ -77,7 +77,7 @@ def gradient_resgammagamma_ln(
 
     dtheta += alpha[:,None] * lYs
     dtheta -= n[None,None,:,None] * digamma(alpha[:,None]) * alpha[:,None]
-    dtheta += a
+    dtheta += a - 1
     dtheta -= b * alpha[:,None]
     
     dtheta[:,1] *= ete
@@ -104,7 +104,7 @@ def gradient_gammagamma_ln(
     dtheta = np.zeros((ns, *theta.shape))
     dtheta += alpha[:,None] * lYs
     dtheta -= n * digamma(alpha[:,None]) * alpha[:,None]
-    dtheta += a
+    dtheta += a - 1
     dtheta -= b * alpha[:,None]
     dtheta += digamma(n * alpha[:,None]) * n * alpha[:,None]
     dtheta -= (n * alpha[:,None]) * np.log(Ys + d)
