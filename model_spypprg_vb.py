@@ -99,7 +99,7 @@ def gradient_gammagamma_ln(
     epsilon = normal(size = (ns, *theta.shape[1:]))
     ete    = np.exp(theta[1]) * epsilon
     alpha  = np.exp(theta[0] + ete)
-    N      = n.reshape(1,1,-1,1)
+    N      = n.reshape(1,-1,1)
 
     dtheta = np.zeros((ns, *theta.shape))
     dtheta += lYs
@@ -128,7 +128,8 @@ class Adam(object):
     # Adam Updateables 
     momentum : np.ndarray # momentum
     sumofsqs : np.ndarray # sum of squares of past gradients
-    
+    theta    : np.ndarray # parameter set
+
     # Loss function
     dloss = None   # function of theta
 
@@ -175,11 +176,11 @@ class Adam(object):
     
     def __init__(
             self, 
-            theta, 
-            rate   = 1e-3, 
-            decay1 = 0.9, 
-            decay2 = 0.999, 
-            niter  = 10,
+            theta  : np.ndarray, 
+            rate   : float = 1e-3, 
+            decay1 : float = 0.9, 
+            decay2 : float = 0.999, 
+            niter  : float = 10,
             ):
         self.theta = theta
         self.initialization(rate, decay1, decay2, niter)
@@ -192,8 +193,8 @@ class VariationalParameters(object):
     alpha_adam   : Adam
 
     def __init__(self, S : int, J : int, **kwargs):
-        self.zeta_mutau = normal(size = (2, J, S))
-        self.alpha_mutau = normal(size = (2, S))
+        self.zeta_mutau = np.zeros((2, J, S)) # normal(size = (2, J, S))
+        self.alpha_mutau = np.zeros((2, S))   # normal(size = (2, S))
 
         self.zeta_adam = Adam(self.zeta_mutau, **kwargs)
         self.alpha_adam = Adam(self.alpha_mutau, **kwargs)
@@ -246,10 +247,11 @@ class Chain(samp.StickBreakingSampler):
         dmat = delta[:,None] == np.arange(self.J)
         Y = r[:,None] * self.data.Yp
         n = dmat.sum(axis = 0)
-        lYs = (np.log(Y).T @ dmat).T
+        lYs = dmat.T @ np.log(Y) # (np.log(Y).T @ dmat).T
+        self.varparm.zeta_adam.update
         
-        func = lambda theta: - gradient_resgammagamma_ln(
-            theta, lYs, n, alpha, beta,
+        func = lambda: - gradient_resgammagamma_ln(
+            self.varparm.zeta_mutau, lYs, n, alpha, beta, self.var_samp,
             )
 
         self.varparm.zeta_adam.specify_dloss(func)
@@ -264,12 +266,13 @@ class Chain(samp.StickBreakingSampler):
             delta : np.ndarray,
             ):
         active = np.where(np.bincount(delta, minlength = self.J) > 0)[0]
-        n = active.shape[0]
+        n = np.array((active.shape[0],))
         lZs = np.log(zeta)[active].sum(axis = 0)
         Zs  = zeta[active].sum(axis = 0)
 
-        func = lambda theta: - gradient_gammagamma_ln(
-            theta, lZs, Zs, n,
+        func = lambda: - gradient_gammagamma_ln(
+            self.varparm.alpha_mutau, 
+            lZs, Zs, n,
             *self.priors.alpha,
             *self.priors.beta,
             ns = self.var_samp
@@ -339,8 +342,7 @@ class Chain(samp.StickBreakingSampler):
     def initialize_sampler(self, nSamp : int):
         self.samples = Samples(self.gibbs_samp, self.N, self.S, self.J)
         self.varparm = VariationalParameters(
-            self.S, self.J,
-            niter = self.var_iter,
+            self.S, self.J, niter = self.var_iter,
             )
         self.curr_iter = 0
         pass
@@ -393,8 +395,8 @@ class Chain(samp.StickBreakingSampler):
             gibbs_samples = 1000,
             max_clusters = 200,
             p = 10,
-            prior_alpha = (0.5, 0.5),
-            prior_beta = (2., 2.),
+            prior_alpha = (1.01, 1.01),
+            prior_beta = (2., 1.),
             concentration = 0.1, 
             discount = 0.1,
             ):
@@ -425,17 +427,7 @@ class ResultSamples(Samples):
         self.chi   = dict['chis']
         self.delta = dict['deltas']
         self.beta  = dict['betas']
-        # self.alpha = lognormal(
-        #     mean = dict['alpha_mutau'][0], 
-        #     sigma = np.exp(dict['alpha_mutau'][1]),
-        #     size = (self.r.shape[0], *dict['alpha_mutau'][0].shape),
-        #     )
-        # self.zeta  = lognormal(
-        #     mean = dict['zeta_mutau'][0],
-        #     sigma = np.exp(dict['zeta_mutau'][1]),
-        #     size = (self.r.shape[0], *dict['zeta_mutau'][0].shape),
-        #     )
-        self.alpha = dict['alphas'],
+        self.alpha = dict['alphas']
         self.zeta  = dict['zetas']
         return
 
@@ -499,17 +491,19 @@ class Result(object):
         return
     
 if __name__ == '__main__':
-    pass
-    # from data import Data_From_Raw
-    # raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
-    # data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
-    # model = Chain(data, p = 10, gibbs_samples = 1000,)
-    # model.sample(5000, verbose = True)
-    # model.write_to_disk('./test/results.pkl')
-    # res = Result('./test/results.pkl')
-    # cond_zetas  = res.generate_conditional_posterior_predictive_zetas()
-    # cond_gammas = res.generate_conditional_posterior_predictive_gammas()
-    # zetas       = res.generate_posterior_predictive_zetas()
-    # gammas      = res.generate_posterior_predictive_gammas()
+    # pass
+    from data import Data_From_Raw
+    raw = pd.read_csv('./datasets/ivt_updated_nov_mar.csv')
+    # raw = pd.read_csv('./datasets/ivt_nov_mar.csv')
+    data = Data_From_Raw(raw, decluster = True, quantile = 0.95)
+    model = Chain(data, p = 10, gibbs_samples = 1000,)
+    model.sample(5000, verbose = True)
+    model.write_to_disk('./test/results.pkl')
+    res = Result('./test/results.pkl')
+    cond_zetas  = res.generate_conditional_posterior_predictive_zetas()
+    cond_gammas = res.generate_conditional_posterior_predictive_gammas()
+    zetas       = res.generate_posterior_predictive_zetas()
+    gammas      = res.generate_posterior_predictive_gammas()
+    raise
 
 # EOF
