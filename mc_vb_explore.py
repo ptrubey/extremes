@@ -119,10 +119,10 @@ class Adam(object):
             + self.decay2 * self.sumofsqs
             + (1 - self.decay2) * dloss * dloss
             )
-        self.theta -= (
-            (self.momentum / (1 - self.decay1**self.iter)) * self.rate / 
-            (np.sqrt(self.sumofsqs / (1 - self.decay2**self.iter )) + self.eps)
-            )
+        mhat = self.momentum / (1 - self.decay1**self.iter)
+        shat = self.sumofsqs / (1 - self.decay2**self.iter)
+        self.theta -= mhat * self.rate / (np.sqrt(shat) + self.eps)
+        raise
         return
 
     def initialization(
@@ -162,19 +162,15 @@ class UnivariateResGammaGammaVB(object):
         epsilon = normal(size = self.ns)
         ete = np.exp(tau) * epsilon
         alpha = np.exp(mu + ete)
-        # alpha = np.exp(self.mu + self.sigma * epsilon)
-        dmu = (
-            + alpha * self.lYs
-            - self.n * digamma(alpha) * alpha
-            + self.a
-            - self.b * alpha
+        grad_alpha = (
+            self.lYs
+            - self.n * digamma(alpha)
+            + (self.a - 1) / alpha
+            - self.b
             )
-
-        dtau = dmu * ete
-        return np.array((
-            dmu.mean(axis = -1) - 1, 
-            dtau.mean(axis = -1) - 1 - tau # np.exp(2 * tau)
-            ))
+        dmu = (grad_alpha * alpha).mean() - 1
+        dtau = (grad_alpha * alpha * ete).mean() - 1 - tau
+        return np.array((dmu, dtau))
 
     def __init__(self, Y, a, b, ns = 20):
         self.Y = Y
@@ -191,32 +187,31 @@ class UnivariateGammaGammaVB(UnivariateResGammaGammaVB):
         epsilon = normal(size = self.ns)
         ete = np.exp(tau) * epsilon
         alpha = np.exp(mu + ete)
-        dmu = (
-            + alpha * self.lYs
-            - self.n * digamma(alpha) * alpha
-            + self.a
-            - self.b * alpha
-            + digamma(self.n * alpha + self.c) * self.n * alpha
-            - (self.n * alpha) * np.log(self.Ys + self.d)
+        grad_alpha = (
+            self.lYs
+            - self.n * digamma(alpha)
+            + (self.a - 1) / alpha
+            - self.b
+            + digamma(self.n * alpha + self.c) * self.n
+            - self.n * np.log(self.Ys + self.d)
             )
-        dtau = dmu * ete
-        # - dE[logq(alpha|mu,tau)]
-        dmu += - 1
-        dtau += - 1 - tau # (-1 - np.exp(2 * tau))
-        return np.array((dmu.mean(axis = -1),dtau.mean(axis = -1)))
+        dmu = (grad_alpha * alpha).mean() - 1
+        dtau = (grad_alpha * alpha * ete).mean() - 1 - tau
+        return np.array((dmu, dtau))
     
     def __init__(self, Y, a, b, c, d, ns = 20):
         super().__init__(Y, a, b, ns)
         self.Ys = Y.sum()
         self.c = c
         self.d = d
+        return
     pass
 
 if __name__ == '__main__':
     # gammavars = (8., 4.)
     gammavars = (5., 1.)
-    Y = gamma(shape = gammavars[0], scale = 1 / gammavars[1], size = 10000)
-    abcd = (0.1,0.1,0.1,0.1)
+    Y = gamma(shape = gammavars[0], scale = 1 / gammavars[1], size = 500)
+    abcd = (1.,1.,1.,1.)
     
     # mc = UnivariateResGammaGammaMC(Y, a, b)
     # mc.sample(5000)

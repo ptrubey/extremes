@@ -17,10 +17,10 @@ class RGGSamples(object):
         self.r    = deque([], maxlen = nkeep)
         self.zeta = deque([], maxlen = nkeep)
         self.r.append(gamma(shape = 4, scale = 1/2, size = N))
-        self.zeta.append(gamma(shape = 2., scale = 1/2., size = S))
+        self.zeta.append(gamma(shape = 2., scale = 1/2., size = (1,S)))
         return
 
-class MultivariateResGammaGamma(BaseSampler):
+class MultivariateResProjgammaGamma(BaseSampler):
     samples    : RGGSamples
     adam       : Adam
     zeta_mutau : np.ndarray
@@ -50,12 +50,10 @@ class MultivariateResGammaGamma(BaseSampler):
         Y = r[:,None] * self.Yp
         lYs = np.log(Y).sum(axis = 0).reshape(1,-1)
         n = np.array((self.N,))
-        self.adam.specify_dloss(
-            lambda theta: gradient_resgammagamma_ln(
-                self.zeta_mutau, lYs, n, self.a, self.b,
-                )
-            )
+        func = lambda theta: gradient_resgammagamma_ln(theta, lYs, n, self.a, self.b, 1000)
+        self.adam.specify_dloss(func)
         self.adam.optimize()
+        self.samples.zeta.append(self.curr_zeta)
         return
     
     def iter_sample(self):
@@ -76,11 +74,61 @@ class MultivariateResGammaGamma(BaseSampler):
         self.b = np.ones(self.S) * b
         return
 
+class MultivariateResGammaGamma(BaseSampler):
+    lYs : np.ndarray
+    n   : np.ndarray
+    samples : RGGSamples
+    adam : Adam
+    zeta_mutau : np.ndarray
+    a : np.ndarray
+    b : np.ndarray
+
+    @property
+    def curr_zeta(self):
+        return np.exp(
+            self.zeta_mutau[0] + 
+            np.exp(self.zeta_mutau[1]) * normal(size = self.zeta_mutau[1].shape)
+            )
+
+    def initialize_sampler(self, ns):
+        self.samples = RGGSamples(1000, self.N, self.S)
+        self.adam = Adam(self.zeta_mutau)
+        self.curr_iter = 0
+        return
+    
+    def update_zeta(self):
+        func = lambda theta: gradient_resgammagamma_ln(
+            theta, self.lYs, np.array(self.N), self.a, self.b, 1000
+            )
+        self.adam.specify_dloss(func)
+        self.adam.optimize()
+        return
+    
+    def iter_sample(self):
+        self.curr_iter += 1
+        self.update_zeta()
+        return
+
+    def __init__(self, Y : np.ndarray, a : float, b : float):
+        self.N, self.S = Y.shape
+        self.lYs = np.log(Y).sum(axis = 0).reshape(1,-1)
+        self.zeta_mutau = np.zeros((2, 1, self.S))
+        self.a = np.ones(self.S) * a
+        self.b = np.ones(self.S) * b
+        return
+
+
+
 if __name__ == '__main__': 
-    gammavars = np.array((5., 3., 0.5))
-    Yp = euclidean_to_psphere(gamma(gammavars[0], size = (500, gammavars.shape[0])))
-    m = MultivariateResGammaGamma(Yp, 1., 1.)
-    m.sample(1000)
-    print(m.zeta_mutau)
-    print(np.log(gammavars))
-    pass
+    # gammavars = np.array((5., 3., 0.5))
+    gammavars = np.array((5.,))
+    Y  = gamma(shape = gammavars, size = (500, gammavars.shape[0]))
+    m = MultivariateResGammaGamma(Y, 1., 1.)
+    # Yp = euclidean_to_psphere(Y)
+    # m = MultivariateResProjgammaGamma(Yp, 1., 1.)
+    print('Optimization')
+    for _ in range(10):
+        m.sample(1000)
+        print(m.zeta_mutau)
+    print('target: {}'.format(np.log(gammavars)))
+    raise

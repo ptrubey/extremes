@@ -62,28 +62,27 @@ def stickbreak(nu):
     return np.exp(out)
 
 def gradient_resgammagamma_ln(
-        theta   : np.ndarray,  # np.stack((mu, tau))
-        lYs     : np.ndarray,  # sum of log(Y)
-        n       : np.ndarray,  # number of observations
-        a       : np.ndarray,  # hierarchical shape 
-        b       : np.ndarray,  # hierarchical rate
-        ns = 10,
+        theta   : np.ndarray,  # np.stack((mu, tau))    # (2, j, d)
+        lYs     : np.ndarray,  # sum of log(Y)          # (j, d)
+        n       : np.ndarray,  # number of observations # (j)
+        a       : np.ndarray,  # hierarchical shape     # (d) or float
+        b       : np.ndarray,  # hierarchical rate      # (d) or float
+        ns = 20,
         ):
     epsilon = normal(size = (ns, *theta.shape[1:]))
-    ete = np.exp(theta[1]) * epsilon
-    alpha = np.exp(theta[0] + ete)
+    ete     = np.exp(theta[1]) * epsilon
+    alpha   = np.exp(theta[0] + ete)
 
     dtheta = np.zeros((ns, *theta.shape))
+    dtheta += lYs
+    dtheta -= n.reshape(1,1,-1,1) * digamma(alpha[:,None])
+    dtheta += (a - 1) / alpha[:,None]
+    dtheta -= b
 
-    dtheta += alpha[:,None] * lYs
-    dtheta -= n[None,None,:,None] * digamma(alpha[:,None]) * alpha[:,None]
-    dtheta += a - 1
-    dtheta -= b * alpha[:,None]
-    
-    dtheta[:,1] *= ete
-    
-    dtheta[:,0] -= 1
-    dtheta[:,1] -= 1 + theta[1] 
+    dtheta[:,0] *= alpha
+    dtheta[:,1] *= alpha * ete
+    dtheta[:,0] -= 1.
+    dtheta[:,1] -= 1. + theta[1]
     return dtheta.mean(axis = 0)
 
 def gradient_gammagamma_ln(
@@ -100,19 +99,21 @@ def gradient_gammagamma_ln(
     epsilon = normal(size = (ns, *theta.shape[1:]))
     ete    = np.exp(theta[1]) * epsilon
     alpha  = np.exp(theta[0] + ete)
+    N      = n.reshape(1,1,-1,1)
 
     dtheta = np.zeros((ns, *theta.shape))
-    dtheta += alpha[:,None] * lYs
-    dtheta -= n * digamma(alpha[:,None]) * alpha[:,None]
-    dtheta += a - 1
-    dtheta -= b * alpha[:,None]
-    dtheta += digamma(n * alpha[:,None]) * n * alpha[:,None]
-    dtheta -= (n * alpha[:,None]) * np.log(Ys + d)
-    
-    dtheta[:,1] *= ete
-    
+    dtheta += lYs
+    dtheta -= N * digamma(alpha[:,None])
+    dtheta += (a - 1) / alpha[:, None]
+    dtheta -= b
+    dtheta += digamma(N * alpha[:,None] + c) * N
+    dtheta -= N * np.log(Ys + d)
+
+    dtheta[:,0] *= alpha
+    dtheta[:,1] *= alpha * ete
     dtheta[:,0] -= 1
     dtheta[:,1] -= 1 + theta[1]
+    
     return dtheta.mean(axis = 0)
 
 class Adam(object):
@@ -142,14 +143,15 @@ class Adam(object):
             + self.decay2 * self.sumofsqs
             + (1 - self.decay2) * dloss * dloss
             )
-        self.theta -= (
-            (self.momentum / (1 - self.decay1**self.iter)) * self.rate / 
-            (np.sqrt(self.sumofsqs / (1 - self.decay2**self.iter )) + self.eps)
-            )
+        mhat = self.momentum / (1 - self.decay1**self.iter)
+        shat = self.sumofsqs / (1 - self.decay2**self.iter)
+        self.theta -= mhat * self.rate / (np.sqrt(shat) + self.eps)
+        raise
         return
     
     def specify_dloss(self, func):
         self.dloss = func
+        return
 
     def initialization(
             self, 
