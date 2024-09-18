@@ -134,7 +134,7 @@ class Adam(object):
 
     def update(self):
         self.iter += 1
-        dloss = self.dloss(self.theta)
+        dloss = self.dloss()
         self.momentum[:] = (
             + self.decay1 * self.momentum
             + (1 - self.decay1) * dloss
@@ -146,7 +146,6 @@ class Adam(object):
         mhat = self.momentum / (1 - self.decay1**self.iter)
         shat = self.sumofsqs / (1 - self.decay2**self.iter)
         self.theta -= mhat * self.rate / (np.sqrt(shat) + self.eps)
-        raise
         return
     
     def specify_dloss(self, func):
