@@ -78,18 +78,22 @@ class MultivariateResProjgammaGamma(MultivariateResGammaGamma):
     def curr_r(self):
         return self.samples.r[-1]
 
+    def dloss(self):
+        return - gradient_resgammagamma_ln(
+            self.zeta_mutau, self.lYs, self.n, self.a, self.b, self.varsamp
+            )
+
     def update_r(self, zeta : np.ndarray):
         As = zeta.sum(axis = -1)
         Bs = self.Yp.sum(axis = -1)
         r = gamma(As, scale = 1/Bs)
-        r[r < 1e5] = 1e5
+        r[r < 1e-5] = 1e-5
         self.samples.r.append(r)
         return
 
     def update_statistics(self, r):
-        Y = r[:,None] * self.Yp
-        self.lYs[:] = np.log(Y).sum().reshape(1,-1)
-        self.n[:]   = np.array(Y.shape[0],)
+        Y = self.curr_r[:,None] * self.Yp
+        self.lYs[:] = np.log(Y).sum(axis = 0).reshape(1,-1)
         return
 
     def update_zeta(self, r):
@@ -109,25 +113,26 @@ class MultivariateResProjgammaGamma(MultivariateResGammaGamma):
         return
 
     def __init__(self, Yp : np.ndarray, a : int, b : int):
-        self.Yp = Yp
-        self.lYs = np.empty(Yp.sum(axis = 0).reshape(1,-1).shape)
-        self.n = np.array((Yp.shape[0],))
-        self.N, self.S = self.Yp.shape        
+        self.Yp         = Yp
+        self.N, self.S  = self.Yp.shape
         self.zeta_mutau = np.zeros((2, 1, self.S))
-        self.a = np.ones(self.S) * a
-        self.b = np.ones(self.S) * b
+
+        self.lYs = np.zeros((1, self.S))
+        self.n   = np.array((self.N,))
+        self.a   = np.ones(self.S) * a
+        self.b   = np.ones(self.S) * b
         return
 
 
 if __name__ == '__main__': 
     gammavars = np.array((5., 3., 0.5))
-    # gammavars = np.array((5.,))
     Y  = gamma(shape = gammavars, size = (500, gammavars.shape[0]))
-    # m = MultivariateResGammaGamma(Y, 1., 1.)
     Yp = euclidean_to_psphere(Y)
+    # m = MultivariateResGammaGamma(Y, 1., 1.)
     m = MultivariateResProjgammaGamma(Yp, 1., 1.)
+    
     print('Optimization')
     for _ in range(10):
-        m.sample(1000)
+        m.sample(100)
         print(m.zeta_mutau.ravel())
     print('target: {}'.format(np.log(gammavars)))

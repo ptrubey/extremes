@@ -33,6 +33,7 @@ def run_slosh(
         data = data, 
         concentration = eta, 
         discount = discount, 
+	max_clusters = 100,
         gibbs_samples = 1000,
         )
     model.sample(10000)
@@ -95,12 +96,12 @@ concs_xlarg = [1.0, 10.0]
 discs_xlarg = [0.2, 0.35, 0.5]
 
 run = {
-    't90' : True,
+    # 't90' : True,
     'ltd' : True,
     'xpt' : True,
     'apt' : True,
     'emg' : True,
-    'loc' : True,
+    # 'loc' : True,
     'del' : True,
     'nyc' : True,
     }

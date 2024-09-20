@@ -19,9 +19,10 @@ sql_paths = [
     './simulated/sphere2/result_240710.sql',   # uniform
     './simulated/sphere2/result_240723.sql',   # pregamed
     './simulated/sphere2/result_240802.sql',   # pregamed2
-    './simulated/sphere2/result_240912.sql',   # MVarPYPG
-    './simulated/sphere2/result_240913.sql',   # MVarPYPG
-    './simulated/sphere2/result_240914.sql',   # MVarPYPG
+    # './simulated/sphere2/result_240912.sql',   # MVarPYPG
+    # './simulated/sphere2/result_240913.sql',   # MVarPYPG
+    # './simulated/sphere2/result_240914.sql',   # MVarPYPG
+    './simulated/sphere2/result_240918.sql',   # MVarPYPG
     ]
 
 def get_table(path, table):
@@ -37,8 +38,6 @@ dfs[1].model = 'VB Random'
 dfs[2].model = 'VB Uniform'
 dfs[3].model = 'VB Pregamed 1'
 dfs[4].model = 'VB Pregamed 2'
-dfs[5].model = 'VB Gibbs 1'
-dfs[6].model = 'VB Gibbs 2'
-dfs[7].model = 'VB Gibbs 3'
+dfs[5].model = 'VB Gibbs'
 df = pd.concat(dfs)
 df.to_csv('./simulated/sphere2/performance.csv', index = False)
