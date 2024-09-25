@@ -25,6 +25,11 @@ theta_out_base = './datasets/slosh/{}/{}_theta.csv.gz'
 regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
 fixed_out_base = './datasets/slosh/{}/{}_epsilon.csv.gz'
 
+V_out_base = './datasets/slosh/{}/V.csv.gz'
+R_out_base = './datasets/slosh/{}/R.csv.gz'
+Z_out_base = './datasets/slosh/{}/Z.csv.gz'
+P_out_base = './datasets/slosh/{}/P.csv.gz'
+
 args = {
     'dataset'   : 'del',
     'quantile'  : 0.90, 
@@ -265,7 +270,17 @@ def run_slosh_reg(
 if __name__ == '__main__':
     # run_slosh_vb(**args)
     # run_slosh_mc(**args)
-    run_slosh_reg(**{**args, 'fixed' : False})
-    run_slosh_reg(**{**args, 'fixed' : True})
+    # run_slosh_reg(**{**args, 'fixed' : False})
+    # run_slosh_reg(**{**args, 'fixed' : True})
+
+    csv_args = {'index' : False, 'compression' : 'gzip'}
+
+    slosh = pd.read_csv(data_in_base.format('del'))
+    slosh_obs = slosh.T[8:].values.astype(np.float64)    
+    data = Data_From_Raw(slosh_obs, decluster = False, quantile = args['conc'])
+    pd.DataFrame(data.V).to_csv(V_out_base.format('del'), **csv_args)
+    pd.DataFrame(data.R).to_csv(R_out_base.format('del'), **csv_args)
+    pd.DataFrame(data.Z).to_csv(Z_out_base.format('del'), **csv_args)
+    pd.DataFrame(data.P).to_csv(P_out_base.format('del'), **csv_args)
 
 # EOF
