@@ -29,6 +29,7 @@ V_out_base = './datasets/slosh/{}/V.csv.gz'
 R_out_base = './datasets/slosh/{}/R.csv.gz'
 Z_out_base = './datasets/slosh/{}/Z.csv.gz'
 P_out_base = './datasets/slosh/{}/P.csv.gz'
+I_out_base = './datasets/slosh/{}/I.csv.gz'
 
 args = {
     'dataset'   : 'del',
@@ -282,5 +283,6 @@ if __name__ == '__main__':
     pd.DataFrame(data.R).to_csv(R_out_base.format('del'), **csv_args)
     pd.DataFrame(data.Z).to_csv(Z_out_base.format('del'), **csv_args)
     pd.DataFrame(data.P).to_csv(P_out_base.format('del'), **csv_args)
+    pd.DataFrame(data.I).to_csv(I_out_base.format('del'), **csv_args)
 
 # EOF
