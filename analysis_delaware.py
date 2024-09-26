@@ -33,7 +33,7 @@ I_out_base = './datasets/slosh/{}/I.csv.gz'
 
 args = {
     'dataset'   : 'del',
-    'quantile'  : 0.90, 
+    'quantile'  : 0.9, 
     'conc'      : 0.1,
     'disc'      : 0.1,
     }
@@ -275,10 +275,11 @@ if __name__ == '__main__':
     # run_slosh_reg(**{**args, 'fixed' : True})
 
     csv_args = {'index' : False, 'compression' : 'gzip'}
-
     slosh = pd.read_csv(data_in_base.format('del'))
     slosh_obs = slosh.T[8:].values.astype(np.float64)    
-    data = Data_From_Raw(slosh_obs, decluster = False, quantile = args['conc'])
+    data = Data_From_Raw(
+        slosh_obs, decluster = False, quantile = args['quantile'],
+        )
     pd.DataFrame(data.V).to_csv(V_out_base.format('del'), **csv_args)
     pd.DataFrame(data.R).to_csv(R_out_base.format('del'), **csv_args)
     pd.DataFrame(data.Z).to_csv(Z_out_base.format('del'), **csv_args)
