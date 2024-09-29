@@ -30,6 +30,7 @@ R_out_base = './datasets/slosh/{}/R.csv.gz'
 Z_out_base = './datasets/slosh/{}/Z.csv.gz'
 P_out_base = './datasets/slosh/{}/P.csv.gz'
 I_out_base = './datasets/slosh/{}/I.csv.gz'
+W_out_base = './datasets/slosh/{}/W.csv.gz'
 
 args = {
     'dataset'   : 'del',
@@ -269,10 +270,10 @@ def run_slosh_reg(
     return
 
 if __name__ == '__main__':
-    # run_slosh_vb(**args)
-    # run_slosh_mc(**args)
-    # run_slosh_reg(**{**args, 'fixed' : False})
-    # run_slosh_reg(**{**args, 'fixed' : True})
+    run_slosh_vb(**args)
+    run_slosh_mc(**args)
+    run_slosh_reg(**{**args, 'fixed' : False})
+    run_slosh_reg(**{**args, 'fixed' : True})
 
     csv_args = {'index' : False, 'compression' : 'gzip'}
     slosh = pd.read_csv(data_in_base.format('del'))
@@ -285,5 +286,6 @@ if __name__ == '__main__':
     pd.DataFrame(data.Z).to_csv(Z_out_base.format('del'), **csv_args)
     pd.DataFrame(data.P).to_csv(P_out_base.format('del'), **csv_args)
     pd.DataFrame(data.I).to_csv(I_out_base.format('del'), **csv_args)
+    pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format('del'), **csv_args)
 
 # EOF
