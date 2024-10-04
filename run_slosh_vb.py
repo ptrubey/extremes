@@ -169,6 +169,15 @@ args = {
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
+    'dbg' : {
+        'path_in'     : path_in_base.format('dbg'),
+        'path_out'    : path_out_base.format('dbg'),
+        'cluster_out' : clus_out_base.format('dbg'),
+        'delta_out'   : delt_out_base.format('dbg'),
+        'quantile'     : 0.90, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
+        }
     }
 
 if __name__ == '__main__':
@@ -179,9 +188,9 @@ if __name__ == '__main__':
             data = instantiate_data(
                 args[dataset]['path_in'], args[dataset]['quantile'],
                 )
-            # run_slosh_for_nclusters(
-            #     data, dataset, args[dataset]['concs'], args[dataset]['discs'],
-            #     )
+            run_slosh_for_nclusters(
+                data, dataset, args[dataset]['concs'], args[dataset]['discs'],
+                )
             run_slosh(**{**args[dataset], 'eta' : 0.1, 'discount' : 0.1})
 
 # EOF

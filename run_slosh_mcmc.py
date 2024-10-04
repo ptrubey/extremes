@@ -104,6 +104,7 @@ run = {
     # 'loc' : True,
     'del' : True,
     # 'nyc' : True,
+    'dbg' : True,
     }
 path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
 path_out_base = './datasets/slosh/slosh_{}_mc.pkl'
@@ -182,6 +183,15 @@ args = {
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
+    'dbg' : {
+        'path_in'     : path_in_base.format('dbg'),
+        'path_out'    : path_out_base.format('dbg'),
+        'cluster_out' : clus_out_base.format('dbg'),
+        'delta_out'   : delt_out_base.format('dbg'),
+        'quantile'     : 0.90, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
+        }
     }
 
 if __name__ == '__main__':
