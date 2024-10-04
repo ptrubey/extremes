@@ -59,6 +59,7 @@ def run_slosh_vb(
     data = Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
     model = vb.VarPYPG(data, eta = conc, discount = disc)
     model.fit_advi()
+    print('Time VB: {}'.format(model.time_elapsed))
     
     deltas = model.generate_conditional_posterior_deltas()
     alphas = model.generate_conditional_posterior_alphas()
@@ -111,6 +112,7 @@ def run_slosh_mc(
     data = Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
     model = mc.Chain(data, concentration = conc, discout = disc)
     model.sample(50000, verbose = True)
+    print('Time MCMC: {}'.format(model.time_elapsed))
     out = BytesIO()
     model.write_to_disk(out, 40001, 10)
     res = mc.Result(out)
@@ -214,6 +216,7 @@ def run_slosh_reg(
         fixed_effects = fixed
         )
     model.sample(50000, verbose = True)
+    print('Time: Regression {}'.format(model.time_elapsed))
     out = BytesIO()
     model.write_to_disk(out, 40001, 10)
     res = mcr.Result(out)
