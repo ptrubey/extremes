@@ -68,15 +68,20 @@ def instantiate_data(path, quantile):
     slosh_obs = slosh.T[8:].values.astype(np.float64)
     return Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
 
-concs_small = [0.001, 0.01, 0.1, 0.2]
-discs_small = [0.001, 0.01, 0.1, 0.2]
+# concs_small = [0.001, 0.01, 0.1, 0.2]
+# discs_small = [0.001, 0.01, 0.1, 0.2]
 
-concs_large = [0.1, 0.5, 2.0]
-discs_large = [0.1, 0.2, 0.3]
+# concs_large = [0.1, 0.5, 2.0]
+# discs_large = [0.1, 0.2, 0.3]
 
-concs_xlarg = [1.0, 10.0]
-discs_xlarg = [0.2, 0.35, 0.5]
-
+# concs_xlarg = [1.0, 10.0]
+# discs_xlarg = [0.2, 0.35, 0.5]
+concs_small = [0.1]
+concs_large = concs_small
+concs_xlarg = concs_small
+discs_small = [0.1]
+discs_large = discs_small
+discs_xlarg = discs_small
 run = {
     # 't90' : True,
     # 'ltd' : True,
