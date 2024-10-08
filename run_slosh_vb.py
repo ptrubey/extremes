@@ -89,8 +89,10 @@ run = {
     # 'apt' : True,
     # 'emg' : True,
     # 'loc' : True,
-    'del' : True,
+    # 'del' : True,
     # 'nyc' : True,
+    'dbg' : True,
+    'crt' : True,
     }
 path_in_base  = './datasets/slosh/slosh_{}_data.csv.gz'
 path_out_base = './datasets/slosh/slosh_{}_vb.pkl'
@@ -177,7 +179,16 @@ args = {
         'quantile'     : 0.90, 
         'concs'       : concs_small,
         'discs'       : discs_small,
-        }
+        },
+    'crt' : {
+        'path_in'     : path_in_base.format('crt'),
+        'path_out'    : path_out_base.format('crt'),
+        'cluster_out' : clus_out_base.format('crt'),
+        'delta_out'   : delt_out_base.format('crt'),
+        'quantile'     : 0.90, 
+        'concs'       : concs_small,
+        'discs'       : discs_small,
+        },
     }
 
 if __name__ == '__main__':
