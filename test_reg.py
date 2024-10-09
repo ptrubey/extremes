@@ -91,7 +91,7 @@ if __name__ == '__main__':
             raw_real    = sloshltd_obs, 
             real_type   = 'threshold',
             decluster   = False, 
-            quantile    = 0.95,
+            quantile    = 0.90,
             observation = x_observation,
             location    = x_location,
             interaction = x_interaction,
@@ -103,12 +103,12 @@ if __name__ == '__main__':
         discount = float(args.disc),
         )
     model.sample(int(args.nSamp), verbose = args.verbose)
-    fname = 'sloshltd_{}_{}_{}'.format(args.src, args.conc, args.disc)
+    fname = 'slosh_{}_{}_{}'.format(args.src, args.conc, args.disc)
     fname_pkl = fname + '.pkl'
-    fpath_pkl = os.path.join('./test', fname_pkl)
+    fpath_pkl = os.path.join('./test/test', fname_pkl)
     model.write_to_disk(fpath_pkl, int(args.nKeep), int(args.nThin))
-    fpath_del = os.path.join('./test', fname + '_delta.csv')
-    fpath_gam = os.path.join('./test', fname + '_gamma.pkl')
+    fpath_del = os.path.join('./test/test', fname + '_delta.csv')
+    fpath_gam = os.path.join('./test/test', fname + '_gamma.pkl')
       
     res = Result(fpath_pkl)
     postdeltas = res.samples.delta

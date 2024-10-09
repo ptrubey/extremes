@@ -11,10 +11,13 @@ from subprocess import Popen, PIPE, STDOUT
 # srces = ['ltd']
 # srces = ['apt']
 # srces = ['apt','del','emg','ltd','nyc','xpt']
-srces = ['apt','del','emg']
+# srces = ['apt','del','emg']
 # srces = ['ltd','nyc','xpt']
-concs = ['0.01','0.1','0.5','2']
-discs = ['0.001','0.01','0.05','0.1']
+srces = ['crt'] # ,'dbg']
+# concs = ['0.01','0.1','0.5','2']
+# discs = ['0.001','0.01','0.05','0.1']
+concs = ['0.1']
+discs = ['0.1']
 
 if __name__ == '__main__':
     processes = []
