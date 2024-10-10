@@ -14,10 +14,12 @@ def argparser():
     # p.add_argument('in_regressors_path')
     # p.add_argument('in_location_path')
     # p.add_argument('out_path')
+    p.add_argument('--fixed_effects', default = 'True')
     p.add_argument('--nSamp', default = '30000')
     p.add_argument('--nKeep', default = '15000')
     p.add_argument('--nThin', default = '15')
     p.add_argument('--verbose', default = False)
+    
     # p.add_argument('--realtype', default = 'threshold')
     # p.add_argument('--quantile', default = 0.95)
     # p.add_argument('--decluster', default = 'True')
@@ -101,9 +103,12 @@ if __name__ == '__main__':
         p = 10, 
         concentration = float(args.conc), 
         discount = float(args.disc),
+        fixed_effects = eval(args.fixed_effects)
         )
     model.sample(int(args.nSamp), verbose = args.verbose)
-    fname = 'slosh_{}_{}_{}'.format(args.src, args.conc, args.disc)
+    fname = 'slosh_{}_{}_{}_{}'.format(
+        args.src, args.conc, args.disc, int(eval(args.fixed_effects))
+        )
     fname_pkl = fname + '.pkl'
     fpath_pkl = os.path.join('./test/test', fname_pkl)
     model.write_to_disk(fpath_pkl, int(args.nKeep), int(args.nThin))

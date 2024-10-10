@@ -86,16 +86,34 @@ def extant_clusters():
         if any([ds in path for ds in datasets]):
             out[path] = pd.read_csv(path)
     lines = []
-    Line = namedtuple('Line', 'path clusters')
+    Line = namedtuple('Line', 'path Clusters')
+    dsnames = {
+        't90' : 'Threshold',  'dbg' : 'Delaware',
+        'del' : 'Restricted', 'crt' : 'Critical',
+        }
     for path in out:
         temp = out[path]
         nc = temp.loc[(temp.eta == 0.1) & (temp.discount == 0.1)].ncluster[0]
-        lines.append(Line(path, nc))        
-
-    return out
+        lines.append(Line(path, str(int(nc))))
+    df = pd.DataFrame(lines)
+    df['Slice'] = [dsnames[path[-7:-4]] for path in df.path]
+    df['Fit'] = [path[-10:-8].upper() for path in df.path]
+    df = df[['Slice', 'Fit', 'Clusters']]
+    addl = [
+        {'Slice' : 'Threshold', 'Fit' : 'Reg w/ FE', 'Clusters' : '~'},
+        {'Slice' : 'Threshold', 'Fit' : 'Reg w/o FE', 'Clusters' : '~'},
+        {'Slice' : 'Delaware', 'Fit' : 'Reg w/ FE', 'Clusters' : '200+'},
+        {'Slice' : 'Delaware', 'Fit' : 'Reg w/o FE', 'Clusters' : '200+'},
+        {'Slice' : 'Restricted', 'Fit' : 'Reg w/ FE', 'Clusters' : '120'},
+        {'Slice' : 'Restricted', 'Fit' : 'Reg w/o FE', 'Clusters' : '130'},
+        {'Slice' : 'Critical', 'Fit' : 'Reg w/ FE', 'Clusters' : 'TBD'},
+        {'Slice' : 'Critical', 'Fit' : 'Reg w/o FE', 'Clusters' : 'TBD'},
+        ]
+    df = pd.concat([df, pd.DataFrame.from_records(addl)])
+    df.to_csv('./datasets/slosh/cluster_counts.csv', index = False)
 
 if __name__ == '__main__':
-    # data_description()
+    data_description()
     extant_clusters()
 
 # EOF
