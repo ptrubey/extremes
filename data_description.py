@@ -104,8 +104,8 @@ def extant_clusters():
         {'Slice' : 'Threshold', 'Fit' : 'Reg w/o FE', 'Clusters' : '~'},
         {'Slice' : 'Delaware', 'Fit' : 'Reg w/ FE', 'Clusters' : '200+'},
         {'Slice' : 'Delaware', 'Fit' : 'Reg w/o FE', 'Clusters' : '200+'},
-        {'Slice' : 'Restricted', 'Fit' : 'Reg w/ FE', 'Clusters' : '120'},
-        {'Slice' : 'Restricted', 'Fit' : 'Reg w/o FE', 'Clusters' : '130'},
+        {'Slice' : 'Restricted', 'Fit' : 'Reg w/ FE', 'Clusters' : '127'},
+        {'Slice' : 'Restricted', 'Fit' : 'Reg w/o FE', 'Clusters' : '118'},
         {'Slice' : 'Critical', 'Fit' : 'Reg w/ FE', 'Clusters' : 'TBD'},
         {'Slice' : 'Critical', 'Fit' : 'Reg w/o FE', 'Clusters' : 'TBD'},
         ]
@@ -113,7 +113,7 @@ def extant_clusters():
     df.to_csv('./datasets/slosh/cluster_counts.csv', index = False)
 
 if __name__ == '__main__':
-    data_description()
+    # data_description()
     extant_clusters()
 
 # EOF
