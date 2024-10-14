@@ -21,77 +21,6 @@ from projgamma import pt_logd_projgamma_my_mt_inplace_unstable,                 
 from samplers import py_sample_chi_bgsb_fixed, py_sample_cluster_bgsb_fixed,    \
     pt_py_sample_cluster_bgsb_fixed
 
-def gradient_normal(x):
-    """
-    calculates gradient on no
-    """
-
-def gradient_pypg_alpha(alpha, xi, tau, delta, log_y, logs_y):
-    """
-    calculates gradient on alpha_{jl} (shape parameter) for sample of size S
-    on projected gamma distribution with product of gammas prior
-    alpha   : PG shape              (S, J, D)
-    xi      : PG prior shape        (S, D)
-    tau     : PG prior rate         (S, D)
-    delta   : cluster identifier    (S, N)
-    log_y   : log(y)                (N, D)
-    logs_y  : log(sum(y))           (N)
-    """
-    S, J, D = alpha.shape
-    assert (D == xi.shape[1]) and (D == tau.shape[1]) and (D == log_y.shape[1])
-    assert (S == xi.shape[0]) and (S == tau.shape[0]) and (S == delta.shape[0])
-    assert (delta.shape[1] == log_y.shape[0])
-    assert (log_y.shape[0] == logs_y.shape[0])
-
-    dmat = delta[:,:,None] == range(J)     # (S, N, J)
-    n_j  = bincount2D_vectorized(delta, J) # (S, J)
-    s_a  = alpha.sum(axis = -1)            # (S, J)
-    
-    out = np.zeros((S, J, D))
-    out += (n_j * digamma(s_a))[:,:,None]  # (S, J, 1)
-    out -= np.einsum('snj,n->sj', dmat, logs_y)[:,:,None] # (S, J, 1)
-    out += np.einsum('snj,nd->sjd', dmat, log_y)  # (S, J, D)
-    out += (n_j[:,:,None] + xi[:,None,:] - 1) * digamma(alpha) # (S,J,D)
-    return out
-
-def gradient_pypg_xi(alpha, xi, tau, a, b):
-    """
-    calculates gradient on xi_{l} (prior shape parameter) for sample of size S
-    for Projected Gamma distribution with product of gammas prior
-    alpha : PG Shape            (S, J, D)
-    xi    : PG Prior Shape      (S, D)
-    tau   : PG Prior Rate       (S, D)
-    a     : xi Prior Shape      (1)
-    b     : xi Prior Rate       (1)
-    """
-    S, J, D = alpha.shape
-    assert (S == xi.shape[0]) and (S == tau.shape[0])
-    assert (D == xi.shape[1]) and (D == tau.shape[1])
-
-    out = np.zeros((S, D))
-    out += J * (np.log(tau) - digamma(xi))
-    out += np.log(alpha).sum(axis = 1)
-    out += (a - 1) / xi
-    out -= b
-    return out
-
-def gradient_pypg_tau(alpha, xi, tau, c, d):
-    """
-    calculates gradient on tau_{l} for sample of size S
-    alpha : PG Shape            (S, J, D)
-    xi    : PG Prior Shape      (S, D)
-    tau   : PG Prior Rate       (S, D)
-    a     : xi Prior Shape      (1)
-    b     : xi Prior Rate       (1)
-    """
-    S, J, D = alpha.shape
-
-    out = np.zeros((S, D))
-    out += (J * xi + c - 1) / tau
-    out -= alpha.sum(axis = 1)
-    out -= d
-    return out
-
 def stickbreak(nu):
     """
         Stickbreaking cluster probability
@@ -114,35 +43,61 @@ def stickbreak_tf(nu):
     return one_v * c_one
 
 class SurrogateVars(object):
-    def init_vars(self, J, D, dtype):
-        self.nu_mu    = tf.Variable(
-            normal.ppf(1 / np.arange(2, J + 1)[::-1]), dtype = dtype, name = 'nu_mu',
+    def init_vars(self, J, D, conc, disc, dtype):
+        self.nu_mu = tf.Variable(
+            digamma(1 - disc) - digamma(conc + np.arange(1, J) * disc),
+            dtype = dtype, name = 'nu_mu',
             )
-        self.nu_sd    = tf.Variable(
-            tf.ones([J-1], dtype = dtype) * -3., name = 'nu_sd',
+        self.nu_sd = tf.Variable(
+            digamma(1 - disc) + digamma(conc + np.arange(1, J) * disc),
+            dtype = dtype, name = 'nu_sd',
             )
         self.alpha_mu = tf.Variable(
-            tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+            np.zeros((J,D)), dtype = dtype, name = 'alpha_mu',
             )
         self.alpha_sd = tf.Variable(
-            tf.random.normal([J,D], mean = -2, dtype = dtype), name = 'alpha_sd',
+            np.ones((J,D)), dtype = dtype, name = 'alpha_sd',
             )
         self.xi_mu    = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
+            np.zeros([D]), dtype = dtype, name = 'xi_mu',
             )
         self.xi_sd    = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
+            np.ones([D]) * -1.5, dtype = dtype, name = 'xi_sd',
             )
         self.tau_mu   = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+            np.zeros([D]), dtype = dtype, name = 'tau_mu'
             )
         self.tau_sd   = tf.Variable(
-            tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+            np.ones([D]) * -3, dtype = dtype, name = 'tau_sd',
             )
+        # self.nu_mu    = tf.Variable(
+        #     normal.ppf(1 / np.arange(2, J + 1)[::-1]), dtype = dtype, name = 'nu_mu',
+        #     )
+        # self.nu_sd    = tf.Variable(
+        #     tf.ones([J-1], dtype = dtype) * -3., name = 'nu_sd',
+        #     )
+        # self.alpha_mu = tf.Variable(
+        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
+        #     )
+        # self.alpha_sd = tf.Variable(
+        #     tf.random.normal([J,D], mean = -2, dtype = dtype), name = 'alpha_sd',
+        #     )
+        # self.xi_mu    = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
+        #     )
+        # self.xi_sd    = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
+        #     )
+        # self.tau_mu   = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
+        #     )
+        # self.tau_sd   = tf.Variable(
+        #     tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
+        #     )
         return
         
-    def __init__(self, J, D, dtype = np.float64):
-        self.init_vars(J, D, dtype)
+    def __init__(self, J, D, conc, disc, dtype = np.float64):
+        self.init_vars(J, D, conc, disc, dtype)
         return
     
     pass
@@ -152,6 +107,35 @@ class SurrogateModel(object):
         self.vars = SurrogateVars(self.J, self.D, self.dtype)
         return
     
+    # def init_model(self):
+    #     self.model = tfd.JointDistributionNamed(dict(
+    #         xi = tfd.Independent(
+    #             tfd.LogNormal(
+    #                 self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
+    #                 ), 
+    #             reinterpreted_batch_ndims = 1,
+    #             ),
+    #         tau = tfd.Independent(
+    #             tfd.LogNormal(
+    #                 self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
+    #                 ), 
+    #             reinterpreted_batch_ndims = 1,
+    #             ),
+    #         nu = tfd.Independent(
+    #             tfd.LogitNormal(
+    #                 self.vars.nu_mu, tf.nn.softplus(self.vars.nu_sd),
+    #                 ), 
+    #             reinterpreted_batch_ndims = 1,
+    #             ),
+    #         alpha = tfd.Independent(
+    #             tfd.LogNormal(
+    #                 self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd)
+    #                 ),
+    #             reinterpreted_batch_ndims = 2,
+    #             ),
+    #         ))
+    #     return
+
     def init_model(self):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
@@ -314,11 +298,11 @@ class VarPYPG(object):
         return
 
     def init_surrogate(self):
-        self.surrogate = SurrogateModel(self.J, self.D, self.dtype)
-        weightinit = WeightsInitializer(
-            self.data, self.surrogate, self.eta, self.discount,
-            )
-        weightinit.set_weights()
+        self.surrogate = SurrogateModel(self.J, self.D, self.eta, self.discount, self.dtype)
+        # weightinit = WeightsInitializer(
+        #     self.data, self.surrogate, self.eta, self.discount,
+        #     )
+        # weightinit.set_weights()
         return
     
     def fit_advi(self, min_steps = 5000, max_steps = 100000,
@@ -440,7 +424,7 @@ class VarPYPG(object):
     def generate_conditional_posterior_predictive_hypercube(self, n = 500):
         gammas = self.generate_conditional_posterior_predictive_gammas(n)
         return euclidean_to_hypercube(gammas)
-
+    
     pass
 
 class ReducedSurrogateVars(SurrogateVars):
