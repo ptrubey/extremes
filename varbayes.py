@@ -104,7 +104,9 @@ class SurrogateVars(object):
 
 class SurrogateModel(object):
     def init_vars(self):
-        self.vars = SurrogateVars(self.J, self.D, self.dtype)
+        self.vars = SurrogateVars(
+            self.J, self.D, self.conc, self.disc, self.dtype,
+            )
         return
     
     # def init_model(self):
@@ -168,9 +170,11 @@ class SurrogateModel(object):
     def sample(self, n):
         return self.model.sample(n)
 
-    def __init__(self, J, D, dtype = np.float64):
+    def __init__(self, J, D, concentration, discount, dtype = np.float64):
         self.J = J
         self.D = D
+        self.conc = concentration
+        self.disc = discount
         self.dtype = dtype
         self.init_vars()
         self.init_model()
