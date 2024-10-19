@@ -49,7 +49,7 @@ def run_slosh_vb(
     alpha_out_path = alpha_out_base.format(dataset, 'vb')
     delta_out_path = delta_out_base.format(dataset, 'vb')
     clust_out_path = clust_out_base.format(dataset, 'vb')
-    graph_out_path = graph_out_base.format(dataset, 'vb')
+    # graph_out_path = graph_out_base.format(dataset, 'vb')
     slosh_out_path = slosh_out_base.format(dataset, 'vb')
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
@@ -65,14 +65,14 @@ def run_slosh_vb(
     alphas = model.generate_conditional_posterior_alphas()
 
     smat   = post.similarity_matrix(deltas)
-    graph  = pd.DataFrame(post.minimum_spanning_trees(deltas.T)).rename(
-        columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'},
-        )
+    # graph  = pd.DataFrame(post.minimum_spanning_trees(deltas.T)).rename(
+    #     columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'},
+    #     )
     pd.DataFrame(
         deltas.T, 
         columns = ['X{:03}'.format(i) for i in range(data.nDat)],
         ).to_csv(delta_out_path, index = False, compression = 'gzip')
-    graph.to_csv(graph_out_path, index = False, compression = 'gzip')
+    # graph.to_csv(graph_out_path, index = False, compression = 'gzip')
     alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 2))
     alphaM[:,:,2:] = alphas
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
@@ -102,7 +102,7 @@ def run_slosh_mc(
     alpha_out_path = alpha_out_base.format(dataset, 'mc')
     delta_out_path = delta_out_base.format(dataset, 'mc')
     clust_out_path = clust_out_base.format(dataset, 'mc')
-    graph_out_path = graph_out_base.format(dataset, 'mc')
+    # graph_out_path = graph_out_base.format(dataset, 'mc')
     slosh_out_path = slosh_out_base.format(dataset, 'mc')
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
@@ -121,14 +121,14 @@ def run_slosh_mc(
     alphas = res.generate_conditional_posterior_predictive_zetas()
     
     smat   = post.similarity_matrix(deltas.T)
-    graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
-        columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
-        )
+    # graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
+    #     columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
+    #     )
     pd.DataFrame(
         deltas, 
         columns = ['X{:03}'.format(i) for i in range(data.nDat)],
         ).to_csv(delta_out_path, index = False, compression = 'gzip')
-    graph.to_csv(graph_out_path, index = False, compression = 'gzip')
+    # graph.to_csv(graph_out_path, index = False, compression = 'gzip')
     alphaM = np.empty((alphas.shape[0], alphas.shape[1], alphas.shape[2] + 2))
     alphaM[:,:,2:] = alphas
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
@@ -158,7 +158,7 @@ def run_slosh_reg(
     alpha_out_path = alpha_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     delta_out_path = delta_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     clust_out_path = clust_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
-    graph_out_path = graph_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    # graph_out_path = graph_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     theta_out_path = theta_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     slosh_out_path = slosh_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     fixed_out_path = fixed_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
@@ -234,9 +234,9 @@ def run_slosh_reg(
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
     alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
     smat   = post.similarity_matrix(deltas.T)
-    graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
-        columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
-        )
+    # graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
+    #     columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
+    #     )
     if fixed:
         pd.DataFrame(res.samples.epsilon).to_csv(
             fixed_out_path, index = False, compression = 'gzip',
@@ -256,7 +256,7 @@ def run_slosh_reg(
         ).to_csv(
             theta_out_path, index = False, compression = 'gzip',
             )
-    graph.to_csv(graph_out_path, index = False, compression = 'gzip')
+    # graph.to_csv(graph_out_path, index = False, compression = 'gzip')
     pd.DataFrame(
         smat,
         columns = ['S{:03}'.format(i) for i in range(data.nDat)]
@@ -287,9 +287,9 @@ if __name__ == '__main__':
     pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
 
     run_slosh_vb(**args)
-    run_slosh_mc(**args)
-    run_slosh_reg(**{**args, 'fixed' : False})
-    run_slosh_reg(**{**args, 'fixed' : True})
+    # run_slosh_mc(**args)
+    # run_slosh_reg(**{**args, 'fixed' : False})
+    # run_slosh_reg(**{**args, 'fixed' : True})
 
 
 

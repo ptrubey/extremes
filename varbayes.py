@@ -44,56 +44,30 @@ def stickbreak_tf(nu):
 
 class SurrogateVars(object):
     def init_vars(self, J, D, conc, disc, dtype):
-        self.nu_mu = tf.Variable(
-            digamma(1 - disc) - digamma(conc + np.arange(1, J) * disc),
-            dtype = dtype, name = 'nu_mu',
+        self.nu_mu    = tf.Variable(
+            normal.ppf(1 / np.arange(2, J + 1)[::-1]), dtype = dtype, name = 'nu_mu',
             )
-        self.nu_sd = tf.Variable(
-            digamma(1 - disc) + digamma(conc + np.arange(1, J) * disc),
-            dtype = dtype, name = 'nu_sd',
+        self.nu_sd    = tf.Variable(
+            tf.ones([J-1], dtype = dtype) * -3., name = 'nu_sd',
             )
         self.alpha_mu = tf.Variable(
-            np.zeros((J,D)), dtype = dtype, name = 'alpha_mu',
+            tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
             )
         self.alpha_sd = tf.Variable(
-            np.ones((J,D)), dtype = dtype, name = 'alpha_sd',
+            tf.random.normal([J,D], mean = -2, dtype = dtype), name = 'alpha_sd',
             )
         self.xi_mu    = tf.Variable(
-            np.zeros([D]), dtype = dtype, name = 'xi_mu',
+            tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
             )
         self.xi_sd    = tf.Variable(
-            np.ones([D]) * -1.5, dtype = dtype, name = 'xi_sd',
+            tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
             )
         self.tau_mu   = tf.Variable(
-            np.zeros([D]), dtype = dtype, name = 'tau_mu'
+            tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
             )
         self.tau_sd   = tf.Variable(
-            np.ones([D]) * -3, dtype = dtype, name = 'tau_sd',
+            tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
             )
-        # self.nu_mu    = tf.Variable(
-        #     normal.ppf(1 / np.arange(2, J + 1)[::-1]), dtype = dtype, name = 'nu_mu',
-        #     )
-        # self.nu_sd    = tf.Variable(
-        #     tf.ones([J-1], dtype = dtype) * -3., name = 'nu_sd',
-        #     )
-        # self.alpha_mu = tf.Variable(
-        #     tf.random.normal([J,D], dtype = dtype), name = 'alpha_mu',
-        #     )
-        # self.alpha_sd = tf.Variable(
-        #     tf.random.normal([J,D], mean = -2, dtype = dtype), name = 'alpha_sd',
-        #     )
-        # self.xi_mu    = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'xi_mu',
-        #     )
-        # self.xi_sd    = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'xi_sd',
-        #     )
-        # self.tau_mu   = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'tau_mu',
-        #     )
-        # self.tau_sd   = tf.Variable(
-        #     tf.random.normal([D],   dtype = dtype), name = 'tau_sd',
-        #     )
         return
         
     def __init__(self, J, D, conc, disc, dtype = np.float64):
@@ -109,35 +83,6 @@ class SurrogateModel(object):
             )
         return
     
-    # def init_model(self):
-    #     self.model = tfd.JointDistributionNamed(dict(
-    #         xi = tfd.Independent(
-    #             tfd.LogNormal(
-    #                 self.vars.xi_mu, tf.nn.softplus(self.vars.xi_sd),
-    #                 ), 
-    #             reinterpreted_batch_ndims = 1,
-    #             ),
-    #         tau = tfd.Independent(
-    #             tfd.LogNormal(
-    #                 self.vars.tau_mu, tf.nn.softplus(self.vars.tau_sd),
-    #                 ), 
-    #             reinterpreted_batch_ndims = 1,
-    #             ),
-    #         nu = tfd.Independent(
-    #             tfd.LogitNormal(
-    #                 self.vars.nu_mu, tf.nn.softplus(self.vars.nu_sd),
-    #                 ), 
-    #             reinterpreted_batch_ndims = 1,
-    #             ),
-    #         alpha = tfd.Independent(
-    #             tfd.LogNormal(
-    #                 self.vars.alpha_mu, tf.nn.softplus(self.vars.alpha_sd)
-    #                 ),
-    #             reinterpreted_batch_ndims = 2,
-    #             ),
-    #         ))
-    #     return
-
     def init_model(self):
         self.model = tfd.JointDistributionNamed(dict(
             xi = tfd.Independent(
@@ -303,10 +248,10 @@ class VarPYPG(object):
 
     def init_surrogate(self):
         self.surrogate = SurrogateModel(self.J, self.D, self.eta, self.discount, self.dtype)
-        # weightinit = WeightsInitializer(
-        #     self.data, self.surrogate, self.eta, self.discount,
-        #     )
-        # weightinit.set_weights()
+        weightinit = WeightsInitializer(
+            self.data, self.surrogate, self.eta, self.discount,
+            )
+        weightinit.set_weights()
         return
     
     def fit_advi(self, min_steps = 5000, max_steps = 100000,
