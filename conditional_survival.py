@@ -126,19 +126,33 @@ class Conditional_Survival(object):
         surv.T[1] = descale_pareto(surv.T[1], self.data.P.T[new_dims[1]])
         return surv
 
-    def load_raw(self, path):
-        raw = pd.read_csv(path)
-        self.data = Data_From_Raw(raw, True)
+    def load_raw(self, path = '', raw = None, *args, **kwargs):
+        if os.path.exists(path):
+            raw = pd.read_csv(path)
+        elif type(raw) is np.ndarray:
+            pass
+        else:
+            raise TypeError('Pass either path or raw!')
+        self.data = Data_From_Raw(raw, *args, **kwargs)
         return
 
     pass
 
-def ResultFactory(model_type, fitted_path, raw_path):
+def ResultFactory(model_type, fitted_path, raw, raw_args):
     class Result(Results[model_type], Conditional_Survival):
         pass
 
     result = Result(fitted_path)
-    result.load_raw(raw_path)
+    if type(raw) is np.ndarray:
+        result.load_raw(raw = raw, **raw_args)
+    elif type(raw) is str:
+        if os.path.exists(raw):
+            result.load_raw(path = raw, **raw_args)
+        else:
+            raise ValueError('Path string must point at file')
+    else:
+        raise TypeError('raw should be string or !')
+
     return result
 
 if __name__ == '__main__':
