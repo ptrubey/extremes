@@ -21,6 +21,7 @@ delta_out_base = './datasets/slosh/{}/{}_delta.csv.gz'
 graph_out_base = './datasets/slosh/{}/{}_graph.csv.gz'
 slosh_out_base = './datasets/slosh/{}/{}_locinfo.csv.gz'
 theta_out_base = './datasets/slosh/{}/{}_theta.csv.gz'
+resul_out_base = './datasets/slosh/{}/{}_result.pkl'
 
 regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
 fixed_out_base = './datasets/slosh/{}/{}_epsilon.csv.gz'
@@ -35,8 +36,8 @@ W_out_base = './datasets/slosh/{}/W.csv.gz'
 args = {
     'dataset'   : 'crt',
     'quantile'  : 0.9, 
-    'conc'      : 0.1,
-    'disc'      : 0.1,
+    'conc'      : 0.05,
+    'disc'      : 0.01,
     }
 
 def run_slosh_vb(
@@ -51,6 +52,7 @@ def run_slosh_vb(
     clust_out_path = clust_out_base.format(dataset, 'vb')
     # graph_out_path = graph_out_base.format(dataset, 'vb')
     slosh_out_path = slosh_out_base.format(dataset, 'vb')
+    # resul_out_path = resul_out_base.format(dataset, 'vb')
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
     slosh_ids = slosh.T[:8].T
@@ -60,6 +62,7 @@ def run_slosh_vb(
     model = vb.VarPYPG(data, eta = conc, discount = disc)
     model.fit_advi()
     print('Time VB: {}'.format(model.time_elapsed))
+    # model.write_to_disk(resul_out_path)
     
     deltas = model.generate_conditional_posterior_deltas()
     alphas = model.generate_conditional_posterior_alphas()
@@ -104,6 +107,7 @@ def run_slosh_mc(
     clust_out_path = clust_out_base.format(dataset, 'mc')
     # graph_out_path = graph_out_base.format(dataset, 'mc')
     slosh_out_path = slosh_out_base.format(dataset, 'mc')
+    resul_out_path = resul_out_base.format(dataset, 'mc')
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
     slosh_ids = slosh.T[:8].T
@@ -115,6 +119,7 @@ def run_slosh_mc(
     print('Time MCMC: {}'.format(model.time_elapsed))
     out = BytesIO()
     model.write_to_disk(out, 40001, 10)
+    model.write_to_disk(resul_out_path, 40001, 10)
     res = mc.Result(out)
 
     deltas = res.samples.delta
@@ -162,6 +167,7 @@ def run_slosh_reg(
     theta_out_path = theta_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     slosh_out_path = slosh_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     fixed_out_path = fixed_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    resul_out_path = resul_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
 
     reobs_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'obs')
     reloc_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'loc')
@@ -219,6 +225,7 @@ def run_slosh_reg(
     print('Time: Regression {}'.format(model.time_elapsed))
     out = BytesIO()
     model.write_to_disk(out, 40001, 10)
+    model.write_to_disk(resul_out_path, 40001, 10)
     res = mcr.Result(out)
 
     deltas = res.samples.delta
@@ -279,17 +286,17 @@ if __name__ == '__main__':
     data = Data_From_Raw(
         slosh_obs, decluster = False, quantile = args['quantile'],
         )
-    pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.P).to_csv(P_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.I).to_csv(I_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.P).to_csv(P_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.I).to_csv(I_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
 
-    run_slosh_vb(**args)
-    # run_slosh_mc(**args)
-    # run_slosh_reg(**{**args, 'fixed' : False})
-    # run_slosh_reg(**{**args, 'fixed' : True})
+    # run_slosh_vb(**args)
+    run_slosh_mc(**args)
+    run_slosh_reg(**{**args, 'fixed' : False})
+    run_slosh_reg(**{**args, 'fixed' : True})
 
 
 

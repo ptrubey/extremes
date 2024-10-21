@@ -156,7 +156,8 @@ def ResultFactory(model_type, fitted_path, raw, raw_args):
     return result
 
 if __name__ == '__main__':
-    fitted_path = "./output/dppprg/results_2_1e-1.db"
+    # fitted_path = "./output/dppprg/results_2_1e-1.db"
+    fitted_path = './datasets/slosh/'
     raw_path    = "./datasets/ivt_nov_mar.csv"
     model_type = 'dppprg'
 
