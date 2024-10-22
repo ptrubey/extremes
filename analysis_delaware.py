@@ -21,6 +21,7 @@ delta_out_base = './datasets/slosh/{}/{}_delta.csv.gz'
 graph_out_base = './datasets/slosh/{}/{}_graph.csv.gz'
 slosh_out_base = './datasets/slosh/{}/{}_locinfo.csv.gz'
 theta_out_base = './datasets/slosh/{}/{}_theta.csv.gz'
+resul_out_base = './datasets/slosh/{}/{}_result.pkl'
 
 regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
 fixed_out_base = './datasets/slosh/{}/{}_epsilon.csv.gz'
@@ -103,6 +104,7 @@ def run_slosh_mc(
     clust_out_path = clust_out_base.format(dataset, 'mc')
     graph_out_path = graph_out_base.format(dataset, 'mc')
     slosh_out_path = slosh_out_base.format(dataset, 'mc')
+    resul_out_path = resul_out_base.format(dataset, 'mc')
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
     slosh_ids = slosh.T[:8].T
@@ -113,6 +115,7 @@ def run_slosh_mc(
     model.sample(50000, verbose = True)
     out = BytesIO()
     model.write_to_disk(out, 40001, 10)
+    model.write_to_disk(resul_out_path, 40001, 10)
     res = mc.Result(out)
 
     deltas = res.samples.delta
@@ -160,6 +163,7 @@ def run_slosh_reg(
     theta_out_path = theta_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     slosh_out_path = slosh_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     fixed_out_path = fixed_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    resul_out_path = resul_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
 
     reobs_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'obs')
     reloc_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'loc')
@@ -216,6 +220,7 @@ def run_slosh_reg(
     model.sample(50000, verbose = True)
     out = BytesIO()
     model.write_to_disk(out, 40001, 10)
+    model.write_to_disk(resul_out_path, 40001, 10)
     res = mcr.Result(out)
 
     deltas = res.samples.delta
