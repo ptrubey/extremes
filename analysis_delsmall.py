@@ -311,23 +311,23 @@ def run_slosh_reg(
 
 if __name__ == '__main__':
     pass
-    # csv_args = {'index' : False, 'compression' : 'gzip'}
-    # slosh = pd.read_csv(data_in_base.format(dataset))
-    # slosh_obs = slosh.T[8:].values.astype(np.float64)    
-    # data = Data_From_Raw(
-    #     slosh_obs, decluster = False, quantile = args['quantile'],
-    #     )
-    # pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
-    # pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
-    # pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
-    # pd.DataFrame(data.P).to_csv(P_out_base.format(dataset), **csv_args)
-    # pd.DataFrame(data.I).to_csv(I_out_base.format(dataset), **csv_args)
-    # pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
+    csv_args = {'index' : False, 'compression' : 'gzip'}
+    slosh = pd.read_csv(data_in_base.format(dataset))
+    slosh_obs = slosh.T[8:].values.astype(np.float64)    
+    data = Data_From_Raw(
+        slosh_obs, decluster = False, quantile = args['quantile'],
+        )
+    pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
+    pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
+    pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
+    pd.DataFrame(data.P).to_csv(P_out_base.format(dataset), **csv_args)
+    pd.DataFrame(data.I).to_csv(I_out_base.format(dataset), **csv_args)
+    pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
 
     # run_slosh_vb(**args)
     # run_slosh_mc(**args)
-    # run_slosh_reg(**{**args, 'fixed' : False})
-    # run_slosh_reg(**{**args, 'fixed' : True})
+    run_slosh_reg(**{**args, 'fixed' : False})
+    run_slosh_reg(**{**args, 'fixed' : True})
 
 
 

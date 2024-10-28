@@ -636,6 +636,29 @@ class Chain(DirichletProcessSampler, ChainBase):
         return
 
 class Result(ChainBase):
+
+    def generate_postpred_regression(self):
+        new_gammas = []
+        for s in range(self.nSamp):
+            dmax = self.samples.delta[s].max()
+            njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1))
+            ljs = (
+                + njs - (njs > 0) * self.discount
+                + (njs == 0) * (
+                    self.concentration
+                    + (njs > 0).sum() * self.discount
+                    )
+                )
+            prob = ljs / ljs.sum()
+            deltas = generate_indices(prob, self.N)
+            zeta = self.compute_shape_theta(
+                delta = deltas, 
+                theta = self.samples.theta[s], 
+                epsilon = self.samples.epsilon[s],
+                )
+            new_gammas.append(gamma(shape = zeta))
+        return np.stack(new_gammas)
+
     def generate_conditional_posterior_predictive_alphas(self):
         alphas = []
         for i in range(self.nSamp):
