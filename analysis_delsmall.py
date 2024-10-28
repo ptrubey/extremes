@@ -26,7 +26,7 @@ resul_out_base = './datasets/slosh/{}/{}_result.pkl'
 
 regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
 fixed_out_base = './datasets/slosh/{}/{}_epsilon.csv.gz'
-ppr_out_base   = './datasets/slosh/{}/{}_V_{}.csv.gz'
+ppr_out_base   = './datasets/slosh/{}/{}_V.csv.gz'
 
 V_out_base = './datasets/slosh/{}/V.csv.gz'
 R_out_base = './datasets/slosh/{}/R.csv.gz'
