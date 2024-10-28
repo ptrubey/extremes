@@ -18,6 +18,7 @@ data_in_base   = './datasets/slosh/slosh_{}_data.csv.gz'
 alpha_out_base = './datasets/slosh/{}/{}_alphas.csv.gz'
 clust_out_base = './datasets/slosh/{}/{}_clusters.csv.gz'
 delta_out_base = './datasets/slosh/{}/{}_delta.csv.gz'
+nu_out_base    = './datasets/slosh/{}/{}_nu.csv.gz'
 graph_out_base = './datasets/slosh/{}/{}_graph.csv.gz'
 slosh_out_base = './datasets/slosh/{}/{}_locinfo.csv.gz'
 theta_out_base = './datasets/slosh/{}/{}_theta.csv.gz'
@@ -25,6 +26,7 @@ resul_out_base = './datasets/slosh/{}/{}_result.pkl'
 
 regre_out_base = './datasets/slosh/{}/{}_X_{}.csv.gz'
 fixed_out_base = './datasets/slosh/{}/{}_epsilon.csv.gz'
+ppr_out_base   = './datasets/slosh/{}/{}_V_{}.csv.gz'
 
 V_out_base = './datasets/slosh/{}/V.csv.gz'
 R_out_base = './datasets/slosh/{}/R.csv.gz'
@@ -53,6 +55,7 @@ def run_slosh_vb(
     # graph_out_path = graph_out_base.format(dataset, 'vb')
     slosh_out_path = slosh_out_base.format(dataset, 'vb')
     # resul_out_path = resul_out_base.format(dataset, 'vb')
+    nu_out_path    = nu_out_base.format(dataset, 'vb')
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
     slosh_ids = slosh.T[:8].T
@@ -66,7 +69,10 @@ def run_slosh_vb(
     
     deltas = model.generate_conditional_posterior_deltas()
     alphas = model.generate_conditional_posterior_alphas()
-
+    
+    samples = model.surrogate.sample(5000)
+    nu      = samples['nu'].numpy()
+    
     smat   = post.similarity_matrix(deltas)
     # graph  = pd.DataFrame(post.minimum_spanning_trees(deltas.T)).rename(
     #     columns = {0 : 'node1', 1 : 'node2', 2 : 'weight'},
@@ -90,7 +96,11 @@ def run_slosh_vb(
         smat,
         columns = ['S{:03}'.format(i) for i in range(data.nDat)]
         ).to_csv(clust_out_path, index = False, compression = 'gzip')
-    
+    pd.DataFrame(
+        nu,
+        columns = ['nu{:03}'.format(i) for i in range(nu.shape[1])],
+        ).to_csv(nu_out_path, index = False, compression = 'gzip')
+
     params = pd.read_csv('./datasets/slosh/slosh_params.csv').loc[data.I]
     params.to_csv(slosh_out_path, index = False, compression = 'gzip')
     return
@@ -108,6 +118,7 @@ def run_slosh_mc(
     # graph_out_path = graph_out_base.format(dataset, 'mc')
     slosh_out_path = slosh_out_base.format(dataset, 'mc')
     resul_out_path = resul_out_base.format(dataset, 'mc')
+    nu_out_path    = nu_out_base.format(dataset, 'mc')    
 
     slosh = pd.read_csv(data_in_path, compression = 'gzip')
     slosh_ids = slosh.T[:8].T
@@ -168,6 +179,8 @@ def run_slosh_reg(
     slosh_out_path = slosh_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     fixed_out_path = fixed_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
     resul_out_path = resul_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    nu_out_path    = nu_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
+    ppr_out_path   = ppr_out_base.format(dataset, 'reg_{}'.format(int(fixed)))
 
     reobs_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'obs')
     reloc_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'loc')
@@ -228,6 +241,8 @@ def run_slosh_reg(
     model.write_to_disk(resul_out_path, 40001, 10)
     res = mcr.Result(out)
 
+    
+
     deltas = res.samples.delta
     thetas = np.vstack([
         np.hstack((np.ones(theta.shape[0]).reshape(-1,1) * i, theta))
@@ -241,6 +256,13 @@ def run_slosh_reg(
     alphaM[:,:,0]  = np.arange(alphas.shape[0]).reshape(alphas.shape[0], 1)
     alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
     smat   = post.similarity_matrix(deltas.T)
+
+    Vnew = res.generate_postpred_regression()
+    VnewM = np.empty((Vnew.shape[0], Vnew.shape[1], Vnew.shape[2] + 2))
+    VnewM[:,:,2:] = Vnew
+    VnewM[:,:,0] = np.arange(Vnew.shape[0]).reshape(Vnew.shape[0], 1)
+    VnewM[:,:,1] = np.arange(Vnew.shape[1]).reshape(1, Vnew.shape[1])
+
     # graph  = pd.DataFrame(post.minimum_spanning_trees(deltas)).rename(
     #     columns = {0 : 'node1', 1 : 'node2', 2 : 'node3'},
     #     )
@@ -257,6 +279,14 @@ def run_slosh_reg(
     pd.DataFrame(deltas).to_csv(
         delta_out_path, index = False, compression = 'gzip',
         )
+    pd.DataFrame(
+        VnewM.reshape(-1, VnewM.shape[2]),
+        columns = ['iter','storm'] + [
+            'V{:03}'.format(i) for i in range(Vnew.shape[2])
+            ]
+        ).to_csv(
+            ppr_out_path, index = False, compression = 'gzip',
+            )
     pd.DataFrame(
         thetas,
         columns = ['iter'] + ['T{:03}'.format(i) for i in range(thetas.shape[1] - 1)]
@@ -280,12 +310,13 @@ def run_slosh_reg(
     return
 
 if __name__ == '__main__':
-    csv_args = {'index' : False, 'compression' : 'gzip'}
-    slosh = pd.read_csv(data_in_base.format(dataset))
-    slosh_obs = slosh.T[8:].values.astype(np.float64)    
-    data = Data_From_Raw(
-        slosh_obs, decluster = False, quantile = args['quantile'],
-        )
+    pass
+    # csv_args = {'index' : False, 'compression' : 'gzip'}
+    # slosh = pd.read_csv(data_in_base.format(dataset))
+    # slosh_obs = slosh.T[8:].values.astype(np.float64)    
+    # data = Data_From_Raw(
+    #     slosh_obs, decluster = False, quantile = args['quantile'],
+    #     )
     # pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
     # pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
     # pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
@@ -294,9 +325,9 @@ if __name__ == '__main__':
     # pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
 
     # run_slosh_vb(**args)
-    run_slosh_mc(**args)
-    run_slosh_reg(**{**args, 'fixed' : False})
-    run_slosh_reg(**{**args, 'fixed' : True})
+    # run_slosh_mc(**args)
+    # run_slosh_reg(**{**args, 'fixed' : False})
+    # run_slosh_reg(**{**args, 'fixed' : True})
 
 
 
