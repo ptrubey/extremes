@@ -5,7 +5,7 @@ from io import BytesIO
 from geopy.distance import geodesic
 
 from energy import limit_cpu
-from data import Data_From_Raw
+from data import Data_From_Raw, euclidean_to_hypercube
 
 import model_spypprg as mc
 import varbayes as vb
@@ -186,7 +186,6 @@ def run_slosh_reg(
     reloc_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'loc')
     reint_out_path = regre_out_base.format(dataset, 'reg_{}'.format(int(fixed)), 'int')
 
-    
     params = pd.read_csv('./datasets/slosh/slosh_params.csv')
     locats = pd.read_csv('./datasets/slosh/slosh_locs.csv')[['IDX','NearOcean','elevation']]
     locats.IDX = locats.IDX.astype(np.int64)
@@ -209,7 +208,6 @@ def run_slosh_reg(
         locatx_std, 
         sloshltd_idi[['NearOcean','elevation']].values.astype(np.float64),
         ))
-
     storm_locs = list(map(tuple, params[['lat','long']].values))
     slosh_locs = list(map(tuple, sloshltd_ids[['lat','long']].values))
     distances  = np.array([
@@ -227,21 +225,20 @@ def run_slosh_reg(
             location    = x_location,
             interaction = x_interaction,
             )
-    model = mcr.Chain(
-        data, 
-        p = 10, 
-        concentration = conc, 
-        discount = disc,
-        fixed_effects = fixed
-        )
-    model.sample(50000, verbose = True)
-    print('Time: Regression {}'.format(model.time_elapsed))
-    out = BytesIO()
-    model.write_to_disk(out, 40001, 10)
-    model.write_to_disk(resul_out_path, 40001, 10)
-    res = mcr.Result(out)
-
-    
+    # model = mcr.Chain(
+    #     data, 
+    #     p = 10, 
+    #     concentration = conc, 
+    #     discount = disc,
+    #     fixed_effects = fixed
+    #     )
+    # model.sample(50000, verbose = True)
+    # print('Time: Regression {}'.format(model.time_elapsed))
+    # out = BytesIO()
+    # model.write_to_disk(out, 40001, 10)
+    # model.write_to_disk(resul_out_path, 40001, 10)
+    # # res = mcr.Result(out)
+    res = mcr.Result(resul_out_path)
 
     deltas = res.samples.delta
     thetas = np.vstack([
@@ -257,7 +254,10 @@ def run_slosh_reg(
     alphaM[:,:,1]  = np.arange(alphas.shape[1]).reshape(1, alphas.shape[1])
     smat   = post.similarity_matrix(deltas.T)
 
-    Vnew = res.generate_postpred_regression()
+    Vnew = np.vstack([
+        res.generate_posterior_predictive_hypercube()
+        for _ in range(20)
+        ])
     VnewM = np.empty((Vnew.shape[0], Vnew.shape[1], Vnew.shape[2] + 2))
     VnewM[:,:,2:] = Vnew
     VnewM[:,:,0] = np.arange(Vnew.shape[0]).reshape(Vnew.shape[0], 1)
@@ -317,12 +317,12 @@ if __name__ == '__main__':
     data = Data_From_Raw(
         slosh_obs, decluster = False, quantile = args['quantile'],
         )
-    pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.P).to_csv(P_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.I).to_csv(I_out_base.format(dataset), **csv_args)
-    pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.V).to_csv(V_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.R).to_csv(R_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.Z).to_csv(Z_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.P).to_csv(P_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.I).to_csv(I_out_base.format(dataset), **csv_args)
+    # pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format(dataset), **csv_args)
 
     # run_slosh_vb(**args)
     # run_slosh_mc(**args)

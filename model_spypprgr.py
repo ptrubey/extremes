@@ -637,27 +637,32 @@ class Chain(DirichletProcessSampler, ChainBase):
 
 class Result(ChainBase):
 
-    def generate_postpred_regression(self):
-        new_gammas = []
-        for s in range(self.nSamp):
-            dmax = self.samples.delta[s].max()
-            njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1))
-            ljs = (
-                + njs - (njs > 0) * self.discount
-                + (njs == 0) * (
-                    self.concentration
-                    + (njs > 0).sum() * self.discount
+    def generate_posterior_predictive_gammas(self, n_per_sample = 1, obs = None):
+        outs = []
+        for _ in range(n_per_sample):
+            new_gammas = []
+            for s in range(self.nSamp):
+                dmax = self.samples.delta[s].max()
+                njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1))
+                ljs = (
+                    + njs - (njs > 0) * self.discount
+                    + (njs == 0) * (
+                        self.concentration
+                        + (njs > 0).sum() * self.discount
+                        )
                     )
-                )
-            prob = ljs / ljs.sum()
-            deltas = generate_indices(prob, self.N)
-            zeta = self.compute_shape_theta(
-                delta = deltas, 
-                theta = self.samples.theta[s], 
-                epsilon = self.samples.epsilon[s],
-                )
-            new_gammas.append(gamma(shape = zeta))
-        return np.stack(new_gammas)
+                prob = ljs / ljs.sum()
+                deltas = generate_indices(prob, self.N)
+                zeta = self.compute_shape_theta(
+                    delta = deltas, 
+                    theta = self.samples.theta[s], 
+                    epsilon = self.samples.epsilon[s],
+                    )
+                if obs is not None:
+                    zeta = zeta[obs]
+                new_gammas.append(gamma(shape = zeta))
+            outs.append(np.stack(new_gammas))
+        return np.vstack(outs)
 
     def generate_conditional_posterior_predictive_alphas(self):
         alphas = []
@@ -682,7 +687,7 @@ class Result(ChainBase):
             gammas.append(gamma(shape))
         return np.stack(gammas)
 
-    def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
+    def generate_posterior_predictive_gammas_old(self, n_per_sample = 1, m = 10):
         new_gammas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
@@ -705,21 +710,13 @@ class Result(ChainBase):
             new_gammas.append(gamma(shape = zeta))
         return np.vstack(new_gammas)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10):
-        gammas = self.generate_posterior_predictive_gammas(n_per_sample, m)
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 1, *args, **kwargs):
+        gammas = self.generate_posterior_predictive_gammas(n_per_sample, *args, **kwargs)
         return euclidean_to_hypercube(gammas)
 
-    def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10):
-        hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
+    def generate_posterior_predictive_angular(self, n_per_sample = 1, *args, **kwargs):
+        hyp = self.generate_posterior_predictive_hypercube(n_per_sample, *args, **kwargs)
         return euclidean_to_angular(hyp)
-
-    def write_posterior_predictive(self, path, n_per_sample = 1):
-        thetas = pd.DataFrame(
-                self.generate_posterior_predictive_angular(n_per_sample),
-                columns = ['theta_{}'.format(i) for i in range(1, self.nCol)],
-                )
-        thetas.to_csv(path, index = False)
-        return
 
     def load_data(self, path):
         if type(path) is BytesIO:

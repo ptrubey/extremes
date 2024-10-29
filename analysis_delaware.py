@@ -294,8 +294,4 @@ if __name__ == '__main__':
     # pd.DataFrame(data.I).to_csv(I_out_base.format('del'), **csv_args)
     # pd.DataFrame(data.raw[data.I]).to_csv(W_out_base.format('del'), **csv_args)
 
-
-
-
-
 # EOF

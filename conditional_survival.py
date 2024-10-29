@@ -99,9 +99,10 @@ class Conditional_Survival(object):
             given_vec_quantile : np.ndarray,
             prediction_range = (0.001, 50, 500),
             n_per_sample = 10,
+            obs = None
             ):
         assert given_dims.shape[0] == given_vec_quantile.shape[0]
-        postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
+        postpred = self.generate_posterior_predictive_hypercube(n_per_sample, obs = obs)
         ignored_dims = np.setdiff1d(
             np.arange(self.nCol), 
             np.union1d(target_dims, given_dims),
@@ -211,6 +212,29 @@ def ResultFactory(model_type, fitted_path, raw, raw_args = {}):
 
     return result
 
+# Scenario of interest
+# Mouth of Bay:
+#  0 : Beebe Hospital
+#  1 : Henlopen Memorial Park
+#  2 : Paramount Air Airport
+#  3 : Cape Regional Medical Center
+# lower bay:
+#   0: Beebe Hospital
+#   1: Henlopen Memorial Park 
+#   6: Smyrna Airport
+# Upper Bay:
+#   5: Egg Island Fish and Wildlife Refuge
+#   7: Salem Airfield
+# Back of Bay
+#   7: Salem Airfield
+#   8: Rainbow's End Airport
+#  Back of Bay; w/ Penn:
+#   11: Penn's Landing
+# Locations of Interest:
+#   4: Dover AFB
+#   9: PIA
+#   10: Packer Avenue Terminal
+
 if __name__ == '__main__':
     if False:
         fitted_path = "./output/dppprg/results_2_1e-1.db"
@@ -263,46 +287,6 @@ if __name__ == '__main__':
         rd2_df_s_.to_csv(out_path_2d_s, index = False)
     
     if True:
-        fitted_path = './datasets/slosh/crt/mc_result.pkl'
-        raw_path    = './datasets/slosh/slosh_crt_data.csv.gz'
-        model_type  = 'spypprg'
-        slosh       = pd.read_csv(raw_path, compression = 'gzip')
-        slosh_ids   = slosh.T[:8].T
-        slosh_obs   = slosh.T[8:].values.astype(np.float64)
-        result      = ResultFactory(
-            model_type, fitted_path, raw = slosh_obs, 
-            raw_args = {'quantile' : 0.9, 'decluster' : False,},
-            )
-        
-        nloc        = slosh_ids.shape[0]
-        interest    = np.array([4,9,10], dtype = int)
-        i = 0
-
-        if not os.path.exists('./condsurv'):
-            os.mkdir('./condsurv')
-
-        # Scenario of interest
-        # Mouth of Bay:
-        #  0 : Beebe Hospital
-        #  1 : Henlopen Memorial Park
-        #  2 : Paramount Air Airport
-        #  3 : Cape Regional Medical Center
-        # lower bay:
-        #   0: Beebe Hospital
-        #   1: Henlopen Memorial Park 
-        #   6: Smyrna Airport
-        # Upper Bay:
-        #   5: Egg Island Fish and Wildlife Refuge
-        #   7: Salem Airfield
-        # Back of Bay
-        #   7: Salem Airfield
-        #   8: Rainbow's End Airport
-        #  Back of Bay; w/ Penn:
-        #   11: Penn's Landing
-        # Locations of Interest:
-        #   4: Dover AFB
-        #   9: PIA
-        #   10: Packer Avenue Terminal
         scenarios = {
             'Mouth' : np.array([0,1,2,3], int),
             'LowerBay' : np.array([0,1,6], int),
@@ -340,21 +324,59 @@ if __name__ == '__main__':
             for lkey in locations_2d.keys()
             for skey in scenarios.keys()
             }
+        raw_path  = './datasets/slosh/slosh_crt_data.csv.gz'
+        slosh     = pd.read_csv(raw_path, compression = 'gzip')
+        slosh_ids = slosh.T[:8].T
+        slosh_obs = slosh.T[8:].values.astype(np.float64)
+
+        if False:
+            fitted_path = './datasets/slosh/crt/mc_result.pkl'
+            model_type  = 'spypprg'
+            result      = ResultFactory(
+                model_type, fitted_path, raw = slosh_obs, 
+                raw_args = {'quantile' : 0.9, 'decluster' : False,},
+                )
+            nloc        = slosh_ids.shape[0]
+            interest    = np.array([4,9,10], dtype = int)
+
+            if not os.path.exists('./condsurv'):
+                os.mkdir('./condsurv')
+
+            outpath_base = './condsurv/{}_{}.csv.gz'
+            for locscen in condsurv_scenarios_1d.keys():
+                out = result.condsurv_at_quantile_std(*condsurv_scenarios_1d[locscen])
+                pd.DataFrame(out).to_csv(
+                    outpath_base.format(*locscen), 
+                    index = False, 
+                    compression = 'gzip'
+                    )
+            for locscen in condsurv_scenarios_2d.keys():
+                out = result.condsurv_at_quantile_std(*condsurv_scenarios_2d[locscen])
+                pd.DataFrame(out).to_csv(
+                    outpath_base.format(*locscen), 
+                    index = False, 
+                    compression = 'gzip'
+                    )
         
-        outpath_base = './condsurv/{}_{}.csv.gz'
-        for locscen in condsurv_scenarios_1d.keys():
-            out = result.condsurv_at_quantile_std(*condsurv_scenarios_1d[locscen])
-            pd.DataFrame(out).to_csv(
-                outpath_base.format(*locscen), 
-                index = False, 
-                compression = 'gzip'
+        if True:
+            fitted_path = './datasets/slosh/crt/reg_1_result.pkl'
+            model_type  = 'spypprgr'
+            result      = ResultFactory(
+                model_type, fitted_path, raw = slosh_obs, 
+                raw_args = {'quantile' : 0.9, 'decluster' : False}, 
                 )
-        for locscen in condsurv_scenarios_2d.keys():
-            out = result.condsurv_at_quantile_std(*condsurv_scenarios_2d[locscen])
-            pd.DataFrame(out).to_csv(
-                outpath_base.format(*locscen), 
-                index = False, 
-                compression = 'gzip'
+            nloc = slosh_ids.shape[0]
+            interest = np.array([4, 9, 10], dtype = int)
+            if not os.path.exists('./condsurv_reg'):
+                os.mkdir('./condsurv_reg')
+            
+            outpath_base = './condsurv_reg/{}_{}_{}.csv.gz'
+            for key in condsurv_scenarios_1d.keys():
+                out = result.condsurv_at_quantile_std(*condsurv_scenarios_1d[key])
+                pd.DataFrame(out).to_csv(
+                    outpath_base.format(*[*key, '1'])
                 )
+
+
 
 # EOF
