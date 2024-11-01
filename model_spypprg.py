@@ -280,7 +280,7 @@ class Result(object):
             ]),0,1) # (n,s,d)
         return gamma(shape = zetas)
 
-    def generate_posterior_predictive_zetas(self, n_per_sample = 1, m = 10):
+    def generate_posterior_predictive_zetas(self, n_per_sample = 1, m = 10, *args, **kwargs):
         zetas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
@@ -302,37 +302,16 @@ class Result(object):
             zetas.append(np.vstack((self.samples.zeta[s], new_zetas))[deltas])
         return np.vstack(zetas)
 
-    def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10):
-        zetas = self.generate_posterior_predictive_zetas(n_per_sample, m)
+    def generate_posterior_predictive_gammas(self, n_per_sample = 1, m = 10, *args, **kwargs):
+        zetas = self.generate_posterior_predictive_zetas(n_per_sample, m, *args, **kwargs)
         return gamma(shape = zetas)
-        # new_gammas = []
-        # for s in range(self.nSamp):
-        #     dmax = self.samples.delta[s].max()
-        #     njs = np.bincount(self.samples.delta[s], minlength = int(dmax + 1 + m))
-        #     ljs = (
-        #         + njs - (njs > 0) * self.discount 
-        #         + (njs == 0) * (
-        #             self.concentration 
-        #             + (njs > 0).sum() * self.discount
-        #             ) / m
-        #         )
-        #     new_zetas = gamma(
-        #         shape = self.samples.alpha[s],
-        #         scale = 1. / self.samples.beta[s],
-        #         size = (m, self.nCol),
-        #         )
-        #     prob = ljs / ljs.sum()
-        #     deltas = generate_indices(prob, n_per_sample)
-        #     zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
-        #     new_gammas.append(gamma(shape = zeta))
-        # return np.vstack(new_gammas)
 
-    def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10):
-        gammas = self.generate_posterior_predictive_gammas(n_per_sample, m)
+    def generate_posterior_predictive_hypercube(self, n_per_sample = 1, m = 10, *args, **kwargs):
+        gammas = self.generate_posterior_predictive_gammas(n_per_sample, m, *args, **kwargs)
         return euclidean_to_hypercube(gammas)
 
-    def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10):
-        hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
+    def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10, *args, **kwargs):
+        hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m, *args, **kwargs)
         return euclidean_to_angular(hyp)
 
     def write_posterior_predictive(self, path, n_per_sample = 1):

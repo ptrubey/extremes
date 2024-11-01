@@ -15,6 +15,8 @@ import model_spypg     as spypg
 import model_spypgiiln as spypgiiln
 import model_spypprg   as spypprg
 
+import model_spypprgr  as spypprgr
+
 ## Real Data
 RealResults = {
     'sdpppg'    : sdpppg.Result,
@@ -65,8 +67,25 @@ CategoricalChains = {
     'cdppprgln'  : cdppprgln.Chain,
     }
 
+## Regression Results
+RegressionResults = {
+    'spypprgr' : spypprgr.Result,
+    }
+RegressionChains = {
+    'spypprgr' : spypprgr.Chain,
+    }
 
-Results = {**MixedResults, **RealResults, **CategoricalResults}
-Chains  = {**MixedChains,  **RealChains,  **CategoricalChains}
+Results = {
+    **MixedResults, 
+    **RealResults, 
+    **CategoricalResults, 
+    **RegressionResults
+    }
+Chains  = {
+    **MixedChains,  
+    **RealChains,  
+    **CategoricalChains, 
+    **RegressionChains
+    }
 
 # EOF

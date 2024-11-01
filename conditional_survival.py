@@ -97,19 +97,27 @@ class Conditional_Survival(object):
             target_dims : np.ndarray,
             given_dims : np.ndarray,
             given_vec_quantile : np.ndarray,
-            prediction_range = (0.001, 50, 500),
+            prediction_range = (0.001, 20, 500),
             n_per_sample = 10,
             obs = None
             ):
         assert given_dims.shape[0] == given_vec_quantile.shape[0]
-        postpred = self.generate_posterior_predictive_hypercube(n_per_sample, obs = obs)
+        print('Target {}, Given {}, storm {}'.format(target_dims, given_dims, obs))
+        postpred = self.generate_posterior_predictive_hypercube(
+            n_per_sample = n_per_sample, obs = obs,
+            )
         ignored_dims = np.setdiff1d(
-            np.arange(self.nCol), 
+            np.arange(self.S), 
             np.union1d(target_dims, given_dims),
             )
-        given_z = np.quantile(
-            self.data.Z.T[given_dims].T, q = given_vec_quantile, axis = 1,
-            )
+        given_z = np.array([
+            np.quantile(self.data.Z.T[dim], q = given_vec_quantile[i])
+            for i, dim in enumerate(given_dims)
+            ])
+        # if (target_dims.shape[0] == 1):
+        #     pred_bounds = np.linspace(*prediction_range, 500)
+        # elif (target_dims.shape[0] > 1):
+        #     pred_bounds = np.linspace(*prediction_range, 500)
         pred_bounds = np.linspace(*prediction_range)
         targets = [pred_bounds for _ in range(target_dims.shape[0])]
         target_z = np.array(list(product(*targets)))
@@ -117,21 +125,25 @@ class Conditional_Survival(object):
             np.quantile(self.data.Z.T[given_dims[dim]], given_vec_quantile[dim])
             for dim in np.arange(given_dims.shape[0])
             ])
-        conditioning_z = np.zeros((self.nCol))
+        conditioning_z = np.zeros((self.S))
         conditioning_z[given_dims] = given_z
         conditioning_z[ignored_dims] += 1e-10
-
         thus_far = postpred.T[np.union1d(given_dims, ignored_dims)].T           \
                     / conditioning_z[np.union1d(given_dims, ignored_dims)]
         thus_far[np.where(thus_far > 1)] = 1
         min_thus_far = (thus_far).min(axis = 1)
-        target_z_list = np.array_split(target_z, int(mp.cpu_count() * 10))
 
+        nsplit = target_z.shape[0] // 200 # arrays of size 200 per
+
+        target_z_list = np.array_split(target_z, nsplit)
         args = zip(
             target_z_list, 
             repeat(postpred.T[target_dims].T), 
             repeat(min_thus_far),
             )
+        # out = []
+        # for _ in range(len(target_z_list)):
+        #     out.append(condsurv_helper(next(args)))
         with mp.Pool(processes = mp.cpu_count(), initializer = limit_cpu) as pool:
             out = np.vstack(list(pool.map(condsurv_helper, args)))
         
@@ -184,6 +196,7 @@ class Conditional_Survival(object):
         return surv
 
     def load_raw(self, path = '', raw = None, *args, **kwargs):
+        data = self.data # copy existing
         if os.path.exists(path):
             raw = pd.read_csv(path)
         elif type(raw) is np.ndarray:
@@ -191,6 +204,10 @@ class Conditional_Survival(object):
         else:
             raise TypeError('Pass either path or raw!')
         self.data = Data_From_Raw(raw, *args, **kwargs)
+        try:
+            self.data.X = data.X
+        except AttributeError:
+            pass
         return
 
     pass
@@ -329,7 +346,8 @@ if __name__ == '__main__':
         slosh_ids = slosh.T[:8].T
         slosh_obs = slosh.T[8:].values.astype(np.float64)
 
-        if False:
+        if True:
+            pass
             fitted_path = './datasets/slosh/crt/mc_result.pkl'
             model_type  = 'spypprg'
             result      = ResultFactory(
@@ -359,6 +377,7 @@ if __name__ == '__main__':
                     )
         
         if True:
+            storm_path  = './datasets/slosh/crt/storms.csv'
             fitted_path = './datasets/slosh/crt/reg_1_result.pkl'
             model_type  = 'spypprgr'
             result      = ResultFactory(
@@ -370,12 +389,30 @@ if __name__ == '__main__':
             if not os.path.exists('./condsurv_reg'):
                 os.mkdir('./condsurv_reg')
             
-            outpath_base = './condsurv_reg/{}_{}_{}.csv.gz'
+            storms = pd.read_csv(storm_path).values.ravel().tolist()
+
+            outpath_base = './condsurv_reg/{}_{}_{}_{}.csv.gz'
             for key in condsurv_scenarios_1d.keys():
+                for storm in storms:
+                    out = result.condsurv_at_quantile_std(*condsurv_scenarios_1d[key], obs = storm)
+                    pd.DataFrame(out).to_csv(
+                        outpath_base.format(*[*key, '1', storm])
+                        )
                 out = result.condsurv_at_quantile_std(*condsurv_scenarios_1d[key])
                 pd.DataFrame(out).to_csv(
-                    outpath_base.format(*[*key, '1'])
-                )
+                        outpath_base.format(*[*key, '1', 'base'])
+                        )
+            for key in condsurv_scenarios_2d.keys():
+                for storm in storms:
+                    out = result.condsurv_at_quantile_std(*condsurv_scenarios_2d[key], obs = storm)
+                    pd.DataFrame(out).to_csv(
+                        outpath_base.format(*[*key, '1', storm])
+                        )
+                    del(out)
+                out = result.condsurv_at_quantile_std(*condsurv_scenarios_2d[key])
+                pd.DataFrame(out).to_csv(
+                        outpath_base.format(*[*key, '1', 'base'])
+                        )
 
 
 

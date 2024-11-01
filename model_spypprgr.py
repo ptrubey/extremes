@@ -660,9 +660,11 @@ class Result(ChainBase):
                     )
                 if obs is not None:
                     zeta = zeta[obs]
+                else:
+                    zeta = zeta[choice(self.N)]
                 new_gammas.append(gamma(shape = zeta))
             outs.append(np.stack(new_gammas))
-        return np.vstack(outs)
+        return np.vstack(outs).reshape(-1, self.S)
 
     def generate_conditional_posterior_predictive_alphas(self):
         alphas = []
@@ -687,7 +689,7 @@ class Result(ChainBase):
             gammas.append(gamma(shape))
         return np.stack(gammas)
 
-    def generate_posterior_predictive_gammas_old(self, n_per_sample = 1, m = 10):
+    def generate_posterior_predictive_gammas_old(self, n_per_sample = 1, m = 10, *args, **kwargs):
         new_gammas = []
         for s in range(self.nSamp):
             dmax = self.samples.delta[s].max()
@@ -708,6 +710,7 @@ class Result(ChainBase):
             deltas = generate_indices(prob, n_per_sample)
             zeta = np.vstack((self.samples.zeta[s], new_zetas))[deltas]
             new_gammas.append(gamma(shape = zeta))
+        raise
         return np.vstack(new_gammas)
 
     def generate_posterior_predictive_hypercube(self, n_per_sample = 1, *args, **kwargs):
