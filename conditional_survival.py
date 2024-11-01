@@ -106,6 +106,10 @@ class Conditional_Survival(object):
         postpred = self.generate_posterior_predictive_hypercube(
             n_per_sample = n_per_sample, obs = obs,
             )
+        try:
+            self.S
+        except AttributeError:
+            self.S = self.data.nCol
         ignored_dims = np.setdiff1d(
             np.arange(self.S), 
             np.union1d(target_dims, given_dims),
