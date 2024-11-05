@@ -326,9 +326,9 @@ if __name__ == '__main__':
             'PackerAve' : np.array([10], int),
             }
         locations_2d = {
-            'DoverAFB_PIA'   : np.array([4,9], int),
+            'DoverAFBPIA'    : np.array([4,9], int),
             'DoverPackerAve' : np.array([4,10], int),
-            'PIA_PackerAve'  : np.array([9,10], int),
+            'PIAPackerAve'   : np.array([9,10], int),
             }
         
         condsurv_scenarios_1d = {
@@ -394,6 +394,7 @@ if __name__ == '__main__':
                 os.mkdir('./condsurv_reg')
             
             storms = pd.read_csv(storm_path).values.ravel().tolist()
+            # storms = [687,]
 
             outpath_base = './condsurv_reg/{}_{}_{}_{}.csv.gz'
             for key in condsurv_scenarios_1d.keys():
