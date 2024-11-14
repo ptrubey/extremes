@@ -78,13 +78,14 @@ if __name__ == '__main__':
             '--ntemps', ntemps,
             '--stepping', stepping,
             '--model_radius', 'False',
+            '--verbose', 'False',
             ]
         process_args.append(args)
         processes.append(Popen(args))
-        processes[-1].wait() # operate in sequential rather than parallel
+        # processes[-1].wait() # operate in sequential rather than parallel
 
-    # for process in processes:
-    #     process.wait()
+    for process in processes:
+        process.wait()
     
     error_proc_ids = np.where(
         np.array([process.returncode for process in processes]) != 0
