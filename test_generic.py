@@ -31,8 +31,8 @@ if __name__ == '__main__':
             raw, decluster = eval(p.decluster), quantile=float(p.quantile),
             )
     if os.path.exists(p.outcome):
-        raw_out = read_csv(p.outcome).values
-        raw_out = raw_out[~np.isnan(raw).any(axis = 1)].ravel().astype(int)
+        raw_out = read_csv(p.outcome).values.astype(float)
+        raw_out = raw_out[~np.isnan(raw_out).any(axis = 1)].ravel().astype(int)
         assert raw_out.shape[0] == raw.shape[0]
         data.fill_outcome(raw_out)
     

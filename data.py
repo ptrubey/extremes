@@ -547,7 +547,10 @@ class MixedData(MixedDataBase, Categorical):
 
 class Projection(object):
     def set_projection(self):
-        self.data.Yp = euclidean_to_psphere(self.data.V, self.p)
+        if self.data.V.shape[1] > 0:
+            self.data.Yp = euclidean_to_psphere(self.data.V, self.p)
+        else:
+            self.data.Yp = np.empty_like(self.data.V)
         return
     pass
 
