@@ -46,6 +46,7 @@ def argparser_generic():
     p.add_argument('--prior_eta', default = '[2e0,1e-1]')
     p.add_argument('--prior_chi', default = '[1e-1,1e0]')
     p.add_argument('--model_radius', default = 'True')
+    p.add_argument('--verbose', default = 'False')
     return p.parse_args()
 
 def argparser_simulation():
