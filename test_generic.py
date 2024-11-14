@@ -15,7 +15,10 @@ if __name__ == '__main__':
     Chain  = models.Chains[p.model]
     Result = models.Results[p.model]
     raw = read_csv(p.in_path).values
-    raw = raw[~np.isnan(raw).any(axis = 1)] # equivalent to na.omit
+    try:
+        raw = raw[~np.isnan(raw).any(axis = 1)] # equivalent to na.omit
+    except TypeError:
+        raw = raw.astype(str)
 
     ## Initialize Data
     if eval(p.cats):
