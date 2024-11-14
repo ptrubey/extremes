@@ -1,5 +1,5 @@
 rm(list = ls())
-libs = c()
+libs = c('psych')
 sapply(libs, require, character.only = TRUE)
 rm(libs)
 
@@ -47,14 +47,22 @@ raw$XMonth[which(raw$month.sep == 1)] = 'September'
 raw$XMonth[which(raw$month.oct == 1)] = 'October'
 raw$XMonth[which(raw$month.nov == 1)] = 'November'
 raw$XMonth[which(raw$month.dec == 1)] = 'December'
+raw$Month = factor(
+  raw$XMonth, 
+  levels = c('March','April','May','June','July','August',
+             'September','October','November','December')
+  )
 
 raw$XDay = ''
-raw$Xday[which(raw$day_of_week.mon == 1)] = 'Monday'
-raw$Xday[which(raw$day_of_week.tue == 1)] = 'Tuesday'
-raw$Xday[which(raw$day_of_week.wed == 1)] = 'Wednesday'
-raw$Xday[which(raw$day_of_week.thu == 1)] = 'Thursday'
-raw$Xday[which(raw$day_of_week.fri == 1)] = 'Friday'
-
+raw$XDay[which(raw$day_of_week.mon == 1)] = 'Monday'
+raw$XDay[which(raw$day_of_week.tue == 1)] = 'Tuesday'
+raw$XDay[which(raw$day_of_week.wed == 1)] = 'Wednesday'
+raw$XDay[which(raw$day_of_week.thu == 1)] = 'Thursday'
+raw$XDay[which(raw$day_of_week.fri == 1)] = 'Friday'
+raw$Day = factor(
+  raw$XDay, 
+  levels = c('Monday','Tuesday','Wednesday','Thursday','Friday')
+  )
 
 raw$HousingStatus = ''
 raw$HousingStatus[which(raw$housing.1 == 1)] = '1'
@@ -79,10 +87,34 @@ raw$POutcomeStatus[which(raw$poutcome.success == 1)] = 'Success'
 raw$PDays = !(raw$pdays < 1)
 raw$Previous = raw$previous > 0
 
-cols = c("age", 'Employment', 'MaritalStatus', 'EducationStatus', 'DefaultStatus',
-         'HousingStatus', 'LoanStatus', 'XMonth', 'Xday', 'duration', 'PDays',
-         'Previous', 'PoutcomeStatus', "emp.var.rate", "cons.price.idx",
-         "cons.conf.idx", "euribor3m", "nr.employed", "class")
+raw$EmpVarRate = cut(raw$emp.var.rate, c(0, 0.2, 0.5, 0.7, 1.), include.lowest = TRUE)
+levels(raw$EmpVarRate) = c('Low','Moderate','Medium','High')
+raw$EmpVarRate = as.character(raw$EmpVarRate)
+
+raw$Age = cut(raw$age, c(0, 0.1, 0.55, 1), include.lowest = TRUE)
+levels(raw$Age) = c('Low','Medium','High')
+raw$Age = as.character(raw$Age)
+
+raw$Duration = cut(raw$duration, c(0, 0.1, 1), include.lowest = TRUE)
+levels(raw$Duration) = c('Short','Long')
+raw$Duration = as.character(raw$Duration)
+
+raw$NEmployed = cut(raw$nr.employed, c(0, 0.5, 1), include.lowest = TRUE)
+levels(raw$NEmployed) = c('Low','High')
+raw$NEmployed = as.character(raw$NEmployed)
+
+jobfields = c('Admin','BlueCollar','Entrepreneur','Housemaid',
+              'Management','SelfEmployed','Services','Technician')
+raw$Employment[which(raw$Employment %in% jobfields)] = 'Employed'
+
+raw$EducationStatus[raw$EducationStatus %in% c('Illiterate','Y4','Y6','Y9')] = 'BelowHigh'
+raw$EducationStatus[raw$EducationStatus %in% c('Professional','University')] = 'Degree'
+
+raw$DefaultStatus[which(raw$DefaultStatus %in% c('0','1'))] = 'Known'
+
+cols = c("Age", 'Employment', 'MaritalStatus', 'EducationStatus', 'DefaultStatus',
+         'HousingStatus', 'LoanStatus', 'Duration', 'PDays',
+         'Previous', 'POutcomeStatus', "EmpVarRate", "NEmployed", "class")
 df = raw[cols]
 
 # months = c('March','April','May','June','July','August','September','October',
@@ -107,9 +139,7 @@ df = raw[cols]
 # chisq.test(t) # strongly significant
 # print(t / rowSums(t)) # seems to indicate that retired and students are main
 #                       # contributors to the anomaly count
-jobfields = c('Admin','BlueCollar','Entrepreneur','Housemaid',
-              'Management','SelfEmployed','Services','Technician')
-df$Employment[which(df$Employment %in% jobfields)] = 'Employed'
+
 
 # t = table(df$MaritalStatus, df$class)
 # print(t / rowSums(t))
@@ -120,8 +150,8 @@ df$Employment[which(df$Employment %in% jobfields)] = 'Employed'
 # print(t / rowSums(t))
 # chisq.test(t) # significant.  Y4-9 seem to act similar.  So do Degreed.
 #               # group illiterate with below high school, as there's only 18 of them.
-df$EducationStatus[df$EducationStatus %in% c('Illiterate','Y4','Y6','Y9')] = 'BelowHigh'
-df$EducationStatus[df$EducationStatus %in% c('Professional','University')] = 'Degree'
+# df$EducationStatus[df$EducationStatus %in% c('Illiterate','Y4','Y6','Y9')] = 'BelowHigh'
+# df$EducationStatus[df$EducationStatus %in% c('Professional','University')] = 'Degree'
 
 # t = table(df$LoanStatus, df$class) # not significant?
 # chisq.test(t)
@@ -133,7 +163,42 @@ df$EducationStatus[df$EducationStatus %in% c('Professional','University')] = 'De
 # t2[,,2] = table(df$LoanStatus, df$DefaultStatus)
 # print(t / t2)
 # mantelhaen.test(t)  # No association
-df$DefaultStatus[which(df$DefaultStatus %in% c('0','1'))] = 'Known'
+# df$DefaultStatus[which(df$DefaultStatus %in% c('0','1'))] = 'Known'
+
+# table(raw$emp.var.rate, raw$class)
+# table(raw$emp.var.rate, raw$class) / rowSums(table(raw$emp.var.rate, raw$class))
+# chisq.test(table(raw$emp.var.rate, raw$class))
+
+# raw$agecat = cut(raw$age, seq(0, 1, by = 0.05), include.lowest = TRUE)
+# table(raw$agecat, raw$class) / rowSums(table(raw$agecat, raw$class))
+# lowest category suspicious, categories above 0.5 suspicious.
+
+keep_rows = sample(nrow(df), size = 5000, replace = FALSE)
+write.csv(df[names(df)[1:13]][keep_rows,], file = './cat_data.csv', row.names = FALSE)
+write.csv(df[c('class')][keep_rows,], file = './cat_outcome.csv', row.names = FALSE)
+
+rows_0 = df[df$class == 0,]
+rows_1 = df[df$class == 1,]
+
+for(i in 1:10){
+  nrow_0 = round(5000 * (1 - (i * 0.01)))
+  nrow_1 = 5000 - nrow_0
+  keep_rows_0 = sample(nrow(rows_0), size = nrow_0, replace = FALSE)
+  keep_rows_1 = sample(nrow(rows_1), size = nrow_1, replace = FALSE)
+  tdf = rbind(rows_0[keep_rows_0,], rows_1[keep_rows_1,])
+  write.csv(
+    tdf[names(tdf)[1:13]], 
+    file = paste0('./bank_',i,'/cat_data.csv'), 
+    row.names = FALSE
+    )
+  write.csv(
+    tdf[c('class')], 
+    file = paste0('./bank_',i,'/cat_outcome.csv'), 
+    row.names = FALSE
+    )
+}
+
+
 
 
 

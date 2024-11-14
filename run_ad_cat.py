@@ -35,7 +35,25 @@ solarflare = {
     'cats'      : '[0,1,2,3,4,5,6,7,8,9]',
     }
 
-datasets = [cover, pima, solarflare, yeast]
+bank = {
+    'source'    : './ad/bank/cat_data.csv',
+    'outcome'   : './ad/bank/cat_outcome.csv',
+    'results'   : './ad/bank/cat_results_{}_{}.pkl',
+    'model'     : 'pypprgln',
+    'cats'      : '[0,1,2,3,4,5,6,7,8,9,10,11,12]',
+    }
+def banki(i):
+    bank_i = {
+    'source'    : './ad/bank/bank_{}/cat_data.csv'.format(i),
+    'outcome'   : './ad/bank/bank_{}/cat_outcome.csv'.format(i),
+    'results'   : './ad/bank/bank_{}/cat_results_{}_{}.pkl'.format(i,'{}','{}'),
+    'model'     : 'pypprgln',
+    'cats'      : '[0,1,2,3,4,5,6,7,8,9,10,11,12]',
+    }
+bank_is = [banki(i) for i in range(1,11)]
+
+# datasets = [cover, pima, solarflare, yeast]
+datasets = [bank] + bank_is
 
 stepping = '1.1'
 ntemps = '5'
