@@ -15,10 +15,6 @@ from data import Data_From_Raw
 from model_spypprg import Chain, Result
 import posterior as post
 
-raw_path  = './datasets/slosh/filtered_data.csv.gz'
-out_sql   = './datasets/slosh/results.sql'
-out_table = 'energy'
-
 def run_slosh(
         path_in,   path_out, 
         delta_out, cluster_out, 
@@ -30,7 +26,7 @@ def run_slosh(
     slosh_obs = slosh.T[8:].values.astype(np.float64)
     data = Data_From_Raw(slosh_obs, decluster = False, quantile = quantile)
     model = Chain(data, concentration=eta, discount = discount)
-    model.sample(50000)
+    model.sample(50000, verbose = True)
     out = BytesIO()
     model.write_to_disk(out, 40000, 10)
     res = Result(out)
@@ -118,8 +114,8 @@ args = {
         'cluster_out' : clus_out_base.format('t90'),
         'delta_out'   : delt_out_base.format('t90'),
         'quantile'    : 0.90,
-        'concs'       : concs_xlarg,
-        'discs'       : discs_xlarg,
+        # 'concs'       : concs_xlarg,
+        # 'discs'       : discs_xlarg,
         },
     'ltd' : {
         'path_in'     : path_in_base.format('ltd'),
@@ -175,15 +171,6 @@ args = {
         'concs'       : concs_small,
         'discs'       : discs_small,
         },
-    'nyc' : {
-        'path_in'     : path_in_base.format('nyc'),
-        'path_out'    : path_out_base.format('nyc'),
-        'cluster_out' : clus_out_base.format('nyc'),
-        'delta_out'   : delt_out_base.format('nyc'),
-        'quantile'     : 0.90, 
-        'concs'       : concs_small,
-        'discs'       : discs_small,
-        },
     'dbg' : {
         'path_in'     : path_in_base.format('dbg'),
         'path_out'    : path_out_base.format('dbg'),
@@ -209,16 +196,16 @@ if __name__ == '__main__':
     # for dataset in run:
     #     if run[dataset]:
     #         run_slosh(**args[dataset])
-    for dataset in run.keys(): 
-        if run[dataset]:
-            data = instantiate_data(
-                args[dataset]['path_in'], args[dataset]['quantile'],
-                )
-            run_slosh_for_nclusters(
-                data, dataset, 
-                args[dataset]['concs'], args[dataset]['discs'],
-                True,
-                )
-    # run_slosh(**{**args['del'], 'eta' : 0.01, 'discount' : 0.01})
+    # for dataset in run.keys(): 
+    #     if run[dataset]:
+    #         data = instantiate_data(
+    #             args[dataset]['path_in'], args[dataset]['quantile'],
+    #             )
+    #         run_slosh_for_nclusters(
+    #             data, dataset, 
+    #             args[dataset]['concs'], args[dataset]['discs'],
+    #             True,
+    #             )
+    run_slosh(**{**args['t90'], 'eta' : 0.1, 'discount' : 0.1})
 
 # EOF

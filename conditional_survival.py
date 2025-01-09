@@ -361,9 +361,16 @@ if __name__ == '__main__':
             nloc        = slosh_ids.shape[0]
             interest    = np.array([4,9,10], dtype = int)
 
+            params = pd.DataFrame(result.data.P.T[[4,9,10]], columns = ('b','a','xi'))
             if not os.path.exists('./condsurv'):
                 os.mkdir('./condsurv')
-
+            params['location'] = ('Dover AFB', 'PIA','Packer Ave')
+            params.to_csv(
+                './condsurv/slosh_crt_params.csv.gz', 
+                compression = 'gzip', 
+                index = False,
+                )
+            
             outpath_base = './condsurv/{}_{}.csv.gz'
             for locscen in condsurv_scenarios_1d.keys():
                 out = result.condsurv_at_quantile_std(*condsurv_scenarios_1d[locscen])
@@ -392,7 +399,13 @@ if __name__ == '__main__':
             interest = np.array([4, 9, 10], dtype = int)
             if not os.path.exists('./condsurv_reg'):
                 os.mkdir('./condsurv_reg')
-            
+            params = pd.DataFrame(result.data.P.T[[4,9,10]], columns = ('b','a','xi'))
+            params['location'] = ('Dover AFB', 'PIA', 'Packer Ave')
+            params.to_csv(
+                './condsurv_reg/slosh_crt_params.csv.gz', 
+                compression = 'gzip', 
+                index = False,
+                )
             storms = pd.read_csv(storm_path).values.ravel().tolist()
             # storms = [687,]
 
