@@ -97,7 +97,7 @@ class Conditional_Survival(object):
             target_dims : np.ndarray,
             given_dims : np.ndarray,
             given_vec_quantile : np.ndarray,
-            prediction_range = (0.001, 20, 500),
+            prediction_range = (0.001, 8, 500),
             n_per_sample = 10,
             obs = None
             ):
