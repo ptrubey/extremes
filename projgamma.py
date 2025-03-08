@@ -583,7 +583,7 @@ def pt_logd_cumdirmultinom_mx_ma(aW, aAlpha, sphere_mat):
     np.nan_to_num(logd, False, -np.inf)
     return logd
 
-def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere_mat):
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable_older(out, aW, aAlpha, sphere_mat):
     sa = np.einsum('tjd,cd->tjc', aAlpha, sphere_mat)
     sw = np.einsum('nd,cd->nc', aW, sphere_mat)
     out += np.einsum('tjc->tj', loggamma(sa))[None,:,:]
@@ -592,7 +592,7 @@ def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere
     out -= np.einsum('tjd->tj', loggamma(aAlpha))[None,:,:]
     return
 
-def pt_logd_cumdircategorical_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable_old(out, aW, aAlpha, sphere_mat):
     """
     inputs:
         aW:         (n,d)
@@ -632,6 +632,49 @@ def pt_logd_cumdircategorical_mx_ma(aW, aAlpha, sphere_mat):
     out += np.einsum('tjd,nd->ntj', ga1, aW)
     out += np.einsum('tjd,nd->ntj', ga, ~aW)
     out -= np.einsum('tjd->tj', ga)[None,:,:]
+    return out
+
+def pt_logd_cumdircategorical_mx_ma_inplace_unstable(
+        out         : np.ndarray, 
+        aC          : np.ndarray, 
+        aAlpha      : np.ndarray, 
+        sphere_mat  : np.ndarray,
+        ):
+    """
+    inputs:
+        aC:         (n,d)
+        aAlpha:     (t,j,d)
+        sphere_mat: (c,d)
+    outputs:
+        logd:       (n,t,j)
+    """
+    if aC.shape[1] == 0:
+        return
+    lsa = np.log(aAlpha @ sphere_mat.T).sum(axis = -1) # (t,j)
+    lca = np.einsum('nd,tjd->ntj', aC, np.log(aAlpha))
+    out += lca
+    out -= lsa
+    return
+
+def pt_logd_cumdircategorical_mx_ma(
+        aC          : np.ndarray, 
+        aAlpha      : np.ndarray, 
+        sphere_mat  : np.ndarray,
+        ):
+    """
+    inputs:
+        aC:         (n,d)
+        aAlpha:     (t,j,d)
+        sphere_mat: (c,d)
+    output:
+        logd:       (n,t,j)
+    """
+    n = aC.shape[0]; t,j,d = aAlpha.shape
+    out = np.zeros((n,t,j))
+    lsa = np.log(aAlpha @ sphere_mat.T).sum(axis = -1) # (t,j)
+    lca = np.einsum('nd,tjd->ntj', aC, np.log(aAlpha))
+    out += lca
+    out -= lsa
     return out
 
 def pt_logd_cumdirmultinom_mx_ma_inplace_unstable(out, aW, aAlpha, sphere_mat):
