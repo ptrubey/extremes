@@ -94,7 +94,7 @@ def rescale_pareto(
         Z : np.ndarray,
         P : np.ndarray,
         C : np.ndarray = None,
-        ):
+        ) -> np.ndarray:
     if C is None:
         C = np.zeros(Z.shape, int)
     # Bounds Checking
@@ -116,7 +116,7 @@ def rescale_pareto(
 def standardize_pareto_2tail(
         raw : np.ndarray, 
         P : np.ndarray,
-        ):
+        ) -> tuple:
     """ Do the Pareto Scaling for both tails """
     # Bounds Checking
     assert raw.shape[1] == P.shape[2]
@@ -143,7 +143,7 @@ def standardize_pareto_2tail(
 def standardize_pareto_1tail(
         raw : np.ndarray,
         P   : np.ndarray,
-        ):
+        ) -> np.ndarray:
     """ Do the Pareto scaling for 1 tail """
     assert raw.shape[1] == P.shape[2]
     assert P.shape[0] == 1
@@ -161,12 +161,24 @@ def standardize_pareto_1tail(
     np.exp(scratch, out = scratch)
     return scratch
 
+class DataBase(object):
+    def to_dict(self) -> dict:
+        raise NotImplementedError('Overwrite Me!')
+    
+    @classmethod
+    def from_dict(cls, d : dict):
+        return cls(**d)
+    
+    @classmethod
+    def from_raw(cls, **kwargs):
+        raise NotImplementedError('Overwrite Me!')
 
-class Threshold_2Tail(object):
+class Threshold_2Tail(DataBase):
     raw = None # Raw data (N x D)
     P   = None # Generalized Pareto Parameters (1 (or 2) x 3 x D)
     Z   = None # Standardized Pareto\
     C   = None # 0 -> Upper tail, 1 -> Lower tail
+    Cm  = None # C in one-hot, ravelled (N x (2*D))
 
     def rescale(self, Z):
         return rescale_pareto(Z, self.P, self.C)
@@ -175,18 +187,18 @@ class Threshold_2Tail(object):
     def from_raw(cls, raw : np.ndarray, q : float):
         P = compute_gp_parameters_2tail(raw, q)
         Z, C = standardize_pareto_2tail(raw, P)
-        return cls()
-
-    @classmethod
-    def from_dict(cls, d : dict):
-        return cls(**d)
-
-    def to_dict(self):
+        Cm = np.stack((C == 0,C == 1), dtype = int).reshape(
+            Z.shape[0], 2 * Z.shape[1]
+            )
+        return cls(raw, P, Z, C, Cm, q)
+    
+    def to_dict(self) -> dict:
         d = {
             'raw'   : self.raw,
             'P'     : self.P,
             'Z'     : self.Z,
             'C'     : self.C,
+            'Cm'    : self.Cm,
             'q'     : self.q,
             }
         return d
@@ -196,13 +208,15 @@ class Threshold_2Tail(object):
             P   : np.ndarray, 
             Z   : np.ndarray,
             C   : np.ndarray,
+            Cm  : np.ndarray,
             q   : float,
             ):
         self.raw = raw
-        self.P = P
-        self.Z = Z
-        self.C = C
-        self.q = q
+        self.P  = P
+        self.Z  = Z
+        self.C  = C
+        self.Cm = Cm
+        self.q  = q
         return
     
     pass
@@ -229,8 +243,97 @@ class Threshold_1Tail(Threshold_2Tail):
     
     pass
 
-class Categorical():
-    pass
+class Multinomial(DataBase):
+    cats = None # number of categories per multinomial variable
+    nCat = None # total number of categories (sum of Cats)
+    iCat = None # Int array associating columns with Vars
+    raw  = None # Originating Data
+    W    = None # Multinomial Data
+
+    @classmethod
+    def from_raw(cls, 
+            raw  : np.ndarray, 
+            cats : np.ndarray = None,
+            ):
+        if cats is None:
+            cats = np.array([raw.shape[1]])
+        nCat = cats.sum()
+        temp = np.hstack([
+            np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
+            ])
+        iCat = [np.where(temp == i)[0] for i in range(temp.max() + 1)]
+        W    = raw.copy()
+        return cls(cats, nCat, iCat, raw, W)
+    
+    def to_dict(self) -> dict:
+        d = {
+            'cats' : self.cats,
+            'nCat' : self.nCat,
+            'iCat' : self.iCat,
+            'raw'  : self.raw,
+            'W'    : self.W,
+            }
+        return d
+
+    def __init__(
+            self, 
+            cats : np.ndarray, 
+            nCat : int, 
+            iCat : np.ndarray,
+            raw  : np.ndarray, 
+            W    : np.ndarray,
+            ):
+        self.cats = cats
+        self.nCat = nCat
+        self.iCat = iCat
+        self.raw  = raw
+        self.W    = W
+        return
+
+class Categorical(Multinomial):
+    values = None
+
+    @classmethod
+    def from_raw(
+            cls, 
+            raw : np.ndarray, 
+            vals : list,
+            ):
+        # Verify Supplied Values
+        if vals is not None:
+            assert len(vals) == raw.shape[1]
+            for i in range(raw.shape[1]):
+                assert len(set(raw.T[i]).difference(set(vals[i]))) == 0
+        # If not supplied, make new one based on existing data
+        else:
+            vals = [np.unique(raw.T[i]) for i in range(raw.shape[1])]
+
+        dummies = []
+        cats  = []
+        for i in range(raw.shape[1]):
+            dummies.append(np.vstack([raw.T[i] == j for j in vals[i]]))
+            cats.append(len(vals[i]))
+        W = np.vstack(dummies.T)
+        iCatL = []
+    
+    def __init__(
+            self,
+            cats,
+            nCat,
+            iCat,
+            raw, 
+            W,
+            vals,
+            ):
+        self.cats = cats
+        self.nCat = nCat
+        self.iCat = iCat
+        self.raw  = raw
+        self.W    = W
+        self.vals = vals
+        return
+
+    pass 
 
 
 
