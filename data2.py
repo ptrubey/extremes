@@ -161,6 +161,20 @@ def standardize_pareto_1tail(
     np.exp(scratch, out = scratch)
     return scratch
 
+def rank_transform_pareto(
+        raw   : np.ndarray, 
+        Fhats : list,
+        ) -> np.ndarray:
+    """ Do Rank-Transform Standard Pareto Scaling """
+    # Bounds Checking
+    assert raw.shape[1] == len(Fhats)
+    # Transformation
+    Z = np.array([
+        Fhat.stdpareto(x)
+        for Fhat, x in zip(Fhats, raw.T)
+        ])
+    return Z
+
 class DataBase(object):
     def to_dict(self) -> dict:
         raise NotImplementedError('Overwrite Me!')
@@ -246,30 +260,35 @@ class Threshold_1Tail(Threshold_2Tail):
 class Multinomial(DataBase):
     cats = None # number of categories per multinomial variable
     nCat = None # total number of categories (sum of Cats)
-    iCat = None # Int array associating columns with Vars
+    iCat = None # Int Vector associating columns with Vars 
+    dCat = None # Bool Array associating columns with Vars
     raw  = None # Originating Data
     W    = None # Multinomial Data
 
     @classmethod
     def from_raw(cls, 
             raw  : np.ndarray, 
-            cats : np.ndarray = None,
+            cats : np.ndarray,
             ):
-        if cats is None:
-            cats = np.array([raw.shape[1]])
         nCat = cats.sum()
-        temp = np.hstack([
+        try:
+            assert nCat == raw.shape[1]
+        except AssertionError:
+            print('Total number of categories must equal number of columns')
+            raise
+        iCat = np.hstack([
             np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
             ])
-        iCat = [np.where(temp == i)[0] for i in range(temp.max() + 1)]
+        dCat = [np.where(iCat == i)[0] for i in range(iCat.max() + 1)]
         W    = raw.copy()
-        return cls(cats, nCat, iCat, raw, W)
+        return cls(cats, nCat, iCat, dCat, raw, W)
     
     def to_dict(self) -> dict:
         d = {
             'cats' : self.cats,
             'nCat' : self.nCat,
             'iCat' : self.iCat,
+            'dCat' : self.dCat,
             'raw'  : self.raw,
             'W'    : self.W,
             }
@@ -280,18 +299,20 @@ class Multinomial(DataBase):
             cats : np.ndarray, 
             nCat : int, 
             iCat : np.ndarray,
+            dCat : np.ndarray,
             raw  : np.ndarray, 
             W    : np.ndarray,
             ):
         self.cats = cats
         self.nCat = nCat
         self.iCat = iCat
+        self.dCat = dCat
         self.raw  = raw
         self.W    = W
         return
 
 class Categorical(Multinomial):
-    values = None
+    vals = None
 
     @classmethod
     def from_raw(
@@ -335,8 +356,33 @@ class Categorical(Multinomial):
 
     pass 
 
+class RankTransform(DataBase):
+    raw   = None
+    Z     = None
+    Fhats = []
 
+    def std_pareto_transform(self, X : np.ndarray) -> np.ndarray:
+        return rank_transform_pareto(X, self.Fhats)
+    
+    @classmethod
+    def from_raw(cls, raw : np.ndarray):
+        Fhats = list(map(ECDF, raw.T))
+        Z     = rank_transform_pareto(X)
+        return cls(raw, Z, Fhats)
+    
+    def to_dict(self) -> dict:
+        d = {
+            'raw'   : self.raw,
+            'Z'     : self.Z,
+            'Fhats' : self.Fhats,
+            }
+        return d
 
+    def __init__(self, raw : np.ndarray, Z : np.ndarray, Fhats : list):
+        self.raw = raw
+        self.Z = Z
+        self.Fhats = Fhats
+        return
 
 if __name__ == '__main__':
     X = np.random.normal(loc = 1., size = (500, 6))
