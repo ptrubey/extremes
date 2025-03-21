@@ -175,6 +175,19 @@ def rank_transform_pareto(
         ])
     return Z
 
+def rank_invtransform_pareto(
+        Z : np.ndarray,
+        Fhats : list,
+        ) -> np.ndarray:
+    # Bounds Checking
+    assert Z.shape[1] == len(Fhats)
+    # Transformation
+    X = np.ndarray(
+        Fhat.FhatInv(z)
+        for Fhat, z in zip(Fhats, Z.T)
+        )
+    return X
+
 class DataBase(object):
     def to_dict(self) -> dict:
         raise NotImplementedError('Overwrite Me!')
@@ -192,7 +205,12 @@ class Threshold_2Tail(DataBase):
     P   = None # Generalized Pareto Parameters (1 (or 2) x 3 x D)
     Z   = None # Standardized Pareto\
     C   = None # 0 -> Upper tail, 1 -> Lower tail
-    Cm  = None # C in one-hot, ravelled (N x (2*D))
+    W   = None # C in one-hot, (N x (2*D))
+    cats = None
+    nCat = None
+    iCat = None
+    dCat = None
+
 
     def rescale(self, Z):
         return rescale_pareto(Z, self.P, self.C)
@@ -201,10 +219,10 @@ class Threshold_2Tail(DataBase):
     def from_raw(cls, raw : np.ndarray, q : float):
         P = compute_gp_parameters_2tail(raw, q)
         Z, C = standardize_pareto_2tail(raw, P)
-        Cm = np.stack((C == 0,C == 1), dtype = int).reshape(
+        W = np.stack((C == 0,C == 1), dtype = int).reshape(
             Z.shape[0], 2 * Z.shape[1]
             )
-        return cls(raw, P, Z, C, Cm, q)
+        return cls(raw, P, Z, C, W, q)
     
     def to_dict(self) -> dict:
         d = {
@@ -222,20 +240,26 @@ class Threshold_2Tail(DataBase):
             P   : np.ndarray, 
             Z   : np.ndarray,
             C   : np.ndarray,
-            Cm  : np.ndarray,
+            W   : np.ndarray,
             q   : float,
             ):
         self.raw = raw
-        self.P  = P
-        self.Z  = Z
-        self.C  = C
-        self.Cm = Cm
-        self.q  = q
+        self.P = P
+        self.Z = Z
+        self.C = C
+        self.W = W
+        self.q = q
+        self.cats = np.repeat(2, self.Z.shape[1])
         return
     
     pass
 
 class Threshold_1Tail(Threshold_2Tail):
+    cats = np.array([])
+    nCat = 0
+    iCat = np.array([])
+    dCat = np.array([])
+
     @classmethod
     def from_raw(cls, raw : np.ndarray, q : float):
         P = compute_gp_parameters_1tail(raw, q)
@@ -257,6 +281,40 @@ class Threshold_1Tail(Threshold_2Tail):
     
     pass
 
+class RankTransform(DataBase):
+    # Vestigial
+    nCat = 0
+    cats = np.array([])
+    iCat = np.array([])
+    dCat = np.array([])
+    # Relevant
+    raw   = None
+    Z     = None
+    Fhats = []
+
+    @classmethod
+    def from_raw(cls, raw : np.ndarray):
+        Fhats = list(map(ECDF, raw.T))
+        Z     = rank_transform_pareto(X)
+        return cls(raw, Z, Fhats)
+
+    def std_pareto_transform(self, X : np.ndarray) -> np.ndarray:
+        return rank_transform_pareto(X, self.Fhats)
+    
+    def to_dict(self) -> dict:
+        d = {
+            'raw'   : self.raw,
+            'Z'     : self.Z,
+            'Fhats' : self.Fhats,
+            }
+        return d
+
+    def __init__(self, raw : np.ndarray, Z : np.ndarray, Fhats : list):
+        self.raw = raw
+        self.Z = Z
+        self.Fhats = Fhats
+        return
+
 class Multinomial(DataBase):
     cats = None # number of categories per multinomial variable
     nCat = None # total number of categories (sum of Cats)
@@ -266,7 +324,8 @@ class Multinomial(DataBase):
     W    = None # Multinomial Data
 
     @classmethod
-    def from_raw(cls, 
+    def from_raw(
+            cls, 
             raw  : np.ndarray, 
             cats : np.ndarray,
             ):
@@ -279,7 +338,9 @@ class Multinomial(DataBase):
         iCat = np.hstack([
             np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
             ])
-        dCat = [np.where(iCat == i)[0] for i in range(iCat.max() + 1)]
+        dCat = np.vstack([
+            np.where(iCat == i)[0] for i in range(iCat.max() + 1)
+            ])
         W    = raw.copy()
         return cls(cats, nCat, iCat, dCat, raw, W)
     
@@ -334,55 +395,147 @@ class Categorical(Multinomial):
         for i in range(raw.shape[1]):
             dummies.append(np.vstack([raw.T[i] == j for j in vals[i]]))
             cats.append(len(vals[i]))
+        cats = np.array(cats, dtype = int)
+        nCat = cats.sum()
+        iCat = np.hstack([
+            np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
+            ])
+        dCat = np.vstack([
+            np.where(iCat == i)[0] for i in range(iCat.max() + 1)
+            ])
         W = np.vstack(dummies.T)
-        iCatL = []
+        return cls(cats, nCat, iCat, dCat, raw, W, vals)
     
+    def to_dict(self):
+        d = {
+            'cats' : self.cats,
+            'nCat' : self.nCat,
+            'iCat' : self.iCat, 
+            'dCat' : self.dCat,
+            'raw'  : self.raw,
+            'W'    : self.W,
+            'vals' : self.vals
+            }
+        return d
+
     def __init__(
             self,
-            cats,
-            nCat,
-            iCat,
-            raw, 
-            W,
-            vals,
+            cats : np.ndarray,
+            nCat : int,
+            iCat : np.ndarray,
+            dCat : np.ndarray,
+            raw  : np.ndarray, 
+            W    : np.ndarray,
+            vals : list,
             ):
-        self.cats = cats
-        self.nCat = nCat
-        self.iCat = iCat
-        self.raw  = raw
-        self.W    = W
         self.vals = vals
+        super().__init__(cats, nCat, iCat, dCat, raw, W)
         return
 
     pass 
 
-class RankTransform(DataBase):
-    raw   = None
-    Z     = None
-    Fhats = []
+class Data(DataBase):
+    xh1t = None
+    xh2t = None
+    rank = None
+    cate = None
 
-    def std_pareto_transform(self, X : np.ndarray) -> np.ndarray:
-        return rank_transform_pareto(X, self.Fhats)
-    
-    @classmethod
-    def from_raw(cls, raw : np.ndarray):
-        Fhats = list(map(ECDF, raw.T))
-        Z     = rank_transform_pareto(X)
-        return cls(raw, Z, Fhats)
+    dcls = None
+
+    Z = None
+    W = None
+    V = None
+    R = None
+    I = None
     
     def to_dict(self) -> dict:
-        d = {
-            'raw'   : self.raw,
-            'Z'     : self.Z,
-            'Fhats' : self.Fhats,
-            }
+        d = dict()
+        for key in ['xh1t','xh2t','rank','cate']:
+            if self.__dict__[key] is not None:
+                d[key] = self.__dict__[key].to_dict()
+        for key in ['Z','W','V','R','I','dcls']:
+            d[key] = self.__dict__[key]
         return d
+    
+    @classmethod
+    def from_dict(cls, d : dict):
+        if 'xh1t' in d.keys():
+            xh1t = Threshold_1Tail.from_dict(d['xh1t'])
+        else:
+            xh1t = None
+        if 'xh2t' in d.keys():
+            xh2t = Threshold_2Tail.from_dict(d['xh2t'])
+        else: 
+            xh2t = None
+        if 'rank' in d.keys():
+            rank = RankTransform.from_dict(d['rank'])
+        else: 
+            rank = None
+        if 'cate' in d.keys():
+            cate = Categorical.from_dict(d['cate'])
+        else:
+            cate = None
+        addlkeys = dict()
+        for key in ['Z','W','V','R','I','dcls']:
+            if key in d.keys():
+                addlkeys[key] = d[key]
+        return cls(xh1t = xh1t, xh2t = xh2t, 
+                   rank = rank, cate = cate, **addlkeys)
+    
+    @classmethod
+    def from_raw(
+            cls,
+            xh1t : Threshold_1Tail = None, 
+            xh2t : Threshold_2Tail = None, 
+            rank : RankTransform = None,
+            cate : Categorical = None,
+            dcls : bool = False,
+            ):
+        inputs = [xh1t, xh2t, rank, cate]
+        filted = [x for x in inputs if x is not None]
+        assert len(np.unique([x.raw.shape[0] for x in filted])) == 1
+        N = filted[0].raw.shape[0]
+        Z = np.empty((N,0), dtype = float)
+        W = np.empty((N,0), dtype = int)
+        if xh1t is not None:
+            Z = np.hstack((Z, xh1t.Z))
+        if xh2t is not None:
+            Z = np.hstack((Z, xh2t.Z))
+            W = np.hstack((W, xh2t.W))
+        if rank is not None:
+            Z = np.hstack((Z, rank.Z))
+        if cate is not None:
+            W = np.hstack((W, cate.W))
 
-    def __init__(self, raw : np.ndarray, Z : np.ndarray, Fhats : list):
-        self.raw = raw
-        self.Z = Z
-        self.Fhats = Fhats
+
+
+
+    def __init__(
+            self, 
+            xh1t : Threshold_1Tail, 
+            xh2t : Threshold_2Tail, 
+            rank : RankTransform, 
+            cate : Categorical, 
+            Z    : np.ndarray, 
+            W    : np.ndarray, 
+            V    : np.ndarray, 
+            R    : np.ndarray, 
+            I    : np.ndarray, 
+            dcls : bool,
+            ):
+        self.xh1t = xh1t
+        self.xh2t = xh2t
+        self.rank = rank
+        self.cate = cate
+        self.Z    = Z
+        self.W    = W
+        self.V    = V
+        self.R    = R
+        self.I    = I
+        self.dcls = dcls
         return
+
+
 
 if __name__ == '__main__':
     X = np.random.normal(loc = 1., size = (500, 6))
