@@ -631,7 +631,11 @@ class Data(DataBase):
             W    : np.ndarray, 
             V    : np.ndarray, 
             R    : np.ndarray, 
-            I    : np.ndarray, 
+            I    : np.ndarray,
+            cats : np.ndarray,
+            nCat : int,
+            iCat : np.ndarray,
+            dCat : np.ndarray,
             dcls : bool,
             ):
         self.xh1t = xh1t
@@ -643,6 +647,10 @@ class Data(DataBase):
         self.V    = V
         self.R    = R
         self.I    = I
+        self.cats = cats
+        self.nCat = nCat
+        self.iCat = iCat
+        self.dCat = dCat
         self.dcls = dcls
         return
 
