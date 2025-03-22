@@ -189,6 +189,12 @@ def rank_invtransform_pareto(
     return X
 
 class DataBase(object):
+    raw  = None # Raw Data
+    cats = None
+    nCat = None
+    iCat = None
+    dCat = None
+
     def to_dict(self) -> dict:
         raise NotImplementedError('Overwrite Me!')
     
@@ -206,11 +212,6 @@ class Threshold_2Tail(DataBase):
     Z   = None # Standardized Pareto\
     C   = None # 0 -> Upper tail, 1 -> Lower tail
     W   = None # C in one-hot, (N x (2*D))
-    cats = None
-    nCat = None
-    iCat = None
-    dCat = None
-
 
     def rescale(self, Z):
         return rescale_pareto(Z, self.P, self.C)
@@ -255,11 +256,6 @@ class Threshold_2Tail(DataBase):
     pass
 
 class Threshold_1Tail(Threshold_2Tail):
-    cats = np.array([])
-    nCat = 0
-    iCat = np.array([])
-    dCat = np.array([])
-
     @classmethod
     def from_raw(cls, raw : np.ndarray, q : float):
         P = compute_gp_parameters_1tail(raw, q)
@@ -313,6 +309,31 @@ class RankTransform(DataBase):
         self.raw = raw
         self.Z = Z
         self.Fhats = Fhats
+        return
+
+class Spherical(DataBase):
+    V = None
+    
+    @classmethod
+    def from_raw(cls, raw : np.ndarray):
+        # Bounds-checking
+        assert raw.shape[0] > 0
+        assert raw.shape[1] > 0
+        # Verify on positive orthant
+        assert raw.min() >= 0
+        # Transform
+        V = euclidean_to_hypercube(raw)
+        # Instantiate
+        return cls(V)
+    
+    def to_dict(self):
+        d = {
+            'V' : self.V,
+            }
+        return d
+    
+    def __init__(self, V):
+        self.V = V
         return
 
 class Multinomial(DataBase):
@@ -438,6 +459,7 @@ class Data(DataBase):
     xh1t = None
     xh2t = None
     rank = None
+    sphr = None
     cate = None
 
     dcls = None
@@ -447,6 +469,11 @@ class Data(DataBase):
     V = None
     R = None
     I = None
+    
+    cats = None
+    nCat = None
+    iCat = None
+    dCat = None
     
     def to_dict(self) -> dict:
         d = dict()
@@ -483,38 +510,122 @@ class Data(DataBase):
                    rank = rank, cate = cate, **addlkeys)
     
     @classmethod
-    def from_raw(
+    def from_components(
             cls,
             xh1t : Threshold_1Tail = None, 
             xh2t : Threshold_2Tail = None, 
-            rank : RankTransform = None,
-            cate : Categorical = None,
-            dcls : bool = False,
+            rank : RankTransform   = None,
+            sphr : Spherical       = None,
+            cate : Categorical     = None,
+            dcls : bool            = False,
             ):
-        inputs = [xh1t, xh2t, rank, cate]
+        inputs = [xh1t, xh2t, sphr, rank, cate]
         filted = [x for x in inputs if x is not None]
+        # Input Checking
+        assert len(filted) > 0
+        #   All data have same length
+        assert filted[0].raw.shape[0] > 0
         assert len(np.unique([x.raw.shape[0] for x in filted])) == 1
+        # Regime Checking
+        if (xh1t is not None) or (xh2t is not None):
+            assert (rank is None) and (sphr is None)
+            real_regime = 'threshold'
+        elif rank is not None:
+            assert (xh1t is None) and (xh2t is None) and (sphr is None)
+            real_regime = 'rank'
+        elif sphr is not None:
+            assert (xh1t is None) and (xh2t is None) and (rank is None)
+            real_regime = 'sphere'
+        else:
+            real_regime = 'none'
+        # Data Filling
         N = filted[0].raw.shape[0]
         Z = np.empty((N,0), dtype = float)
         W = np.empty((N,0), dtype = int)
-        if xh1t is not None:
-            Z = np.hstack((Z, xh1t.Z))
-        if xh2t is not None:
-            Z = np.hstack((Z, xh2t.Z))
-            W = np.hstack((W, xh2t.W))
-        if rank is not None:
+        cats = np.empty((0), dtype = int)
+        if real_regime == 'threshold':
+            if xh1t is not None:
+                Z = np.hstack((Z, xh1t.Z))
+            if xh2t is not None:
+                Z = np.hstack((Z, xh2t.Z))
+                W = np.hstack((W, xh2t.W))
+                cats = np.hstack((cats, xh2t.cats))
+            R = Z.max(axis = 1)
+            V = Z / R[:None]
+            V[V < EPS] = EPS
+            if dcls:
+                I = cluster_max_row_ids(R)
+            else:
+                I = np.where(R >= 1)[0]
+        elif real_regime == 'rank':
             Z = np.hstack((Z, rank.Z))
+            R = Z.max(axis = 1)
+            V = Z / R[:,None]
+            V[V < EPS] = EPS
+            I = np.arange(N)
+        elif real_regime == 'sphr':
+            V = sphr.V
+            I = np.arange(N)
+        else:
+            V = np.empty((N, 0), dtype = float)
+            R = np.repeat(1., N)
+            I = np.arange(N)
         if cate is not None:
             W = np.hstack((W, cate.W))
+            cats = np.hstack((cats, cate.cats))
 
-
-
+        return cls(xh1t, xh2t, rank, sphr, cate, Z, W, V, R, I, dcls)
+    
+    @classmethod
+    def from_raw(
+            cls, 
+            xh1t_raw : np.ndarray = None, 
+            xh2t_raw : np.ndarray = None, 
+            xhquant  : float      = None,
+            dcls     : bool       = False,
+            rank_raw : np.ndarray = None,
+            sphr_raw : np.ndarray = None,
+            cate_raw : np.ndarray = None,
+            cate_val : list       = None,
+            ):
+        # Regime Checking
+        if (xh1t_raw is not None) or (xh2t_raw is not None):
+            assert xhquant is not None
+            assert (rank_raw is None) and (sphr_raw is None)
+        # Data Parsing
+        #   Threshold 1-Tail
+        if xh1t_raw is not None:
+            xh1t = Threshold_1Tail.from_raw(xh1t_raw, xhquant)
+        else:
+            xh1t = None
+        #   Threshold 2-tail
+        if xh2t_raw is not None:
+            xh2t = Threshold_2Tail.from_raw(xh2t_raw, xhquant)
+        else: 
+            xh2t = None
+        #   Rank-Transformed
+        if rank_raw is not None:
+            rank = RankTransform.from_raw(rank_raw)
+        else: 
+            rank = None
+        #   Sphere
+        if sphr_raw is not None:
+            sphr = Spherical.from_raw(sphr_raw)
+        else:
+            sphr = None
+        #   Categorical
+        if cate_raw is not None:
+            cate = Categorical.from_raw(cate_raw, cate_val)
+        else:
+            cate = None
+        return cls.from_components(xh1t, xh2t, rank, sphr, cate, dcls)
 
     def __init__(
             self, 
             xh1t : Threshold_1Tail, 
             xh2t : Threshold_2Tail, 
-            rank : RankTransform, 
+            rank : RankTransform,
+            sphr : Spherical,
             cate : Categorical, 
             Z    : np.ndarray, 
             W    : np.ndarray, 
@@ -534,8 +645,6 @@ class Data(DataBase):
         self.I    = I
         self.dcls = dcls
         return
-
-
 
 if __name__ == '__main__':
     X = np.random.normal(loc = 1., size = (500, 6))
