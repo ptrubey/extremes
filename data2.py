@@ -22,7 +22,7 @@ def category_matrix(cats):
     CatMat = (catvec[:, None] == np.arange(len(cats))).T
     return CatMat
 
-# modified to work on 3d arrays
+# modified to work on n-d arrays
 def euclidean_to_simplex(euc):
     """ projects R_+^d to S_1^{d-1} """
     return (euc + EPS) / (euc + EPS).sum(axis = -1)[...,None]
@@ -150,14 +150,14 @@ def standardize_pareto_1tail(
     assert P.shape[1] == 3
     scratch = np.zeros(raw.shape)
     scratch += raw
-    scratch -= P[:,[0]]
-    scratch /= P[:,[1]]
-    scratch *= P[:,[2]]
+    scratch -= P[0,[0]]
+    scratch /= P[0,[1]]
+    scratch *= P[0,[2]]
     scratch += 1
     with np.errstate(invalid = 'ignore'):
         np.log(scratch, out = scratch)
     np.nan_to_num(scratch, copy = False, nan = -np.inf)
-    scratch /= P[:,[2]]
+    scratch /= P[0,[2]]
     np.exp(scratch, out = scratch)
     return scratch
 
@@ -167,6 +167,7 @@ def rank_transform_pareto(
         ) -> np.ndarray:
     """ Do Rank-Transform Standard Pareto Scaling """
     # Bounds Checking
+    assert len(raw.shape) == 2
     assert raw.shape[1] == len(Fhats)
     # Transformation
     Z = np.array([
@@ -180,6 +181,7 @@ def rank_invtransform_pareto(
         Fhats : list,
         ) -> np.ndarray:
     # Bounds Checking
+    assert len(Z.shape) == 2
     assert Z.shape[1] == len(Fhats)
     # Transformation
     X = np.ndarray(
@@ -195,29 +197,42 @@ class DataBase(object):
     iCat = None
     dCat = None
 
-    def to_dict(self) -> dict:
-        raise NotImplementedError('Overwrite Me!')
+    @staticmethod
+    def form_idCat(cats : np.ndarray) -> tuple:
+        iCat = np.hstack([
+            np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
+            ])
+        dCat = np.vstack([
+            (iCat == i) for i in range(iCat.max() + 1)
+            ])
+        return iCat, dCat
     
     @classmethod
     def from_dict(cls, d : dict):
         return cls(**d)
+
+    def to_dict(self) -> dict:
+        raise NotImplementedError('Overwrite Me!')
     
     @classmethod
     def from_raw(cls, **kwargs):
         raise NotImplementedError('Overwrite Me!')
 
 class Threshold_2Tail(DataBase):
-    raw = None # Raw data (N x D)
-    P   = None # Generalized Pareto Parameters (1 (or 2) x 3 x D)
-    Z   = None # Standardized Pareto\
-    C   = None # 0 -> Upper tail, 1 -> Lower tail
-    W   = None # C in one-hot, (N x (2*D))
+    raw  = None # Raw data (N x D)
+    P    = None # Generalized Pareto Parameters (1 (or 2) x 3 x D)
+    Z    = None # Standardized Pareto\
+    C    = None # 0 -> Upper tail, 1 -> Lower tail
+    W    = None # C in one-hot, (N x (2*D))
+    cats = None 
 
     def rescale(self, Z):
         return rescale_pareto(Z, self.P, self.C)
 
     @classmethod
     def from_raw(cls, raw : np.ndarray, q : float):
+        assert len(raw.shape) == 2
+        assert type(q) is float
         P = compute_gp_parameters_2tail(raw, q)
         Z, C = standardize_pareto_2tail(raw, P)
         W = np.stack((C == 0,C == 1), dtype = int).reshape(
@@ -231,7 +246,7 @@ class Threshold_2Tail(DataBase):
             'P'     : self.P,
             'Z'     : self.Z,
             'C'     : self.C,
-            'Cm'    : self.Cm,
+            'W'     : self.W,
             'q'     : self.q,
             }
         return d
@@ -239,9 +254,9 @@ class Threshold_2Tail(DataBase):
     def __init__(self,
             raw : np.ndarray, 
             P   : np.ndarray, 
-            Z   : np.ndarray,
-            C   : np.ndarray,
-            W   : np.ndarray,
+            Z   : np.ndarray, 
+            C   : np.ndarray, 
+            W   : np.ndarray, 
             q   : float,
             ):
         self.raw = raw
@@ -273,6 +288,7 @@ class Threshold_1Tail(Threshold_2Tail):
         self.raw = raw
         self.P   = P
         self.Z   = Z
+        self.q   = q
         return
     
     pass
@@ -356,12 +372,7 @@ class Multinomial(DataBase):
         except AssertionError:
             print('Total number of categories must equal number of columns')
             raise
-        iCat = np.hstack([
-            np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
-            ])
-        dCat = np.vstack([
-            np.where(iCat == i)[0] for i in range(iCat.max() + 1)
-            ])
+        iCat, dCat = cls.form_idCats(cats)
         W    = raw.copy()
         return cls(cats, nCat, iCat, dCat, raw, W)
     
@@ -402,6 +413,7 @@ class Categorical(Multinomial):
             raw : np.ndarray, 
             vals : list,
             ):
+        assert len(raw.shape) == 2
         # Verify Supplied Values
         if vals is not None:
             assert len(vals) == raw.shape[1]
@@ -424,7 +436,7 @@ class Categorical(Multinomial):
         dCat = np.vstack([
             np.where(iCat == i)[0] for i in range(iCat.max() + 1)
             ])
-        W = np.vstack(dummies.T)
+        W = np.vstack(dummies).T
         return cls(cats, nCat, iCat, dCat, raw, W, vals)
     
     def to_dict(self):
@@ -498,6 +510,10 @@ class Data(DataBase):
             rank = RankTransform.from_dict(d['rank'])
         else: 
             rank = None
+        if 'sphr' in d.keys():
+            sphr = Spherical.from_dict(d['sphr'])
+        else:
+            sphr = None
         if 'cate' in d.keys():
             cate = Categorical.from_dict(d['cate'])
         else:
@@ -506,7 +522,7 @@ class Data(DataBase):
         for key in ['Z','W','V','R','I','dcls']:
             if key in d.keys():
                 addlkeys[key] = d[key]
-        return cls(xh1t = xh1t, xh2t = xh2t, 
+        return cls(xh1t = xh1t, xh2t = xh2t, sphr = sphr,
                    rank = rank, cate = cate, **addlkeys)
     
     @classmethod
@@ -551,7 +567,7 @@ class Data(DataBase):
                 W = np.hstack((W, xh2t.W))
                 cats = np.hstack((cats, xh2t.cats))
             R = Z.max(axis = 1)
-            V = Z / R[:None]
+            V = Z / R[:,None]
             V[V < EPS] = EPS
             if dcls:
                 I = cluster_max_row_ids(R)
@@ -573,11 +589,59 @@ class Data(DataBase):
         if cate is not None:
             W = np.hstack((W, cate.W))
             cats = np.hstack((cats, cate.cats))
-
-        return cls(xh1t, xh2t, rank, sphr, cate, Z, W, V, R, I, dcls)
+        
+        nCat = cats.sum()
+        iCat, dCat = cls.form_idCat(cats)
+        
+        return cls(xh1t, xh2t, rank, sphr, cate, Z, W, V, R, I, cats, nCat, iCat, dCat, dcls)
     
     @classmethod
     def from_raw(
+            cls, 
+            raw         : np.ndarray, 
+            xh1t_cols   : np.ndarray = np.array([], dtype = int),
+            xh2t_cols   : np.ndarray = np.array([], dtype = int), 
+            xhquant     : float      = None,
+            dcls        : bool       = None,
+            rank_cols   : np.ndarray = np.array([], dtype = int), 
+            sphr_cols   : np.ndarray = np.array([], dtype = int), 
+            cate_cols   : np.ndarray = np.array([], dtype = int), 
+            cate_val    : list       = None,
+            ):
+        """ data generation from raw, single table.  columns identified using C indexing. """
+        # bounds checking:
+        assert len(raw.shape) == 2
+        assert np.concatenate(
+            [xh1t_cols, xh2t_cols, rank_cols, sphr_cols, cate_cols],
+            ).max() < raw.shape[1]
+        # Parsing
+        if len(xh1t_cols) > 0:
+            xh1t_raw = raw.T[xh1t_cols].T
+        else:
+            xh1t_raw = None
+        if len(xh2t_cols) > 0:
+            xh2t_raw = raw.T[xh2t_cols].T
+        else: 
+            xh2t_raw = None
+        if len(rank_cols) > 0:
+            rank_raw = raw.T[rank_cols].T
+        else:
+            rank_raw = None
+        if len(sphr_cols) > 0:
+            sphr_raw = raw.T[sphr_cols].T
+        else:
+            sphr_raw = None
+        if len(cate_cols) > 0:
+            cate_raw = raw.T[cate_cols].T
+        else:
+            cate_raw = None
+        # Instantiate
+        return cls.from_raw_separated(
+            xh1t_raw, xh2t_raw, xhquant, dcls, rank_raw, sphr_raw, cate_raw, cate_val,
+            )
+
+    @classmethod
+    def from_raw_separated(
             cls, 
             xh1t_raw : np.ndarray = None, 
             xh2t_raw : np.ndarray = None, 
@@ -627,20 +691,21 @@ class Data(DataBase):
             rank : RankTransform,
             sphr : Spherical,
             cate : Categorical, 
-            Z    : np.ndarray, 
-            W    : np.ndarray, 
-            V    : np.ndarray, 
-            R    : np.ndarray, 
-            I    : np.ndarray,
-            cats : np.ndarray,
-            nCat : int,
-            iCat : np.ndarray,
-            dCat : np.ndarray,
-            dcls : bool,
+            Z    : np.ndarray = None, 
+            W    : np.ndarray = None, 
+            V    : np.ndarray = None, 
+            R    : np.ndarray = None, 
+            I    : np.ndarray = None,
+            cats : np.ndarray = None,
+            nCat : int        = None,
+            iCat : np.ndarray = None,
+            dCat : np.ndarray = None,
+            dcls : bool       = None,
             ):
         self.xh1t = xh1t
         self.xh2t = xh2t
         self.rank = rank
+        self.sphr = sphr
         self.cate = cate
         self.Z    = Z
         self.W    = W
@@ -655,10 +720,27 @@ class Data(DataBase):
         return
 
 if __name__ == '__main__':
-    X = np.random.normal(loc = 1., size = (500, 6))
-    P = compute_gp_parameters_2tail(X, 0.95)
-    Z, C = standardize_pareto_2tail(X, P)
-    Xn = rescale_pareto(Z, P, C)
+    X1 = np.random.normal(loc = 1., size = (500, 5)) # 5
+    X2 = np.random.gamma(shape =  5, scale = 0.5, size = (500, 3)) # 3
+    X3 = np.vstack((
+        np.random.choice(3, size = 500, p = np.array([1,2,3])/6),
+        np.random.choice(3, size = 500, p = np.array([3,2,1])/6),
+        np.random.choice(3, size = 500, p = np.array([1,4,1])/6),
+        )).T # 3
+    X = np.hstack((X1,X2,X3))
+    data = Data.from_raw(
+        raw = X, 
+        xhquant = 0.95,
+        dcls = False,
+        xh2t_cols = np.array([0,1,2,3,4], dtype = int),
+        xh1t_cols = np.array([5,6,7], dtype = int),
+        cate_cols = np.array([8,9,10], dtype = int),
+        )
+    d = data.to_dict()
+    dat2 = Data.from_dict(d)
+    # P = compute_gp_parameters_2tail(X, 0.95)
+    # Z, C = standardize_pareto_2tail(X, P)
+    # Xn = rescale_pareto(Z, P, C)
     raise
 
 # EOF
