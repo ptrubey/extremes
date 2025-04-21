@@ -17,9 +17,8 @@ EPS = np.finfo(float).eps
 import cUtility as cu
 from samplers import ParallelTemperingStickBreakingSampler,                     \
     bincount2D_vectorized, pt_py_sample_chi_bgsb, pt_py_sample_cluster_bgsb
-from data import Projection, MixedDataBase, MixedData, euclidean_to_angular,    \
-    euclidean_to_hypercube, euclidean_to_simplex, euclidean_to_psphere,         \
-    category_matrix, euclidean_to_catprob
+from data import Projection, Data, category_matrix, euclidean_to_catprob,       \
+    euclidean_to_hypercube, euclidean_to_psphere, euclidean_to_simplex
 from projgamma import GammaPrior, NormalPrior, InvWishartPrior,                 \
     pt_logd_cumdircategorical_mx_ma_inplace_unstable, pt_logd_mvnormal_mx_st,   \
     logd_gamma_my, logd_mvnormal_mx_st, logd_invwishart_ms,                     \
@@ -398,12 +397,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             'mus'    : mus,
             'Sigmas' : Sigmas,
             'deltas' : deltas,
-            # 'nCol'   : self.nCol,
-            # 'nDat'   : self.nDat,
-            # 'nCat'   : self.nCat,
-            'cats'   : self.data.Cats,
-            # 'V'      : self.data.V,
-            # 'W'      : self.data.W,
+            'data'   : self.data.to_dict(),
             'swap_y' : self.swap_succeeds,
             'swap_n' : self.swap_attempts - self.swap_succeeds,
             'swap_p' : self.swap_succeeds / (self.swap_attempts + 1e-9),
@@ -412,11 +406,6 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             'model_radius' : self.model_radius,
             'time'   : self.time_elapsed_numeric,
             }
-        self.data.write_to_dict(out)
-        # try to add outcome / radius to dictionary
-        # for attr in ['Y','R','P','values']:
-        #     if hasattr(self.data, attr):
-        #         out[attr] = self.data.__dict__[attr]
         # write to disk
         with open(path, 'wb') as file:
             pickle.dump(out, file)
@@ -424,7 +413,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
     
     def categorical_considerations(self):
         """ Builds the CatMat """
-        self.CatMat = category_matrix(self.data.Cats)
+        self.CatMat = category_matrix(self.data.cats)
         return
     
     def __init__(
@@ -440,7 +429,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
             model_radius = False,
             **kwargs
             ):
-        assert type(data) is MixedData
+        assert type(data) is Data
         if model_radius:
             assert type(data.R) is np.ndarray
         self.model_radius = model_radius
@@ -453,7 +442,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         if self.model_radius:
             self.tCol += 1
         self.nDat = self.data.nDat
-        self.nCats = self.data.Cats.shape[0]
+        self.nCats = self.data.cats.shape[0]
 
         # Setting Priors
         _prior_mu = NormalPrior(
@@ -466,7 +455,7 @@ class Chain(ParallelTemperingStickBreakingSampler, Projection):
         psi = np.zeros((self.tCol, self.tCol))
         psi[:self.nCol, :self.nCol] = np.eye(self.nCol)
         start_idx = self.nCol
-        for catlength in self.data.Cats:
+        for catlength in self.data.cats:
             end_idx = start_idx + catlength
             cat_cov = np.eye(end_idx - start_idx)
             for i in range(catlength):
@@ -536,10 +525,6 @@ class Result(object):
             simplex_reverse.append(euclidean_to_simplex(gammas[:,cat_start:cat_end]))
         # stack hypercube and categorical variables side by side.
         return np.hstack([hypcube] + simplex_reverse[::-1])
-
-    def generate_posterior_predictive_angular(self, n_per_sample = 1, m = 10):
-        hyp = self.generate_posterior_predictive_hypercube(n_per_sample, m)
-        return euclidean_to_angular(hyp)
 
     def generate_posterior_predictive_spheres(self, n_per_sample):
         rhos = self.generate_posterior_predictive_gammas(n_per_sample)[:,self.nCol:(self.nCol + self.nCat)] # (s,D)
@@ -660,10 +645,9 @@ class Result(object):
         zetas  = out['zetas']
         mus    = out['mus']
         Sigmas = out['Sigmas']
-        cats   = out['cats']
         chis   = out['chis']
         
-        self.data = MixedDataBase.instantiate_from_dict(out)
+        self.data = Data.from_dict(out['data'])
         self.model_radius = out['model_radius']
         # self.data = MixedDataBase(out['V'], out['W'], out['cats'])
         self.nSamp  = deltas.shape[0]
@@ -673,9 +657,9 @@ class Result(object):
         self.tCol   = self.nCol + self.nCat
         if self.model_radius: 
             self.tCol += 1
-        self.nCats  = cats.shape[0]
-        self.cats   = cats
-        self.CatMat = category_matrix(self.data.Cats)
+        self.nCats  = self.data.cats.shape[0]
+        self.cats   = self.data.cats
+        self.CatMat = category_matrix(self.data.cats)
         
         self.GEMPrior = GEMPrior(*out['GEM'])
         self.max_clust_count = chis.shape[-1]
@@ -720,7 +704,7 @@ class Heap(object):
         return
 
 if __name__ == '__main__':
-    from data import MixedData
+    from data import Data
     from projgamma import GammaPrior
     from pandas import read_csv
     import os
@@ -763,15 +747,22 @@ if __name__ == '__main__':
     # out = read_csv(p.in_outcome_path).values
     # out = out[~np.isnan(out).any(axis = 1)].ravel()
     # assert raw.shape[0] == out.shape[0]
-    data = MixedData(
-        raw, 
-        cat_vars = np.array(eval(p.cat_vars), dtype = int), 
-        realtype = p.realtype,
-        decluster = eval(p.decluster), 
-        quantile = float(p.quantile),
-        # outcome = out,
-        )
+    # data = MixedData(
+    #     raw, 
+    #     cat_vars = np.array(eval(p.cat_vars), dtype = int), 
+    #     realtype = p.realtype,
+    #     decluster = eval(p.decluster), 
+    #     quantile = float(p.quantile),
+    #     # outcome = out,
+    #     )
     # data.fill_outcome(out)
+    from data import Data
+    data = Data.from_raw(
+        raw,
+        xh1t_cols = np.arange(raw.shape[1]),
+        dcls = True,
+        xhquant = 0.95,
+        )
     model = Chain(
         data, prior_chi = GEMPrior(0.1, 0.1), p = 10, ntemps = 6,
         )

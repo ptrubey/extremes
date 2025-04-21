@@ -199,6 +199,10 @@ class DataBase(object):
 
     @staticmethod
     def form_idCat(cats : np.ndarray) -> tuple:
+        if len(cats) == 0:
+            iCat = np.array([], dtype = int)
+            dCat = np.array([], dtype = bool)
+            return iCat, dCat
         iCat = np.hstack([
             np.ones(cat, dtype = int) * i for i, cat in enumerate(cats)
             ])
@@ -593,7 +597,9 @@ class Data(DataBase):
         nCat = cats.sum()
         iCat, dCat = cls.form_idCat(cats)
         
-        return cls(xh1t, xh2t, rank, sphr, cate, Z, W, V, R, I, cats, nCat, iCat, dCat, dcls)
+        return cls(xh1t, xh2t, rank, sphr, cate, 
+                   Z[I], W[I], V[I], R[I], I, 
+                   cats, nCat, iCat, dCat, dcls)
     
     @classmethod
     def from_raw(
@@ -717,7 +723,18 @@ class Data(DataBase):
         self.iCat = iCat
         self.dCat = dCat
         self.dcls = dcls
+        self.nCol = Z.shape[1]
+        self.nDat = self.I.shape[0]
         return
+
+class Projection(object):
+    def set_projection(self):
+        if self.data.V.shape[1] > 0:
+            self.data.Yp = euclidean_to_psphere(self.data.V, self.p)
+        else:
+            self.data.Yp = np.empty_like(self.data.V)
+        return
+    pass
 
 if __name__ == '__main__':
     X1 = np.random.normal(loc = 1., size = (500, 5)) # 5
