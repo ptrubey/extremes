@@ -11,6 +11,7 @@ ad/
 ad*/
 condsurv/
 .vscode/
+angular/
 *.code-workspace
 *.png
 .Rproj.user
