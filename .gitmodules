@@ -1,0 +1,3 @@
+[submodule "projgamma"]
+	path = projgamma
+	url = git@github.com:ptrubey/projgamma.git
