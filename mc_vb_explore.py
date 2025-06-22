@@ -122,7 +122,6 @@ class Adam(object):
         mhat = self.momentum / (1 - self.decay1**self.iter)
         shat = self.sumofsqs / (1 - self.decay2**self.iter)
         self.theta -= mhat * self.rate / (np.sqrt(shat) + self.eps)
-        raise
         return
 
     def initialization(
@@ -226,7 +225,7 @@ if __name__ == '__main__':
     adam = Adam(
         np.array((0.,0.)), 
         dloss, 
-        rate = 1e-2, 
+        rate = 1e-3, 
         decay1 = 0.9, 
         decay2 = 0.999,
         )
