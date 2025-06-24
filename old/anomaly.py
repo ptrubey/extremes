@@ -1,243 +1,629 @@
-""" Module for implementing anomaly detection algorithms;
-    building on postpred_loss.Prediction_Gammas.prediction algorithm """
-import numpy as np
-import pandas as pd
-import os
-import matplotlib.pyplot as plt
-import re
+"""Module for implementing anomaly detection algorithms.
 
-from sklearn.metrics import pairwise_distances
-from multiprocessing import Pool, cpu_count
-from scipy.stats import gmean
+Implements classic anomaly detection algorithms, as well as 
+custom anomaly detection algorithms for extreme data.
+"""
+# builtins imported as package
+import numpy as np, pandas as pd, matplotlib.pyplot as plt
+import re, os, argparse, glob, gc
+# builtins explicitly imported
+from multiprocessing import pool as mcpool, cpu_count, Pool # get_context
 from scipy.integrate import trapezoid
-from scipy.special import gamma as gamma_func
+from scipy.special import gamma as gamma_func, gammaln
+from scipy.stats import gmean
+from numpy.random import gamma, choice
 from itertools import repeat
 from collections import defaultdict
+from functools import cached_property
+from time import sleep
+from math import ceil
+from sklearn.metrics import roc_auc_score, precision_recall_curve, auc
+from collections import defaultdict
+# Competing Anomaly Detection Algorithms
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.svm import OneClassSVM
+# Custom Modules
+from damex import DAMEX_Vanilla
+from data import Projection, category_matrix, euclidean_to_catprob,             \
+    euclidean_to_hypercube, euclidean_to_psphere
+from energy import limit_cpu, kde_per_obs, manhattan_distance_matrix,           \
+    hypercube_distance_matrix, euclidean_distance_matrix,                       \
+    euclidean_dmat_per_obs, hypercube_dmat_per_obs, manhattan_dmat_per_obs,     \
+    mixed_energy_score, real_energy_score, simp_energy_score,                   \
+    multi_kde_per_obs
+from projgamma import pt_logd_cumdircategorical_mx_ma, pt_logd_dirichlet_mx_ma, \
+    pt_logd_pareto_mx_ma
+from models import Results
+from samplers import bincount2D_vectorized
+np.seterr(divide = 'ignore')
 
-from energy import limit_cpu, hypercube_distance_unsummed, postpred_loss_single, energy_score_inner
-from data import Data_From_Raw
-from postpred_loss import PostPredLoss, Prediction_Gammas, Results
-from raw_anomaly import Anomaly, roc_curve, prc_curve
-from simulate_data import DataAD
+# Globals
+EPS = np.finfo(float).eps
+MAX = np.finfo(float).max
 
-class AnomalyDetector(PostPredLoss):
-    """ Implements anomaly detection algorithms; uses Linf """
-    data = None
-
-    def pairwise_distance_to_replicates(self):
-        predicted = self.Linf(self.prediction())
-        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
-        res = pool.map(hypercube_distance_unsummed, zip(np.moveaxis(predicted, 0, 1), self.data.V))
-        pool.close()
-        return np.hstack(list(res)).T
-
-    def pdr_plot(self):
-        pdr = self.pairwise_distance_to_replicates()
-        pdrms = np.sort(pdr.mean(axis = 1))
-        plt.plot(pdrms)
-        plt.show()
-        return
-
-    def pairwise_distance_to_postpred(self, n_per_sample = 10):
-        postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
-        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
-        res = pool.map(hypercube_distance_unsummed, zip(repeat(postpred), self.data.V))
-        pool.close()
-        return np.hstack(list(res)).T
-
-    def pdp_plot(self, n_per_sample = 10):
-        pdp = self.pairwise_distance_to_postpred(n_per_sample)
-        pdpm = gmean(pdp, axis = 1)
-        pdpms = np.sort(pdpm)
-        plt.plot(pdpms)
-        plt.show()
-        return
-
-    def knn_distance(self, k = 10, n_per_sample = 10):
-        postpred = self.generate_posterior_predictive_hypercube(n_per_sample)
-        pool = Pool(processes = cpu_count(), initializer = limit_cpu)
-        res = pool.map(hypercube_distance_unsummed, zip(repeat(postpred), self.data.V))
-        pool.close()
-        return np.vstack([sorted(r.reshape(-1)) for r in res]).T[:k].T
-
-    def knn_distance_plot(self, k = 20, n_per_sample = 10):
-        knn = self.knn_distance(k, n_per_sample)
-        ord = np.argsort(gmean(knn, axis = 1))
-        knn2 = knn[ord].T[np.array([4,9,14,19],dtype = int)].T
-        plt.plot(knn2)
-        plt.show()
-        return
-
-    def populate_cones(self, epsilon):
-        C_damex = (self.postpred > epsilon).astype(int)
-        cones = defaultdict(lambda: 1e-10)
-        for row in C_damex:
-            cones[tuple(row)] += 1 / self.postpred.shape[0]
-        return cones
-
-    def scoring_cones(self, epsilon = 0.5):
-        cone_prob = self.populate_cones(epsilon)
-        scores = np.empty(self.data.nDat)
-        for i in range(self.nDat):
-            scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)] / self.data.R[i]
-        return scores
-
-    def scoring_cones_angular(self, epsilon = 0.5):
-        cone_prob = self.populate_cones(epsilon)
-        scores = np.empty(self.data.nDat)
-        for i in range(self.nDat):
-            scores[i] = cone_prob[tuple(self.data.V[i] > epsilon)]
-        return scores
-
-    def scoring_pdr(self, scalar = 1., base = np.e):
-        """ Inverse of average density of posterior predictive distribution * probability of seeing
-        observation as far out as that."""
-        pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
-        n, p = self.data.V.shape
-        # inv_scores = (base ** (-scalar * pdrm).T / self.data.R).T
-        inv_scores = 1 / (pdrm ** (p-1)) / self.data.R
-        return 1 / inv_scores
-
-    def scoring_pdr_angular(self, scalar = 1., base = np.e):
-        pdrm = self.pairwise_distance_to_replicates().mean(axis = 1)
-        n, p = self.data.V.shape
-        # inv_scores = base ** (-scalar * pdrm)
-        inv_scores = 1 / (pdrm ** (p-1))
-        return 1 / inv_scores
-
-    def scoring_pdp(self, scalar = 1., base = np.e, n_per_sample = 10):
-        pdp = self.pairwise_distance_to_postpred(n_per_sample)
-        pdpm = gmean(pdp, axis = 1)
-        inv_scores = (base ** (-scalar * pdpm).T / self.data.R).T
-        return 1 / inv_scores
-
-    def scoring_pdp_angular(self, scalar = 1., base = np.e, n_per_sample = 10):
-        pdp = self.pairwise_distance_to_postpred(n_per_sample)
-        pdpm = gmean(pdp, axis = 1)
-        inv_scores = base ** (-scalar * pdpm)
-        return 1 / inv_scores
-
-    def scoring_knn(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
-        knn = self.knn_distance(k, n_per_sample).T[-1]
-        n, p = self.data.V.shape
-        # inv_scores = (base**(- scalar * knn).T / self.data.R).T
-        inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1)) / self.data.R
-        return 1 / inv_scores
-
-    def scoring_knn_angular(self, scalar = 1., base = np.e, k = 5, n_per_sample = 10):
-        knn = self.knn_distance(k, n_per_sample).T[-1]
-        n, p = self.data.V.shape
-        inv_scores =  (k / n) / (np.pi**((p-1)/2)/gamma_func((p-1)/2 + 1) * knn**(p-1))
-        return 1 / inv_scores
-
-    def scoring_ppl(self):
-        predicted = self.Linf(self.prediction())
-        ppl = postpred_loss_single(predicted, self.data.V)
-        return ppl * self.data.R
-
-    def scoring_ppl_angular(self):
-        predicted = self.Linf(self.prediction())
-        ppl = postpred_loss_single(predicted, self.data.V)
-        return ppl
-
-    def scoring_es(self):
-        predicted = self.Linf(self.prediction())
-        es = energy_score_inner(np.moveaxis(predicted, 0, 1), self.data.V)
-        return es * self.data.R
-
-    def scoring_es_angular(self):
-        predicted = self.Linf(self.prediction())
-        es = energy_score_inner(np.moveaxis(predicted, 0, 1), self.data.V)
-        return es
-
-    def scoring_kde(self, h = 1, kernel = 'gaussian'):
-        return self.scoring_kde_angular(h, kernel) * self.data.R
+# class DAMEX(object):
+#     damex = defaultdict(lambda: 1e-6)
+#     threshold = None
     
-    def scoring_kde_angular(self, h = 1, kernel = 'gaussian'):
-        pdr = self.pairwise_distance_to_postpred()
+#     def __init__(self, data):
+#         n = data.E.shape[0]
+#         k = np.sqrt(data.E.shape[0])
+#         epsilon = 0.01
+#         self.threshold = n * epsilon / k
+#         Z = np.array(list(map(std_pareto_transform, self.data.E.T))).T
+#         U = (Z > self.threshold)
+#         for u in map(tuple, U):
+#             self.damex[u] += n / k
+
+#     def score(self, X):
+#         R = X.max(axis = 1)
+#     pass
+
+def chkarr(obj, attr):
+    """ check if object has array; array is valid, and has positive dimensions """
+    if hasattr(obj, attr):
+        if (type(obj.__dict__[attr]) is np.ndarray):
+            if (obj.__dict__[attr].shape[-1] > 0):
+                return True
+            else:
+                return False
+        else:
+            return False
+    else:
+        return False
+
+def metric_auc(scores, actual):
+    """  
+    metric_auc(scores, actual)
+    ---
+    Compute Area-Under-the-Curve statistics for ROC and PRC
+    ---
+    Args:
+        scores : (N) vector, float
+        actual : (N) vector, int/bool
+    ---
+    Out:  tuple: (AuROC, AuPRC)
+    """
+    scores[np.isinf(scores)] = MAX
+    scores[scores > MAX] = MAX
+    try:
+        auroc = roc_auc_score(actual, scores)
+    except ValueError:
+        return (np.nan, np.nan)
+    precision, recall, thresholds = precision_recall_curve(actual, scores)
+    auprc = auc(recall, precision)
+    return (auroc, auprc)
+
+class Anomaly(Projection):
+    """ 
+    Anomaly:
+
+    Implements a variety of classic and experimental anomaly detection metrics.
+
+    Usage:
+        - Create composite class with (Result[model], Anomaly).
+        - Instantiate.
+        - Anomaly metrics will prefer to use existing distance metrics before generating new ones.
+    Note:
+        - Can declare multiprocessing.Pool first, so that *_distance_matrix will use 
+            an existing pool rather than making a new one every time.
+    """
+    postpred_per_samp = 1
+
+    # Parallelism
+    pool = None
+    def pools_open(self):
+        # self.pool = get_context('spawn').Pool(
+        self.pool = Pool(
+            processes = (3 * cpu_count()) // 4, 
+            initializer = limit_cpu,
+            )
+        return
+    def pools_closed(self):
+        self.pool.close()
+        self.pool.join()
+        del self.pool
+        return
+    
+    @property
+    def zeta_sigma(self):
+        zetas = np.array([
+            zeta[delta] 
+            for zeta, delta 
+            in zip(self.samples.zeta, self.samples.delta)
+            ])
+        try:
+            sigmas = np.array([
+                sigma[delta]
+                for sigma, delta
+                in zip(self.samples.sigma, self.samples.delta) 
+                ])
+        except AttributeError:
+            sigmas = np.ones(zetas.shape)
+        return zetas, sigmas
+    @property
+    def r(self):
+        zetas, sigmas = self.zeta_sigma
+        self.set_projection()
+        r_shape = zetas[:,:,:self.nCol].sum(axis = 2)
+        r_rate  = (sigmas[:,:,:self.nCol] * self.data.Yp[None,:,:]).sum(axis = 2)
+        return gamma(r_shape, scale = 1 / r_rate)
+    @property
+    def rho(self):
+        zetas, sigmas = self.zeta_sigma
+        try:
+            rho_shapes = zetas[:,:,self.nCol:] + self.data.W[None,:,:]
+            rho_rates  = sigmas[:,:,self.nCol:]
+            return gamma(rho_shapes, rho_rates)
+        except AttributeError:
+            return np.zeros((self.nSamp, self.nDat, 0))
+    
+    def energy_score(self):
+        if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            Vnew = euclidean_to_hypercube(
+                self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
+                )
+            Wnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
+            return mixed_energy_score(self.data.V, self.data.W, Vnew, Wnew)
+        elif chkarr(self.data, 'V'):
+            Vnew = euclidean_to_hypercube(
+                self.generate_posterior_predictive_gammas(self.postpred_per_samp)[:,:self.nCol]
+                )
+            return real_energy_score(self.data.V, Vnew)
+        elif chkarr(self.data, 'W'):
+            Wnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
+            return simp_energy_score(self.data.W, Wnew)
+        else:
+            raise            
+
+    ## Latent Distance per Observation (Summary)
+    def euclidean_distance(self, V = None, W = None, R = None, **kwargs):
+        # znew axis: (observation, sample iteration, dimension): (i, s, d)
+        znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        if hasattr(self.data, 'V') and (V is not None):            
+            shape = znew[:,:,:self.nCol].sum(axis = 2)
+            radii = gamma(shape).mean(axis = 1)
+            Y1 = radii[:,None] * V
+        elif W is not None:
+            Y1 = np.zeros((W.shape[0], 0))
+        else:
+            raise ValueError('We need some data')
+        if hasattr(self.data, 'W') and (W is not None):
+            Y2 = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
+        elif V is not None:
+            Y2 = np.zeros((V.shape[0], 0))
+        else:
+            raise ValueError('We need some data')
+        Y = np.hstack((Y1,Y2))
+        dmat = euclidean_distance_matrix(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            Y,
+            self.pool,
+            )
+        return dmat
+    def hypercube_distance(self, V = None, W = None, R = None):
+        znew  = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        if (chkarr(self.data, 'V') and type(V) is np.ndarray and 
+                chkarr(self.data, 'W') and type(W) is np.ndarray):
+            radii = gamma(znew[:,:,:self.nCol].sum(axis = 2)) # (i, s)
+            Yp = euclidean_to_psphere(V, 10) # (i, s)
+            Y1 = Yp[:,None,:] * radii[:,:,None]  # (i, ,d1) * (i,s, ) = (i,s,d1)
+            Y2 = gamma(znew[:,:,self.nCol:(self.nCol + self.nCat)]) # (i, s, d2)
+            YY = np.concatenate((Y1,Y2), axis = 2)
+            VV = euclidean_to_hypercube(euclidean_to_hypercube(YY).mean(axis = 1))
+        else:
+            if hasattr(self.data, 'V') and (V is not None):            
+                shape = znew[:,:,:self.nCol].sum(axis = 2)
+                radii = gamma(shape).mean(axis = 1)
+                Y1 = radii[:,None] * V
+            elif W is not None:
+                Y1 = np.zeros((W.shape[0], 0))
+            else:
+                raise ValueError('We need some data')
+            if hasattr(self.data, 'W') and (W is not None):
+                Y2 = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
+            elif V is not None:
+                Y2 = np.zeros((V.shape[0], 0))
+            else:
+                raise ValueError('We need some data')
+            Y = np.hstack((Y1,Y2))
+            VV = euclidean_to_hypercube(Y)
+        Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        postpred = euclidean_to_hypercube(Gnew[:,:(self.nCol + self.nCat)])
+        dmat = hypercube_distance_matrix(postpred, VV, self.pool)
+        return dmat
+    def mixed_distance(self, V = None, W = None):
+        Gcon = self.generate_new_conditional_posterior_predictive_gammas(Vnew = V, Wnew = W)
+        Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        catmat = category_matrix(self.data.cats)
+        if hasattr(self.data, 'V') and (V is not None):
+            Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
+            dmat_r = hypercube_distance_matrix(Vnew, V, self.pool)
+        else:
+            dmat_r = np.zeros((W.shape[0], Gnew.shape[0]))
+        if hasattr(self.data, 'W') and (W is not None):
+            mrho = Gcon[:,:,self.nCol:].mean(axis = 1)
+            pi_new = euclidean_to_catprob(Gnew, catmat)
+            pi_con = euclidean_to_catprob(mrho, catmat)
+
+            dmat_c = manhattan_distance_matrix(pi_new, pi_con, self.pool)
+        else:
+            dmat_c = np.zeros((V.shape[0], Gnew.shape[0]))
+        return dmat_r, dmat_c
+
+    # Bandwidth estimators
+    @cached_property
+    def hypercube_bandwidth(self):
+        """hypercube bandwidth for only hypercube section"""
+        V = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(1)[:,:self.nCol])
+        VV = hypercube_dmat_per_obs(V[None], V, self.pool)
+        return np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1)))
+    @cached_property
+    def latent_euclidean_bandwidth(self):
+        Y = self.generate_posterior_predictive_gammas(1)
+        YY = euclidean_dmat_per_obs(Y[None], Y, self.pool)
+        return np.sqrt((YY**2).sum() / (2 * Y.shape[0] * (Y.shape[0] - 1)))
+    @cached_property
+    def latent_sphere_bandwidth(self):
+        P = self.generate_posterior_predictive_spheres(1)
+        PP = manhattan_dmat_per_obs(P[None], P, self.pool)
+        return np.sqrt((PP**2).sum() / (2 * P.shape[0] * (P.shape[0] - 1)))
+    @cached_property
+    def latent_hypercube_bandwidth(self):
+        V = euclidean_to_hypercube(self.generate_posterior_predictive_gammas(1))
+        VV = hypercube_dmat_per_obs(V[None], V, self.pool)
+        return np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1)))
+    @cached_property
+    def latent_mixed_bandwidth(self):
+        V = euclidean_to_hypercube(
+            self.generate_posterior_predictive_gammas(1)[:,:self.nCol]
+            )
+        P = self.generate_posterior_predictive_spheres(1)
+        
+        VV = hypercube_dmat_per_obs(V[None], V, self.pool)
+        PP = manhattan_dmat_per_obs(P[None], P, self.pool)
+        
+        hV = np.sqrt((VV**2).sum() / (2 * V.shape[0] * (V.shape[0] - 1)))
+        hP = np.sqrt((PP**2).sum() / (2 * P.shape[0] * (P.shape[0] - 1)))
+        return (hV, hP)
+
+    ## Classic Anomaly Metrics:
+    def isolation_forest(self, V = None, W = None, R = None, **kwargs):
+        """ Implements IsolationForest Method. Scores are arranged so larger = more anomalous """
+        if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+            forest = IsolationForest().fit(dat)
+            raw = forest.score_samples(np.hstack([R[:,None] * V, W]))
+        elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            dat = np.hstack((self.data.V, self.data.W))
+            forest = IsolationForest().fit(dat)
+            raw = forest.score_samples(np.hstack((V,W)))
+        elif chkarr(self.data, 'V'):
+            dat = self.data.V
+            forest = IsolationForest().fit(dat)
+            raw = forest.score_samples(V)
+        elif chkarr(self.data, 'W'):
+            dat = self.data.W
+            forest = IsolationForest().fit(dat)
+            raw = forest.score_samples(W)
+        else:
+            raise
+        return raw.max() - raw + 1
+    def local_outlier_factor(self, V = None, W = None, R = None, k = 5, **kwargs):
+        """ Implements Local Outlier Factor.  k specifies the number of neighbors to fit to. """
+        if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+            lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
+            raw = lof.score_samples(np.hstack([R[:,None] * V, W]))
+        elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            dat = np.hstack((self.data.V, self.data.W))
+            lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
+            raw = lof.score_samples(np.hstack((V,W)))
+        elif chkarr(self.data, 'V'):
+            dat = self.data.V
+            lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
+            raw = lof.score_samples(V)
+        elif chkarr(self.data, 'W'):
+            dat = self.data.W
+            lof = LocalOutlierFactor(n_neighbors = k, novelty = True).fit(dat)
+            raw = lof.score_samples(W)
+        else:
+            raise
+        return raw.max() - raw + 1
+    def one_class_svm(self, V = None, W = None, R = None, **kwargs):
+        if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+            svm = OneClassSVM(gamma = 'auto').fit(dat)
+            raw = svm.score_samples(np.hstack([R[:,None] * V, W]))
+        elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            dat = np.hstack((self.data.V, self.data.W))
+            svm = OneClassSVM(gamma = 'auto').fit(dat)
+            raw = svm.score_samples(np.hstack((V,W)))
+        elif chkarr(self.data, 'V'):
+            dat = self.data.V
+            svm = OneClassSVM(gamma = 'auto').fit(dat)
+            raw = svm.score_samples(V)
+        elif chkarr(self.data, 'W'):
+            dat = self.data.W
+            svm = OneClassSVM(gamma = 'auto').fit(dat)
+            raw = svm.score_samples(W)
+        else:
+            raise
+        return raw.max() - raw + 1
+
+    # def damex(self, V = None, W = None, R = None, **kwargs):
+    #     if chkarr(self.data, 'R') and chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+    #         # Full Mixed Data Regime
+    #         dat = np.hstack((self.data.R[:, None] * self.data.V, self.data.W))
+    #         dam = DAMEX_Vanilla(self.data.R[:, None] * self.data.V, )
+            
+    #         raw = svm.score_samples(np.hstack([R[:,None] * V, W]))
+    #     elif chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            
+    #         dat = np.hstack((self.data.V, self.data.W))
+    #         # svm = OneClassSVM(gamma = 'auto').fit(dat)
+    #         raw = svm.score_samples(np.hstack((V,W)))
+    #     elif chkarr(self.data, 'V'):
+    #         dat = self.data.V
+    #         # svm = OneClassSVM(gamma = 'auto').fit(dat)
+    #         raw = svm.score_samples(V)
+    #     elif chkarr(self.data, 'W'):
+    #         dat = self.data.W
+    #         # svm = OneClassSVM(gamma = 'auto').fit(dat)
+    #         raw = svm.score_samples(W)
+    #     else:
+    #         raise
+
+    ## Extreme Anomaly Metrics:
+    def knn_hypercube_distance_to_postpred(self, V = None, W = None, R = None, k = 5, **kwargs):
+        knn = np.array(list(map(
+            np.sort, self.hypercube_distance(V = V, W = W, R = R)
+            )))[:, k, 0]
+        try:
+            n = V.shape[0]
+        except AttributeError:
+            n = W.shape[0]
+        p = self.tCol
+        log_scores = (
+            + np.log(k/n)
+            + gammaln((p-1)/2 + 1)
+            - ((p-1)/2) * np.log(np.pi)
+            - (p-1) * np.log(knn)
+            )        
+        with np.errstate(under = 'ignore', over='ignore'):
+            scores = np.exp(log_scores)
+        scores[np.isnan(scores)] = MAX
+        return scores
+    def knn_euclidean_distance_to_postpred(self, V = None, W = None, R = None, k = 5, **kwargs):
+        knn = np.array(list(map(
+            np.sort, self.euclidean_distance(V = V, W = W, R = R),
+            )))[:, k, 0]
+        try:
+            n = V.shape[0]
+        except AttributeError:
+            n = W.shape[0]
+        p = self.tCol
+        log_scores = (
+            + np.log(k/n)
+            + gammaln((p-1)/2 + 1)
+            - ((p-1)/2) * np.log(np.pi)
+            - (p-1) * np.log(knn)
+            )        
+        with np.errstate(under = 'ignore', over='ignore'):
+            scores = np.exp(log_scores)
+        scores[np.isnan(scores)] = MAX
+        return scores
+    def populate_cones(self, epsilon):
+        postpred = euclidean_to_hypercube(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            )
+        C_damex = (postpred > epsilon)
+        cones = defaultdict(lambda: EPS)
+        for row in C_damex:
+            cones[tuple(row)] += 1 / postpred.shape[0]
+        return cones
+    def cone_density(self, V = None, W = None, R = None, epsilon = 0.5, **kwargs):
+        if V is None:
+            return np.array([np.nan] * W.shape[0])
+        n = V.shape[0]
+        cone_prob = self.populate_cones(epsilon)
+        scores = np.empty(n)
+        znew = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        rho_new = gamma(znew[:,:,self.nCol:]).mean(axis = 1)
+        r_new = gamma(znew[:,:,:self.nCol].sum(axis = 2)).mean(axis = 1)
+        Vnew = euclidean_to_hypercube(np.hstack((r_new[:,None] * V, rho_new)))
+        for i in range(n):
+            scores[i] = 1 / cone_prob[tuple(Vnew[i] > epsilon)]
+        return scores
+    def hypercube_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        if V is None:
+            return np.array([np.nan] * W.shape[0])
+        h = self.latent_hypercube_bandwidth
+        Z = self.hypercube_distance(V, W, R) / h
         if kernel == 'gaussian':
-            return 1 / (np.exp(-(pdr / h)**2) / np.sqrt(2 * np.pi)).mean(axis = 1)
+            return 1 / (np.exp(- 0.5 * (Z**2)).mean(axis = (1,2)) + EPS)
         elif kernel == 'laplace':
-            return 1 / np.exp(-np.abs(pdr / h)).mean(axis = 1)
+            return 1 / (np.exp(-np.abs(Z)).mean(axis = (1,2)) + EPS)
         else:
             raise ValueError('requested kernel not available')
         pass
-
-    def instantiate_data(self, path, quantile = 0.95, decluster = True):
-        """ path: raw data path """
-        raw = pd.read_csv(path)
-        self.data = Data_From_Raw(raw, decluster = decluster, quantile = quantile)
-        self.postpred = self.generate_posterior_predictive_hypercube(10)
-        return
-
-    def instantiate_data_ad(self, path):
-        self.data = DataAD(path)
-        self.postpred = self.generate_posterior_predictive_hypercube(10)
-        return
-
-    def get_scores(self, scalar = 1., base = np.e, epsilon = 0.5):
-        pdr   = self.scoring_pdr(scalar, base)
-        pdra  = self.scoring_pdr_angular(scalar, base)
-        pdp   = self.scoring_pdp(scalar, base)
-        pdpa  = self.scoring_pdp_angular(scalar, base)
-        knn   = self.scoring_knn(scalar, base)
-        knna  = self.scoring_knn_angular(scalar, base)
-        cone  = self.scoring_cones(epsilon)
-        conea = self.scoring_cones_angular(epsilon)
-        ppl   = self.scoring_ppl()
-        ppla  = self.scoring_ppl_angular()
-        es    = self.scoring_es()
-        esa   = self.scoring_es_angular()
-        kde   = self.scoring_kde()
-        kdea  = self.scoring_kde_angular()
-        return np.array((pdr, pdra, pdp, pdpa, knn, knna, cone, conea, 
-                            ppl, ppla, es, esa, kde, kdea))
+    def euclidean_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        h = self.latent_euclidean_bandwidth
+        Z = self.euclidean_distance(V, W, R) / h
+        if kernel == 'gaussian':
+            return 1 / (np.exp(- 0.5 * Z**2).mean(axis = (1,2)) + EPS)
+        elif kernel == 'laplace':
+            return 1 / (np.exp(-np.abs(Z)).mean(axis = (1,2)) + EPS)
+        else:
+            raise ValueError('requested kernel not available')
+        pass
+    def latent_sphere_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        # if V is not None:
+        #     return np.array([np.nan] * W.shape[0])
+        h = self.latent_sphere_bandwidth
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        Gcon = gamma(Zcon[:,:,self.nCol:(self.nCol + self.nCat)] + W[:,None])
+        catmat = category_matrix(self.data.Cats)
+        Pcon = euclidean_to_catprob(Gcon, catmat)
+        Pnew = self.generate_posterior_predictive_spheres(self.postpred_per_samp)
+        inv_scores = kde_per_obs(Pcon, Pnew, h, 'manhattan', self.pool)
+        return 1 / (inv_scores + EPS)
+    def latent_euclidean_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        h = self.latent_euclidean_bandwidth
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        if V is not None:
+            Rcon = gamma(Zcon[:,:,:self.nCol].sum(axis = 2))
+            Y1 = Rcon[:,:,None] * V[:,None,:]
+        else:
+            Y1 = np.zeros((*Zcon.shape[:-1], 0))
+        Y2 = gamma(Zcon[:,:,self.nCol:])
+        Ycon = np.concatenate((Y1,Y2), axis = 2)
+        Ynew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+        inv_scores = kde_per_obs(Ycon, Ynew, h, 'euclidean', self.pool)
+        return 1 / (inv_scores + EPS)
+    def latent_hypercube_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        if V is None:
+            return np.array([np.nan] * W.shape[0])
+        h = self.latent_euclidean_bandwidth
+        Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+        if V is not None:
+            Rcon = gamma(Zcon[:,:,:self.nCol].sum(axis = 2))
+            Y1 = Rcon[:,:,None] * V[:,None,:]
+        else:
+            Y1 = np.zero
+        Y2 = gamma(Zcon[:,:,self.nCol:])
+        Vcon = euclidean_to_hypercube(np.concatenate((Y1,Y2), axis = 2))
+        Vnew = euclidean_to_hypercube(
+            self.generate_posterior_predictive_gammas(self.postpred_per_samp),
+            )
+        inv_scores = kde_per_obs(Vcon, Vnew, h, 'hypercube', self.pool)
+        return 1 / (inv_scores + EPS)
+    def latent_mixed_kernel_density_estimate(self, V = None, W = None, R = None, kernel = 'gaussian', **kwargs):
+        if chkarr(self.data, 'V') and chkarr(self.data, 'W'):
+            h_real, h_cat = self.latent_mixed_bandwidth
+            Zcon = self.generate_new_conditional_posterior_predictive_zetas(Vnew = V, Wnew = W, Rnew = R)
+            Gcon = gamma(Zcon)
+            Pcon = euclidean_to_catprob(
+                Gcon[:,:,self.nCol:(self.nCol + self.nCat)], 
+                self.CatMat,
+                )
+            Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+            Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
+            Pnew = euclidean_to_catprob(
+                Gnew[:,self.nCol:(self.nCol + self.nCat)], 
+                self.CatMat,
+                )
+            InvScores = multi_kde_per_obs(
+                cond1 = V,
+                pp1   = Vnew,
+                band1 = h_real,
+                met1  = 'hypercube',
+                cond2 = Pcon,
+                pp2   = Pnew, 
+                band2 = h_cat,
+                met2  = 'manhattan',
+                pool  = self.pool,
+                )
+            return 1 / (InvScores + EPS)
+        if chkarr(self.data, 'V'):
+            h_real = self.hypercube_bandwidth
+            Gnew = self.generate_posterior_predictive_gammas(self.postpred_per_samp)
+            Vnew = euclidean_to_hypercube(Gnew[:,:self.nCol])
+            S1 = kde_per_obs(V[None], Vnew, h_real, 'hypercube', self.pool)
+        else:
+            S1 = np.ones(self.data.nDat)
+        if chkarr(self.data, 'W'):
+            S2 = 1 / self.latent_sphere_kernel_density_estimate(V = V, W = W, R = R)
+        else:
+            S2 = np.ones(self.data.nDat)
+        return 1 / (S1 * S2 + EPS)
     
+    ## Parametric Density Estimate Metric
+    def simplex_density_estimate(self, V = None, W = None, R = None, **kwargs):
+        """
+        V : (n x nCol) (if available)
+        W : (n x nCat) (if available)
+        R : (n)        (if available)
+        """
+        S = V / V.sum(axis = 1)[:, None] # (n x nCol), on S_1^{d-1}
+        ll_real = pt_logd_dirichlet_mx_ma(S, self.samples.zeta[:,:,:self.nCol])
+        ll_cat = pt_logd_cumdircategorical_mx_ma(
+            W, self.samples.zeta[:,:,self.nCol:(self.nCol + self.nCat)], self.CatMat,
+            )
+        if self.model_radius:
+            ll_real += pt_logd_pareto_mx_ma(R, self.samples.zeta[:,:,-1])
+        ll = ll_real + ll_cat # n, s, j
+
+        weights = bincount2D_vectorized(self.samples.delta, self.max_clust_count) * 1.
+        weights -= (weights > 0) * self.GEMPrior.discount
+        weights += (weights == 0) * (
+            + self.GEMPrior.concentration
+            + self.GEMPrior.discount * (weights > 0).sum(axis = 1)[:,None]
+            ) / ((weights == 0).sum(axis = 1) + EPS)[:,None]
+        weights /= weights.sum(axis = 1)[:,None]
+        np.log(weights, out = weights)
+        clust_density = ll + weights[None]
+        with np.errstate(over='ignore'):
+            np.exp(clust_density, out = clust_density)
+        clust_density[np.isinf(clust_density)] = MAX
+        with np.errstate(over='ignore'):
+            avg_density = clust_density.sum(axis = 2).mean(axis = 1)
+        avg_density[np.isinf(avg_density)] = MAX
+        return 1 / avg_density
+
+    # scoring metrics
     @property
-    def metric_names(self):
-        return ['pdr','pdra','pdp','pdpa','knn','knna','cone','conea',
-                        'ppl','ppla','es','esa', 'kde','kdea']
-
-    def get_auroc(self, scores):
-        res = roc_curve(scores, self.anomaly.y[self.data.I[0]])
-        _res = pd.DataFrame(
-            res, columns = ('tpr','fpr'),
-            ).groupby('fpr').max().reset_index()[['tpr','fpr']].values
-        return trapezoid(*_res.T)
-
-    def get_auprc(self, scores):
-        res = prc_curve(scores, self.anomaly.y[self.data.I[0]])
-        _res = pd.DataFrame(
-            res, columns = ('ppv','tpr'),
-            ).groupby('tpr').max().reset_index()[['ppv','tpr']].values
-        return trapezoid(*_res.T)
-
-    def get_metrics(self, scalar = 1., base = np.e, epsilon = 0.5):
-        scores = self.get_scores(scalar, base, epsilon)
-        auroc = np.array(list(map(self.get_auroc, scores)))
-        auprc = np.array(list(map(self.get_auprc, scores)))
-        return np.array((auroc, auprc))
-
-    def get_raw_metrics(self):
-        scores = self.anomaly.get_scores()
-        auroc = np.array(list(map(self.get_auroc, scores.T)))
-        auprc = np.array(list(map(self.get_auprc, scores.T)))
-        return np.array((auroc, auprc))
-
-    @property
-    def raw_metric_names(self):
-        return ['svm','lof','forest']
-
-    pass
+    def scoring_metrics(self):
+        metrics = {
+            'iso'    : self.isolation_forest,
+            'lof'    : self.local_outlier_factor,
+            'svm'    : self.one_class_svm,
+            # 'damex'  : self.damex, 
+            # 'kedp'   : self.knn_euclidean_distance_to_postpred,
+            'khdp'   : self.knn_hypercube_distance_to_postpred,
+            # 'cone'   : self.cone_density,
+            # 'ekde'   : self.euclidean_kernel_density_estimate,
+            'hkde'   : self.hypercube_kernel_density_estimate,
+            'lhkde'  : self.latent_hypercube_kernel_density_estimate,
+            # 'lekde'  : self.latent_euclidean_kernel_density_estimate,
+            # 'lskde'  : self.latent_sphere_kernel_density_estimate,
+            'lmkde'  : self.latent_mixed_kernel_density_estimate,
+            'sde'    : self.simplex_density_estimate,
+            }
+        return metrics
+    def get_scores(self, V, W, R):
+        metrics = self.scoring_metrics.keys()
+        density_metrics = [
+            'khdp','kedp','cone','hkde','ekde','lskde','lekde','lhkde','lmkde',
+            ]
+        out = pd.DataFrame()
+        for metric in metrics:
+            print('s' + '\b'*11 + metric.ljust(10), end = '')
+            sleep(1)
+            temp = self.scoring_metrics[metric](V = V, W = W, R = R).ravel()
+            temp[np.isnan(temp)] = MAX
+            temp[temp > MAX] = MAX
+            out[metric] = np.log(temp)
+            if type(R) is np.ndarray and R.shape[-1] > 0:
+                if (metric in density_metrics) and (R is not None):
+                    with np.errstate(over='ignore', invalid='ignore'):
+                        out['c' + metric] = out[metric] + 2 * np.log(R)
+        print('s' + '\b'*11 + 'Done'.ljust(10))
+        return out
+    def get_scoring_metrics(self, Y, V = None, W = None, R = None):
+        scores = self.get_scores(V, W, R)
+        aucs = np.array([metric_auc(score, Y) for score in scores.values.T]).T
+        metrics = pd.DataFrame(aucs, columns = scores.columns.values.tolist())
+        metrics['Metric'] = ('AuROC','AuPRC')
+        metrics['EnergyScore'] = self.energy_score()
+        return metrics
+    def set_postpred_per_sample(self, n):
+        self.postpred_per_samp = n
+        return
 
 def ResultFactory(model, path):
-    class Result(Results[model], AnomalyDetector, Prediction_Gammas[model]):
-        anomaly = None
-
-        def instantiate_anomaly(self, path_x, path_y):
-            self.anomaly = Anomaly(path_x, path_y)
-            return
-
+    class Result(Results[model], Anomaly):
         pass
 
     return Result(path)
@@ -253,105 +639,154 @@ def plot_log_inverse_scores_knn(scores):
     plt.show()
     return
 
-def make_result_old(model, result_path, path_x, path_y, quantile, decluster):
-    result = ResultFactory(model, result_path)
-    result.instantiate_raw_anomaly(path_x, path_y)
-    result.instantiate_data(path_x, quantile, decluster)
-    return result
+class FakeParser(object):
+    def __init__(self, **kwargs):
+        self.__dict__.update(kwargs)
+        return
 
-def make_result_ad_old(model, result_path, path_x, path_y):
-    result = ResultFactory(model, result_path)
-    result.instantiate_raw_anomaly(path_x, path_y)
-    result.instantiate_data_ad(path_x)
-    return result
-
-def make_result(path):
-    for model in Prediction_Gammas.keys():
-        if re.search(model, path):
-            break
-    else:
-        raise TypeError
-
-    result = ResultFactory(model, path)
-    result.instntiate_anomaly()
-
+def argparser():
+    p = argparse.ArgumentParser()
+    p.add_argument('file_string')
+    p.add_argument('out_file')
+    return p.parse_args()
+    # return FakeParser(
+    #     file_string = 'real_results_*', 
+    #     outfile = 'performance_real.csv',
+    #     )
 
 if __name__ == '__main__':
-    pass
-    # args = argparser()
-    # model = os.path.split(os.path.split(args.model_path)[0])[1]
-    # result = ResultFactory(model, args.model_path)
-    # result.instantiate_data(args.data_path, decluster=True)
-    #
-    # scores_c = result.scoring_cones()
-    # scores_r = result.scoring_pdr()
-    # scores_p = result.scoring_pdp()
-    # scores_k = result.scoring_knn()
-    # models = ['dphprg','mhprg','dphprg','dphprg','dphprg']
-    # model_paths = [
-    #     './ad/cardio/dphprg/results_2_1e-1.db',
-    #     './ad/cover/mhprg/results_50.db',
-    #     './ad/mammography/dphprg/results_2_1e-1.db',
-    #     './ad/pima/dphprg/results_2_1e-1.db',
-    #     './ad/satellite/dphprg/results_2_1e-1.db',
-    #     ]
-    # paths_x = [
-    #     './datasets/ad_cardio_x.csv',
-    #     './datasets/ad_cover_x.csv',
-    #     './datasets/ad_mammography_x.csv',
-    #     './datasets/ad_pima_x.csv',
-    #     './datasets/ad_satellite_x.csv',
-    #     ]
-    # paths_y = [
-    #     './datasets/ad_cardio_y.csv',
-    #     './datasets/ad_cover_y.csv',
-    #     './datasets/ad_mammography_y.csv',
-    #     './datasets/ad_pima_y.csv',
-    #     './datasets/ad_satellite_y.csv',
-    #     ]
-    # quantiles = [0.95, 0.95, 0.95, 0.95, 0.97]
-    # decluster = [False] * 5
-    # results = [make_result(*x) for x in zip(models, model_paths, paths_x, paths_y, quantiles, decluster)]
+    p = argparser()
+    # real_results_\*, rank_results_\*, cat_results_\*
 
-    # models = repeat('dppprg')
-    # model_paths = [
-    #     './simulated_ad/m5_c5/dppprg/results_2_1e-1.db',
-    #     './simulated_ad/m5_c10/dppprg/results_2_1e-1.db',
-    #     './simulated_ad/m10_c5/dppprg/results_2_1e-1.db',
-    #     './simulated_ad/m10_c10/dppprg/results_2_1e-1.db',
-    #     ]
-    # paths_x = [
-    #     './simulated_ad/ad_sim_m5_c5_x.csv',
-    #     './simulated_ad/ad_sim_m5_c10_x.csv',
-    #     './simulated_ad/ad_sim_m10_c5_x.csv',
-    #     './simulated_ad/ad_sim_m10_c10_x.csv',
-    #     ]
-    # paths_y = [
-    #     './simulated_ad/ad_sim_m5_c5_y.csv',
-    #     './simulated_ad/ad_sim_m5_c10_y.csv',
-    #     './simulated_ad/ad_sim_m10_c5_y.csv',
-    #     './simulated_ad/ad_sim_m10_c10_y.csv',
-    #     ]
-    # mixes = ['5','5','10','10']
-    # cols  = ['5','10','5','10']
+    result_path = './ad/{}/{}.pkl'
+    datasets = ['annthyroid','cardio','cover','mammography','pima','yeast','solarflare']
+    # datasets = ['annthyroid']
+    result_paths = []
+    metrics = []
+    for dataset in datasets:
+        result_files = glob.glob(result_path.format(dataset, p.file_string))
+        for result_file in result_files:
+            result_paths.append(result_file)
+    
+    pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    for result_path in result_paths:
+        print(result_path.ljust(80), end = '')
+        result = ResultFactory('pypprgln', result_path)
+        result.pool = pool
+        data = (result.data.Y, result.data.V, result.data.W, result.data.R)
+        metric = result.get_scoring_metrics(*data)
+        metric['path'] = result_path
+        metrics.append(metric)
+        del result
+        gc.collect()
+    
+    pool.close()
+    df = pd.concat(metrics)
+    df.to_csv(os.path.join('./ad', p.out_file), index = False)
+    
 
-    # results = [make_result_ad(*x) for x in zip(models, model_paths, paths_x, paths_y)]
-    # metrics = [result.get_metrics() for result in results]
-    # metrics_raw = [result.get_raw_metrics() for result in results]
+    # basepath = './ad/cardio'
 
-    # dfs = [pd.DataFrame(metric, columns = results[0].metric_names) for metric in metrics]
-    # dfs_raw = [pd.DataFrame(metric_raw, columns = results[0].raw_metric_names) for metric_raw in metrics_raw]
+    # result = ResultFactory('mpypprgln', os.path.join(basepath, 'results_xv1_1e-1_1e0.pkl'))
+    # result.pools_open()
 
-    # for df, df_raw, nmix, ncol in zip(dfs,dfs_raw, mixes, cols):
-    #     df['nMix'] = nmix
-    #     df['nCol'] = ncol
-    #     df_raw['nMix'] = nmix
-    #     df_raw['nCol'] = ncol
+    # is_raw = pd.read_csv(os.path.join(basepath, 'data_xv1_is.csv')).values
+    # os_raw = pd.read_csv(os.path.join(basepath, 'data_xv1_os.csv')).values
+    # is_out  = pd.read_csv(os.path.join(basepath, 'outcome_xv1_is.csv')).values.ravel()
+    # os_out  = pd.read_csv(os.path.join(basepath, 'outcome_xv1_os.csv')).values.ravel()
+    # is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
+    # os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+    # is_out  = is_out[~np.isnan(is_out)].astype(int)
+    # os_out  = os_out[~np.isnan(os_out)].astype(int)
 
-    # df = pd.concat(dfs)
-    # df_raw = pd.concat(dfs_raw)
+    # is_data = result.data.to_mixed_new(is_raw, is_out)
+    # os_data = result.data.to_mixed_new(os_raw, os_out)
+    
+    # metric_is = result.get_scoring_metrics(*is_data)
+    # metric_os = result.get_scoring_metrics(*os_data)
 
-    # df.to_csv('./simulated_ad/metrics.csv', index = False)
-    # df_raw.to_csv('./simulated_ad/metrics_raw.csv', index = False)
+    # result.pools_closed()
 
-# EOF
+    # raise
+    # import re
+    # results  = []
+    # basepath = './ad'
+    # # datasets = ['cardio','cover','mammography','pima','satellite','annthyroid','yeast']
+    # # resbases = {'mdppprgln' : 'results_xv*.pkl'}
+    # datasets = ['cardio','cover','mammography','annthyroid','yeast']
+    # # resbases = {'mpypprgln' : 'results*.pkl'}
+    # resbases = {'mpypprgln' : 'results_xv*.pkl'}
+    # # datasets = ['solarflare']
+    # # resbases = {'cdppprgln' : 'results_xv*.pkl'}
+    # for model in resbases.keys():
+    #     for dataset in datasets:
+    #         files = glob.glob(os.path.join(basepath, dataset, resbases[model]))
+    #         for file in files:
+    #             results.append((model, file))
+    #             # if not 'xv' in file:
+    #             #     results.append((model, file))
+    # metrics = []
+    # pool = Pool(processes = ceil(0.8 * cpu_count()), initializer = limit_cpu)
+    # for result in results:
+    #     extant_result = ResultFactory(*result)
+    #     extant_result.set_postpred_per_sample(20)
+    #     extant_result.pool = pool
+
+    #     # Normal Code
+    #     # raw = pd.read_csv(
+    #     #         os.path.join(os.path.split(result[1])[0], 'data.csv'),
+    #     #         ).values
+    #     # raw = raw[~np.isnan(raw).any(axis = 1)]
+    #     # out = pd.read_csv(
+    #     #         os.path.join(os.path.split(result[1])[0], 'outcome.csv'),
+    #     #         ).values.ravel()
+    #     # out = out[~np.isnan(out.astype(float))].astype(int)
+    #     # data = extant_result.data.to_mixed_new(raw, out)
+    #     # print('Processing Result {}'.format(result[1]).ljust(80), end = '')
+    #     # extant_metric = extant_result.get_scoring_metrics(*data)
+    #     # del extant_result
+    #     # extant_metric['path'] = result[1]
+    #     # gc.collect()
+
+    #     # Cross-Validation Code
+    #     cv = re.search('xv(\d+)', result[1]).group(1)
+    #     is_raw = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'data_xv{}_is.csv'.format(cv)),
+    #         ).values
+    #     is_raw = is_raw[~np.isnan(is_raw).any(axis = 1)]
+    #     os_raw = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'data_xv{}_os.csv'.format(cv)),
+    #         ).values
+    #     os_raw = os_raw[~np.isnan(os_raw).any(axis = 1)]
+        
+    #     is_out = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_is.csv'.format(cv)),
+    #         ).values.ravel()
+    #     is_out = is_out[~np.isnan(is_out.astype(float))].astype(int)
+    #     os_out = pd.read_csv(
+    #         os.path.join(os.path.split(result[1])[0], 'outcome_xv{}_os.csv'.format(cv)),
+    #         ).values.ravel()
+    #     os_out = os_out[~np.isnan(os_out.astype(float))].astype(int)
+
+    #     is_data = extant_result.data.to_mixed_new(is_raw, is_out)
+    #     os_data = extant_result.data.to_mixed_new(os_raw, os_out)
+
+    #     print('Processing Result {} IS'.format(result[1]).ljust(80), end = '')
+    #     extant_metric_is = extant_result.get_scoring_metrics(*is_data)
+    #     print('Processing Result {} OOS'.format(result[1]).ljust(80), end = '')
+    #     extant_metric_os = extant_result.get_scoring_metrics(*os_data)
+
+    #     del extant_result
+    #     extant_metric_is['path'] = result[1]
+    #     extant_metric_os['path'] = result[1]
+    #     extant_metric_is['InSamp'] = True
+    #     extant_metric_os['InSamp'] = False
+    #     metrics.append(extant_metric_is)
+    #     metrics.append(extant_metric_os)
+    #     gc.collect()
+    
+    # df = pd.concat(metrics)
+    # df.to_csv('./ad/performance_py_xv.csv')
+    # df.to_csv('./ad/performance_py.csv')
+
+# EOF   
