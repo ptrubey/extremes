@@ -1,10 +1,11 @@
-from data import MixedData
-from models import Results
 from glob import glob
-from samplers import bincount2D_vectorized
 import pandas as pd
 import numpy as np
 import os
+
+from projgamma.data import Data
+from projgamma.samplers import bincount2D_vectorized
+
 
 EPS = np.finfo(float).eps
 
@@ -141,24 +142,6 @@ cat = {
     }
 cat_datasets = ['cover','pima','solarflare','yeast']
 
-# out = {
-#     'name'       : dataset['name'],
-#     'quantile'   : dataset['quantile'],
-#     'n_over_threshold' : dat.nDat,
-#     'n_over_anom' : dat.Y.sum(),
-#     'total_cols' : dat.nCol + dat.nCat,
-#     'prevalence' : dat.Y.sum() / dat.nDat,
-#     'raw_prevalence' : y.sum() / y.shape[0],
-#     'N_raw_obsv' : y.shape[0],
-#     'N_raw_anom' : y.sum(),
-#     'P_anom_pres' : dat.Y.sum() / y.sum(),
-#     'P_over_thre' : dat.nDat / y.shape[0],
-#     }
-# out['OR_keep_anom'] = (
-#     out['P_anom_pres'] / (1 - out['P_anom_pres'] + EPS)
-#     / (out['P_over_thre'] / (1 - out['P_over_thre'] + EPS))
-#     )
-
 summaries = []
 
 for dataset in rank_datasets:
@@ -252,13 +235,6 @@ for dataset in cat_datasets:
 summary_df = pd.DataFrame(summaries)
 summary_df.to_csv('./ad/data_summary_updated.csv', index = False)
 
-# basepath = './ad'
-# folders = ['cardio','cover','mammography','annthyroid','yeast']
-# result_paths = []
-# for folder in folders:
-#     for file in glob(os.path.join(basepath, folder, 'results_xv*')):
-#         result_paths.append(file)
-
 # result_summaries = []
 # for path in result_paths:
 #     result = Results['mpypprgln'](path)
@@ -283,14 +259,5 @@ summary_df.to_csv('./ad/data_summary_updated.csv', index = False)
 
 # res_df = pd.DataFrame(result_summaries)
 # res_df.to_csv('./ad/result_summary.csv', index = False)
-    
-
-
-
-
-
-
-
-
 
 # EOF
