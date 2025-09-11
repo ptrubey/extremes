@@ -4,7 +4,7 @@ from numpy.random import normal, uniform, gamma
 from scipy.special import gammaln, digamma
 import matplotlib.pyplot as plt
 
-from samplers import BaseSampler
+from projgamma.samplers import BaseSampler
 
 class Samples(object):
     def __init__(self, ns):
