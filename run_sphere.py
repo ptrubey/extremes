@@ -25,31 +25,29 @@ def run_model_from_path(path):
     if not os.path.exists(testpath):
         return
     test = pd.read_csv(testpath).values
-    data = Data.from_raw(raw, sphr_cols = np.arange(raw.shape[0]))    
+    data = Data.from_raw(raw, sphr_cols = np.arange(raw.shape[1]))    
     model = Chain(data, max_clust_count = 200)
     try:
         model.sample(40000)
-    except: # (AssertionError, FloatingPointError, ValueError):
+    except (AssertionError, FloatingPointError, ValueError):
         print('\nFailed: {}\n'.format(path))
         return 
-    outd = model.to_dict()
+    outd = model.to_dict(20000)
     res = Result(outd)
     pp = res.generate_posterior_predictive_hypercube(10)
     
-    es1 = energy_score_full_sc(pp, data.V)
+    # es1 = energy_score_full_sc(pp, data.V)
     es2 = energy_score_full_sc(pp, test)
-    esbl1 = energy_score_full_sc(data.V, test)
-    esbl2 = energy_score_full_sc(test, data.V)
-    
-    raise
+    # esbl1 = energy_score_full_sc(data.V, test)
+    # esbl2 = energy_score_full_sc(test, data.V)
 
     df = pd.DataFrame([{
         'path'   : path,
         'model'  : 'pypprg',
-        'es1'    : es1,
+        # 'es1'    : es1,
         'es2'    : es2,
-        'esbl1'  : esbl1,
-        'esbl2'  : esbl2,
+        # 'esbl1'  : esbl1,
+        # 'esbl2'  : esbl2,
         'time'   : model.time_elapsed_numeric
         }])
     conn = sql.connect(out_sql)
@@ -78,19 +76,17 @@ if __name__ == '__main__':
     conn.close()
     todo_len = len(todo)
 
-    for item in todo:
-        run_model_from_path_wrapper(item)
+    # for item in todo:
+    #     run_model_from_path_wrapper(item)
     
-    # pool = mp.Pool(
-    #     processes = mp.cpu_count(), 
-    #     initializer = limit_cpu, 
-    #     maxtasksperchild = 1,
-    #     )
-    # for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
-    #     sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    # pool.close()
-    # pool.join()
-
-    # raise
+    pool = mp.Pool(
+        processes = mp.cpu_count(), 
+        initializer = limit_cpu, 
+        maxtasksperchild = 1,
+        )
+    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
+        sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
+    pool.close()
+    pool.join()
 
 # EOF
