@@ -67,10 +67,11 @@ def run_model_from_path(path, verbose):
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
-    verbose = True
+    verbose = False
 
     conn = sql.connect(out_sql)
-    args = [(file,verbose) for file in files]
+    args = [file for file in files]
+    # args = [(file,verbose) for file in files]
     try:
         df = pd.read_sql('select * from energy;', conn)[['path',]]
         done = list(map(tuple, df.drop_duplicates().values))
@@ -78,6 +79,7 @@ if __name__ == '__main__':
     except pd.io.sql.DatabaseError:
         todo = args
     conn.close()
+    todo = [(file, verbose) for file in todo]
     todo_len = len(todo)
 
     # for item in todo:
