@@ -7,18 +7,20 @@ import sqlite3 as sql
 from time import sleep
 from numpy.random import uniform
 
-from projgamma.energy import limit_cpu, energy_score_full_sc
+from projgamma.energy import limit_cpu, energy_score_full_sc, energy_score_hypercube
 from projgamma.data import Data, euclidean_to_psphere
 from projgamma.model_pypprg import Chain, Result
 
 source_path = './simulated/sphere2/data_m*_r*_i*.csv'
-out_sql     = './simulated/sphere2/result_241015.sql'
+out_sql     = './simulated/sphere2/result_241106.sql'
 out_table   = 'energy'
 
 def run_model_from_path_wrapper(args):
     return run_model_from_path(*args)
 
-def run_model_from_path(path):
+def run_model_from_path(path, verbose):
+    if verbose:
+        print(path)
     basepath, fname = os.path.split(path)
     raw = euclidean_to_psphere(pd.read_csv(path).values)
     testpath = os.path.join(basepath, 'test' + fname[4:])
@@ -28,19 +30,20 @@ def run_model_from_path(path):
     data = Data.from_raw(raw, sphr_cols = np.arange(raw.shape[1]))    
     model = Chain(data, max_clust_count = 200)
     try:
-        model.sample(40000)
+        model.sample(40000, verbose)
     except (AssertionError, FloatingPointError, ValueError):
         print('\nFailed: {}\n'.format(path))
         return 
-    outd = model.to_dict(20000)
+    outd = model.to_dict(20000, 5)
     res = Result(outd)
     pp = res.generate_posterior_predictive_hypercube(10)
-    
+    if verbose:
+        print('Calculating Energy Score')
     # es1 = energy_score_full_sc(pp, data.V)
-    es2 = energy_score_full_sc(pp, test)
+    # es2 = energy_score_full_sc(pp, test)
+    es2 = energy_score_hypercube(pp, test)
     # esbl1 = energy_score_full_sc(data.V, test)
     # esbl2 = energy_score_full_sc(test, data.V)
-
     df = pd.DataFrame([{
         'path'   : path,
         'model'  : 'pypprg',
@@ -64,9 +67,10 @@ def run_model_from_path(path):
 
 if __name__ == '__main__':
     files = glob.glob(source_path)
+    verbose = True
 
     conn = sql.connect(out_sql)
-    args = [(file,) for file in files]
+    args = [(file,verbose) for file in files]
     try:
         df = pd.read_sql('select * from energy;', conn)[['path',]]
         done = list(map(tuple, df.drop_duplicates().values))
@@ -79,14 +83,14 @@ if __name__ == '__main__':
     # for item in todo:
     #     run_model_from_path_wrapper(item)
     
-    pool = mp.Pool(
-        processes = mp.cpu_count(), 
-        initializer = limit_cpu, 
-        maxtasksperchild = 1,
-        )
-    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
-        sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    pool.close()
-    pool.join()
+    # pool = mp.Pool(
+    #     processes = int(mp.cpu_count() * (1/4)), 
+    #     initializer = limit_cpu, 
+    #     maxtasksperchild = 1,
+    #     )
+    # for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
+    #     sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
+    # pool.close()
+    # pool.join()
 
 # EOF
