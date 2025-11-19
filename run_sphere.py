@@ -85,14 +85,14 @@ if __name__ == '__main__':
     # for item in todo:
     #     run_model_from_path_wrapper(item)
     
-    # pool = mp.Pool(
-    #     processes = int(mp.cpu_count() * (1/4)), 
-    #     initializer = limit_cpu, 
-    #     maxtasksperchild = 1,
-    #     )
-    # for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
-    #     sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
-    # pool.close()
-    # pool.join()
+    pool = mp.Pool(
+        processes = int(mp.cpu_count() * (1/4)), 
+        initializer = limit_cpu, 
+        maxtasksperchild = 1,
+        )
+    for i, _ in enumerate(pool.imap_unordered(run_model_from_path_wrapper, todo), 1):
+        sys.stderr.write('\rdone {0:.2%}'.format(i/todo_len))
+    pool.close()
+    pool.join()
 
 # EOF
